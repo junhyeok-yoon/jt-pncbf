@@ -1,0 +1,43 @@
+# Python caches and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.conda/
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local scratch and temporary files
+*.tmp
+*.temp
+*.log
+.ipynb_checkpoints/
+
+# TensorBoard event files
+events.out.tfevents.*
+
+# Version / development documents (kept locally, not committed)
+docs/versions/
+
+# Generated run artifacts: ignore ordinary runs, keep curated secured data.
+data/*
+!data/secured_data/
+!data/secured_data/**

@@ -1,0 +1,13 @@
+nav:
+  - Home: index.md
+  - Protocol:
+      - protocol/00_constitution.md
+      - protocol/01_env.md
+      - protocol/02_control.md
+      - protocol/03_train.md
+      - protocol/04_eval.md
+      - protocol/05_code.md
+      - protocol/06_workflow.md
+  - Versions:
+      - v1 (legacy): versions/v1.md
+  - Ledger: ledger.md

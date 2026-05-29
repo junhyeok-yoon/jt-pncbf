@@ -1,0 +1,69 @@
+site_name: JT-PNCBF
+site_description: Self-built research infrastructure for Observation-Conditioned PNCBF and Joint Training
+# site_url: set this after the repo is live, e.g. https://<github-username>.github.io/jt-pncbf/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Home: index.md
+  - Protocol:
+      - protocol/00_constitution.md
+      - protocol/01_eval.md
+      - protocol/02_env.md
+      - protocol/03_code.md
+      - protocol/04_workflow.md
+  - Versions:
+      - versions/index.md
+      - v1 (legacy): versions/v1.md
+  - Eval Reports:
+      - eval/index.md
+  - Ledger: ledger.md

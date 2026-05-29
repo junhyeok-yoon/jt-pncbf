@@ -1,0 +1,94 @@
+# base_config.yaml — task + structure (rarely changed). Defines "what task we solve".
+# Per-experiment hyperparameters live in exp_config.yaml; deep-merged on top of this.
+
+env:
+  obstacle_distribution: random      # random | fixed_centered
+  world_lim: 4.0
+  oob_limit: 8.0                    # 2 * world_lim (terminating, no clamp)
+  dt: 0.05
+  h_scale: 0.35                    # geometric signed-h ramp margin
+  k_obs: 5
+  goal_radius: 0.15
+  goal_speed_radius: 0.30
+  stuck_window_steps: 60
+  stuck_radius: 0.10
+  v_init_max: 0.5
+  bounds:
+    double_integrator:
+      u_max: 2.0
+      v_max: 2.5
+    unicycle:
+      a_max: 2.0
+      omega_max: 3.0
+
+obstacle:
+  n_min: 1
+  n_max: 12
+  r_min: 0.15
+  r_max: 0.80
+  p_corridor: 0.6
+  corridor_along_factor: 1.5
+  corridor_perp_factor: 1.0
+
+scene_train:
+  min_start_goal_dist: 1.0
+  start_goal_clearance: 0.10
+  init_feasibility_margin: 0.05
+
+network:
+  value:
+    n_layers: 3
+    hidden: 256
+    softplus_beta: 20.0
+    head: linear_clipped            # raw linear forward; clipped value() for deployment
+    n_vs: 2                         # ensemble size; min target / mean deployment
+  control:
+    n_layers: 2
+    hidden: 256
+    activation: leaky_relu            # LeakyReLU(0.01); value uses softplus for differentiability
+    output: softsign                  # softsign | tanh
+
+filter:
+  gamma_margin: 0.0                 # agent safety margin (used in CBF-QP h_eff)
+  hardnet:
+    epsilon: 5.0e-4
+    box_aware: true
+  cbf_qp:
+    penalty: 10.0
+    relax_eps1: 0.5
+    v_shift: 1.0e-3
+    max_iter: 500
+    max_iter_in: 100
+    eps_abs: 1.0e-9                   # solver convergence tolerance
+    max_workers: 32                   # per-row CPU parallelism when no vectorized solve
+
+lqr:
+  double_integrator:
+    Q: [1.0, 1.0, 0.1, 0.1]
+    R: [1.0, 1.0]
+  unicycle:
+    Q: [0.5, 0.5, 0.1, 0.1]
+    R: [0.5, 0.5]
+    v_min: 0.1                      # speed regularization to avoid division by small v
+
+eval:
+  max_steps: 200
+  scene:
+    min_start_goal_dist: 1.5        # looser than train
+    start_goal_clearance: 0.15      # looser than train
+  in_loop:
+    n: 200
+    seed: 12345
+  full:
+    n: 500
+    seed: 23456
+  bootstrap:
+    n_resample: 1000
+    seed: 20260508
+  multi_seed:
+    min: 3
+    recommend: 5
+  insertion:
+    t_insert: 50
+    radius: 0.45
+    seed_offset: 77
