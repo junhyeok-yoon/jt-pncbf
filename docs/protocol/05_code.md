@@ -26,7 +26,7 @@ jt-pncbf/
 │   ├── index.md                            # state dashboard
 │   ├── ledger.md                           # one row per run
 │   ├── protocol/{00..06}.md
-│   └── versions/{v1.md, vX.Y.Z/{changes.md, <task>.md, results.md}, ...}
+│   └── versions/vX.Y.Z/{changes.md, <task>.md, results.md}    # local-only
 ├── scripts/                                # entry-point scripts (CLI launchers, pool builders)
 ├── src/
 │   ├── common/                             # frozen utilities: rk4, signed_h, top_k_obs, lqr,
@@ -165,7 +165,12 @@ data/
             └── multi_seed_report.md
 ```
 
-**`<run_id>` format:** `vX.Y.Z__YYYYMMDD-HHMMSS__seed<N>` (e.g., `v2.0.0__20260527-182000__seed42`). The Researcher / Strategist sees this format consistently across `metrics.csv`, `ledger.md`, and TensorBoard.
+**`<run_id>` formats:**
+
+- **Training runs:** `vX.Y.Z__YYYYMMDD-HHMMSS__seed<N>` (e.g., `v2.0.1__20260529-171057__seed42`). This is the canonical form.
+- **Eval-only diagnostic runs** (a run that does no training, only re-evaluates an existing checkpoint under an ablation): `vX.Y.Z__YYYYMMDD-HHMMSS__<descriptive>_seed<N>`, where `<descriptive>` is a short snake_case tag (e.g. `hardnet_oc`, `cbfqp_oc`, `slowmpc`). The descriptive form must never collide with a training run id (see `04_eval` §7.1).
+
+The Researcher / Strategist sees the `<run_id>` format consistently across `metrics.csv`, `ledger.md`, and TensorBoard.
 
 **`data/<run_id>/config.yaml`** — the **effective** configuration: deep-merge of `base_config.yaml`, `exp_config.yaml`, and any CLI overrides. Written **once** at run start; never re-read at runtime (the trainer reads the merged in-memory config). This file is the audit record.
 
@@ -177,34 +182,36 @@ data/
 
 ## 4. `.gitignore` policy
 
-`data/` is by default git-ignored, with `secured_data/` carved out. Exact rules:
+`data/` is by default git-ignored, with `secured_data/` carved out. `docs/versions/` is git-ignored entirely (per-version `changes.md`, build-logs, and `results.md` are local working artifacts). Exact rules:
 
 ```text
 # .gitignore (relevant portion)
 data/*
 !data/secured_data/
 !data/secured_data/**
+docs/versions/
 ```
 
 This pattern:
 
 - ignores every in-flight `data/<run_id>/`;
 - tracks **everything** inside `data/secured_data/` (pools and version snapshots);
+- keeps `docs/versions/` local-only;
 - requires no manual exception per file.
 
-Large secured artifacts (checkpoint `.pt` files) are committed plain (no LFS in v2.0.0). If the secured tree later grows beyond a few hundred megabytes, switching to git-LFS is a one-line `.gitattributes` change and is reserved as a one-axis future task.
+Large secured artifacts (checkpoint `.pt` files) are committed plain (no LFS). If the secured tree later grows beyond a few hundred megabytes, switching to git-LFS is a one-line `.gitattributes` change and is reserved as a one-axis future task.
 
 ---
 
 ## 5. Verification harness (required before any framework code is allowed to run)
 
-The harness lives in `tests/` and must pass before any training. The Executor refuses to start training if any test in §5.1–§5.6 fails. This is the v2 equivalent of a pre-commit hook, implemented as a pytest gate in `scripts/verify.sh`.
+The harness lives in `tests/` and must pass before any training. The Executor refuses to start training if any test in §5.1–§5.6 fails. This is a lightweight pre-commit gate implemented as a pytest invocation in `scripts/verify.sh`.
 
 ### 5.1 QP correctness (CBF-QP)
 
 For a battery of $(h, L_f h, L_g h, u^{\text{nom}}, \text{bounds})$ cases:
 
-- Solver-reported primal and dual residuals below tolerance ($10^{-6}$). This is the accepted operational definition of "KKT residual" for v2.0.0 (per `02_control` §5.2); the test is not required to independently assemble stationarity / complementarity / active-set residuals.
+- Solver-reported primal and dual residuals below tolerance ($10^{-6}$). This is the accepted operational definition of "KKT residual" used by this spec (per `02_control` §5.2); the test is not required to independently assemble stationarity / complementarity / active-set residuals.
 - Returned $u$ satisfies CBF row and box constraints within tolerance (slack accounted for).
 - Solution matches an independent reference (OSQP or cvxpy) within tolerance.
 
@@ -266,7 +273,7 @@ Concrete requirements:
 - **Filter is batched.** HardNet projection operates on `[B, action_dim]`. CBF-QP is batched at the call site by stacking $(h, L_f h, L_g h, u_{\text{nom}})$ rows into one solver call where the solver supports it; where it does not, the per-row solve is parallelized over at most `base_config.filter.cbf_qp.max_workers` CPU threads (default 32) and the host transfer happens once per macro step, not per row.
 - **No `.item()` inside the hot loop.** Scalars for logging are deferred to a single tensor-to-host transfer at the end of each macro step.
 - **One device transfer per macro step.** Collection and the V minibatch live on the GPU; the only host transfer per macro step is the logging payload.
-- **No `torch.compile` in v2.0.0.** It is an optional one-axis addition once the baseline is stable.
+- **`torch.compile` is not used.** It is reserved as an optional one-axis future addition once the baseline is stable.
 - **GPU utilization target.** Sustained > 80% on the training device for the V/policy update windows (verified by a one-time `nvidia-smi`-based sampling during the first 100 macro steps). Below this number indicates a Python-loop regression and triggers an investigation, not a halt.
 
 The smoke stage (`03_train` §6) implicitly exercises the batched code paths at small batch size; it does not measure utilization.
@@ -281,7 +288,7 @@ Every run records:
 - `config.yaml` (the effective merged config, see §3);
 - the pool manifest with seeds and sampler params (`04_eval` §6.3).
 
-In v2.0.0 the checkpoint contains `step`, `pi_state`, `v_s_state`, `v_s_target_state`, `args` (`03_train` §5). Optimizer state, RNG state, and schedule state are **not** stored: exact resume-from-step is therefore not supported in v2.0.0. Model warm-starts from a checkpoint are supported (load `pi_state` and `v_s_state`). Exact step-level reproducibility (including optimizer state, RNG state, dataloader state) is reserved as a one-axis addition once the baseline is in place.
+The checkpoint contains `step`, `pi_state`, `v_s_state`, `v_s_target_state`, `args` (`03_train` §5). Optimizer state, RNG state, and schedule state are **not** stored: exact resume-from-step is therefore not supported. Model warm-starts from a checkpoint are supported (load `pi_state` and `v_s_state`). Exact step-level reproducibility (including optimizer state, RNG state, dataloader state) is reserved as a one-axis future addition.
 
 ---
 
@@ -299,7 +306,7 @@ In v2.0.0 the checkpoint contains `step`, `pi_state`, `v_s_state`, `v_s_target_s
 
 ## 10. Dependencies
 
-Pinned in `pyproject.toml`. Top-level v2.0.0 deps:
+Pinned in `pyproject.toml`. Top-level project deps:
 
 ```toml
 [project]

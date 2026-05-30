@@ -163,7 +163,7 @@ def _candidate_actions(
     row_upper: Tensor,
     bounds: Tensor,
 ) -> Tensor:
-    # The box-aware enumerator is specified for the 2-D action systems in v2.0.0.
+    # The box-aware enumerator is specified for the current 2-D action systems.
     action_dim = u_nom.shape[1]
     low = bounds[:, 0]
     high = bounds[:, 1]

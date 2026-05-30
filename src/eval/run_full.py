@@ -63,7 +63,7 @@ def run_full_eval(
     max_scenes: int | None = None,
 ) -> FullEvalResult:
     checkpoint_path = _checkpoint_path(run_dir, ckpt_path, use_last)
-    framework, config, checkpoint = _load_oc_framework(checkpoint_path)
+    framework, config, checkpoint = _load_framework(checkpoint_path)
     pool_path = _full_pool_path(config)
     eval_result = evaluate(
         framework,
@@ -129,10 +129,18 @@ def run_full_eval(
     )
 
 
-def _load_oc_framework(checkpoint_path: Path) -> tuple[Any, Mapping[str, Any], dict[str, Any]]:
-    from src.frameworks.oc_pncbf.train import load_framework_from_checkpoint
+def _load_framework(checkpoint_path: Path) -> tuple[Any, Mapping[str, Any], dict[str, Any]]:
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    framework = str(checkpoint.get("framework", "oc_pncbf"))
+    if framework == "oc_pncbf":
+        from src.frameworks.oc_pncbf.train import load_framework_from_checkpoint
 
-    return load_framework_from_checkpoint(checkpoint_path)
+        return load_framework_from_checkpoint(checkpoint_path)
+    if framework == "jt_pncbf":
+        from src.frameworks.jt_pncbf.train import load_framework_from_checkpoint
+
+        return load_framework_from_checkpoint(checkpoint_path)
+    raise ValueError(f"Unsupported checkpoint framework: {framework!r}")
 
 
 def _checkpoint_path(

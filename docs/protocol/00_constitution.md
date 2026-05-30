@@ -6,9 +6,8 @@ to it. All three actors read it at the start of every working session.
 It contains governance, precedence, and principles only. Concrete standards live in the
 sibling documents and are referenced, never duplicated, here.
 
-This document is currently in **initial-draft state**. Until the v2.0.0 baseline is locked,
-the Researcher may edit any protocol document directly without recording an entry; the
-changelog at the foot of this file begins at v2.0.0.
+Direct edits to any protocol document are recorded as a one-line entry in
+`docs/protocol/CHANGELOG.md` (date, file, summary of the change).
 
 ## Research scope and framework lineage
 
@@ -40,6 +39,12 @@ framework relationships.
   training and evaluation, and handles real-time tactical response. Lives in the repository.
   Never makes a strategic or versioning decision on its own: when one seems necessary, it
   proposes to the Researcher and waits.
+
+**Executor never edits `docs/protocol/`.** Protocol documents are edited only by the
+Strategist (under Researcher direction) or by the Researcher directly. If the Executor
+finds a protocol gap or contradiction during implementation, it records the finding in its
+build-log under a `PROTOCOL FOLLOW-UP` heading and continues; the Strategist resolves it
+at the next review or version close.
 
 The Strategist and Executor are swappable instances. Continuity is provided by this
 repository (the single source of truth), not by any session's memory.
@@ -88,8 +93,7 @@ described in Section 2.
    protocol alone. Where a past failure motivates a present rule, the rule is stated on its
    own merits (the mechanism it prevents), not as a story about when it was violated.
    History lives in the per-version documents (`docs/versions/`), the build-logs, and
-   `ledger.md` — never in the protocol. (Defining the version scheme itself — that `v1` is
-   the legacy era, that `docs/versions/v1.md` holds its retrospective — is project
+   `ledger.md` — never in the protocol. (Defining the version scheme itself is project
    management, not history narrative, and is permitted.)
 
 ---
@@ -137,13 +141,13 @@ The engineering disciplines that keep results attributable and the codebase main
 ## 5. Versioning
 
 - **Scheme:** `vMAJOR.MINOR.PATCH`.
-  - `MAJOR` — framework era. The prior major era is **v1** (legacy). The
-    rebuilt infrastructure is **v2**.
-  - `MINOR` — a deliberate new experiment (e.g. `v2.0`, `v2.1`), directed by the Researcher.
-    The first experiment under the new infrastructure is **`v2.0.0`**.
-  - `PATCH` — a fix or small adjustment to an existing version that does not warrant a new
-    minor version. A small idea is allowed here: if `v2.1` needs a correction or minor
-    change not large enough to be `v2.2`, it becomes **`v2.1.1`**.
+  - `MAJOR` — framework-infrastructure era. Incremented only for a full refoundation of the
+    repository or the core stack.
+  - `MINOR` — a deliberate new experiment that introduces a substantive method change
+    validated by a new run, directed by the Researcher.
+  - `PATCH` — a fix or small adjustment to an existing minor version that does not warrant
+    a new minor version (a small correction or non-method update that does not require a
+    new validated run).
 - **Version increment is exclusively the Researcher's role.** The Executor never increments
   a version on its own. Version proliferation — silently turning a small fix into a new
   version — is forbidden. If the Executor believes a bump is needed, it proposes and waits.
@@ -165,8 +169,6 @@ The engineering disciplines that keep results attributable and the codebase main
     completes: the outcome; whether it improved over the prior version; the evidence; and,
     if it did not improve, the most likely cause inferred from the data. This is the only
     document that renders a verdict on the version; build-logs state facts, not verdicts.
-  - v1 is the single exception: it is one retrospective file, `docs/versions/v1.md` (flat,
-    no folder), since it was not built under this convention.
 
 ---
 
@@ -177,17 +179,19 @@ The engineering disciplines that keep results attributable and the codebase main
 - **Markdown is the truth.** The MkDocs site is only a human-facing rendering of it;
   TensorBoard is the live, in-flight monitoring channel; `data/` is local working output.
 - **What git tracks vs. what stays local.**
-  - **Tracked in git:** all `src/` (including `src/configs/`), `scripts/`, `docs/`, top-level
-    files (`README.md`, `LICENSE`, `pyproject.toml`, `mkdocs.yml`), and the
-    **`data/secured_data/`** subtree. Code history is recovered from commits and tags — code
-    is never copied anywhere else to "save" it.
-  - **Local only (git-ignored):** every `data/<run_id>/` directory except for entries inside
-    `data/secured_data/`. In-flight run outputs are not pushed; only the secured snapshot is.
+  - **Tracked in git:** all `src/` (including `src/configs/`), `scripts/`, `docs/protocol/`,
+    `docs/index.md`, `docs/ledger.md`, top-level files (`README.md`, `LICENSE`,
+    `pyproject.toml`, `mkdocs.yml`), and the **`data/secured_data/`** subtree. Code history
+    is recovered from commits and tags — code is never copied anywhere else to "save" it.
+  - **Local only (git-ignored):** `docs/versions/` (per-version `changes.md`, build-logs,
+    and `results.md` are working artifacts kept on disk), and every `data/<run_id>/`
+    directory except for entries inside `data/secured_data/`. In-flight run outputs are not
+    pushed; only the secured snapshot is.
 - **Run output convention.** Every run writes to `data/<run_id>/`, where
   `<run_id> = vX.Y.Z__YYYYMMDD-HHMMSS__seedNN`. There is no extra `data/logs/` indirection.
   At the close of a version, the chosen final runs are copied into
   `data/secured_data/<version>/seed<N>/` and committed. The shared evaluation pools live at
-  `data/secured_data/pools/` and are also committed, so that every v2 version is evaluated
+  `data/secured_data/pools/` and are also committed, so that every version is evaluated
   on bit-identical pools.
 - **Update cadence.** `index.md` (the state dashboard) and `ledger.md` are updated and pushed
   at version boundaries. Between pushes, the Strategist reads the last-pushed state;
@@ -212,9 +216,8 @@ The engineering disciplines that keep results attributable and the codebase main
   performance requirements, logging, verification harness.
 - `docs/protocol/06_workflow.md` — three-actor workflow, version lifecycle, prompt format,
   decision-brief format.
-- `docs/versions/v1.md` (legacy, flat) and, per active version, the folder
-  `docs/versions/vX.Y.Z/` containing `changes.md`, Executor build-logs `<task>.md`
-  (including any audit), and `results.md`.
+- `docs/versions/vX.Y.Z/` (local-only) — per-active-version folder containing `changes.md`,
+  Executor build-logs `<task>.md` (including any audit), and `results.md`.
 - `docs/ledger.md` — one row per run, with lineage and metrics.
 
 **Configs (`src/configs/`):**

@@ -1,0 +1,196 @@
+env:
+  obstacle_distribution: random
+  world_lim: 4.0
+  oob_limit: 8.0
+  dt: 0.05
+  h_scale: 0.35
+  k_obs: 5
+  goal_radius: 0.15
+  goal_speed_radius: 0.3
+  stuck_window_steps: 60
+  stuck_radius: 0.1
+  v_init_max: 0.5
+  bounds:
+    double_integrator:
+      u_max: 2.0
+      v_max: 2.5
+    unicycle:
+      a_max: 2.0
+      omega_max: 3.0
+obstacle:
+  n_min: 1
+  n_max: 12
+  r_min: 0.15
+  r_max: 0.8
+  p_corridor: 0.6
+  corridor_along_factor: 1.5
+  corridor_perp_factor: 1.0
+scene_train:
+  min_start_goal_dist: 1.0
+  start_goal_clearance: 0.1
+  init_feasibility_margin: 0.05
+network:
+  value:
+    n_layers: 3
+    hidden: 256
+    softplus_beta: 20.0
+    head: linear_clipped
+    n_vs: 2
+  control:
+    n_layers: 2
+    hidden: 256
+    activation: leaky_relu
+    output: softsign
+filter:
+  gamma_margin: 0.0
+  hardnet:
+    epsilon: 0.0005
+    box_aware: true
+  cbf_qp:
+    penalty: 10.0
+    relax_eps1: 0.5
+    v_shift: 0.001
+    max_iter: 500
+    max_iter_in: 100
+    eps_abs: 1.0e-09
+    max_workers: 32
+  alpha_safe: 2.0
+  alpha_unsafe: 100.0
+lqr:
+  double_integrator:
+    Q:
+    - 1.0
+    - 1.0
+    - 0.1
+    - 0.1
+    R:
+    - 1.0
+    - 1.0
+  unicycle:
+    Q:
+    - 0.5
+    - 0.5
+    - 0.1
+    - 0.1
+    R:
+    - 0.5
+    - 0.5
+    v_min: 0.1
+eval:
+  max_steps: 200
+  scene:
+    min_start_goal_dist: 1.5
+    start_goal_clearance: 0.15
+  in_loop:
+    n: 200
+    seed: 12345
+  full:
+    n: 500
+    seed: 23456
+  bootstrap:
+    n_resample: 1000
+    seed: 20260508
+  multi_seed:
+    min: 3
+    recommend: 5
+  insertion:
+    t_insert: 50
+    radius: 0.45
+    seed_offset: 77
+  cadence: 2000
+run:
+  version: v2.0.1
+  seed: 12345
+  framework: jt_pncbf
+  system: double_integrator
+  n_steps_override: 42000
+  schedule_n_steps_override: 42000
+training:
+  jt:
+    n_steps: 42000
+    vs_warmup_steps: 2000
+    K_V: 3
+    K_pi: 1
+    bptt_T: 30
+    schedule_n_steps: 42000
+  oc_pncbf:
+    epochs: 1000
+    grad_steps_per_epoch: 500
+    horizon: 100
+optim:
+  lr_VS: 0.0003
+  lr_pi: 0.0001
+  weight_decay: 0.1
+  grad_clip: 2.0
+  batch_size_jt: 4096
+  batch_size_oc: 65536
+  tau_polyak: 0.005
+  polyak_per_v_step: true
+  tb_histogram_every: 200
+  metrics_log_every: 200
+  batch_size_jt_value: 4096
+value_target:
+  type: pncbf
+  rpcbf_H: 7
+  rpcbf_beta: 20.0
+schedules:
+  gamma_disc:
+    horizon_init: 20.0
+    horizon_final: 100.0
+    lambda_floor: 0.05
+    f_warm: 0.1
+    f_phase1: 0.8
+    total_epochs: 1000
+  target_rhs:
+    init: 0.0
+    final: 0.9
+    f_warm: 0.1
+    f_phase1: 0.8
+  sigma:
+    sigma_min: 0.3
+    sigma_max: 2.0
+    init: 0.5
+    rho_target: 0.1
+    beta_sigma: 0.05
+  sigma_pi:
+    init: 0.0
+    decay_steps: 5000
+collection:
+  jt:
+    collect_every: 100
+    episodes_per_collect: 100
+    v_label_episodes: 32
+    buffer_cap: 1000000
+  oc_pncbf:
+    collect_size: 4096
+    buffer_capacity: 32768
+loss:
+  value:
+    lambda_R: 1.0
+    lambda_A: 0.0
+    lambda_C: 0.0
+  policy:
+    gamma_T: 0.99
+    lambda_v: 0.01
+    mu_u: 0.001
+    tau_gate: 0.05
+    w_outside: 0.3
+    lambda_a: 0.05
+    lambda_s: 0.1
+    lambda_sat: 1.0
+    sat_excess_threshold: 2.0
+    lambda_pretanh: 1.0
+    z_target: 0.867
+    vs_gated_pretanh: true
+    vs_gate_tau: 0.05
+labeling:
+  k_A: 5
+  m_phys: 0.1
+  k_safe: 5
+  delta_C: 0.1
+halt:
+  vs_grad_leak_threshold: 1.0e-09
+  sigma_max_cycles: 5
+  cps_floor: -0.5
+  early_stop_patience: 0
+  early_stop_min_delta: 0.002

@@ -16,7 +16,7 @@ Sets strategy. Makes every decision: version increments, scope changes, hyperpar
 
 Analyzes, proposes, and writes prompts. Does **not** execute code. Does **not** decide unilaterally. Persistent across sessions only through this repository — a new Strategist instance is brought up to speed by reading `docs/index.md`, `docs/ledger.md`, the current version's `docs/versions/vX.Y.Z/changes.md` and its build-logs, and the protocol documents.
 
-The Strategist's deliverables are: framework proposals (`docs/proposals/`), retrieve and execute prompts (transient, not committed), decision briefs (delivered in chat), and version `changes.md` / `results.md` drafts.
+The Strategist's deliverables are: framework proposals (`docs/proposals/`), retrieve and execute prompts (transient, not committed), decision briefs (delivered in chat), and version `changes.md` / `results.md` drafts. **Protocol edits** (`docs/protocol/`) are also the Strategist's responsibility under Researcher direction; the Executor never edits protocol files (`00_constitution` §1).
 
 ### 1.3 Executor (Claude Code or Codex — interchangeable)
 
@@ -26,7 +26,7 @@ The Executor's deliverables are: code commits, run outputs (`data/<run_id>/`), p
 
 ### 1.4 Session boundary
 
-A "session" is a chat conversation. Continuity across sessions is provided by the **repository**, not by any session's memory. A new Strategist instance must be able to read the repository and resume work without further context. Therefore every decision and every result lands in a tracked file before the session ends.
+A "session" is a chat conversation. Continuity across sessions is provided by the **repository**, not by any session's memory. A new Strategist instance must be able to read the repository and resume work without further context. Therefore every decision and every result lands in a tracked file (or, for local-only working artifacts such as `docs/versions/`, in the corresponding local file) before the session ends.
 
 ---
 
@@ -45,7 +45,36 @@ The Researcher decides to start a new version (`vX.Y.Z`). The Strategist drafts 
 5. **Eval plan.** Number of seeds (≥ 3, recommend ≥ 5). Comparison target: the previous secured version. Comparison rule: non-overlapping 95% CIs on pooled `cps` (`04_eval` §5).
 6. **Risks.** What could go wrong; what the halt protocol (`03_train` §4.7) would catch; what to watch in TensorBoard during the first hours.
 
-The document is committed before any code change. The Executor's first action is to read it.
+`docs/versions/` is local-only (§6); `changes.md` is the Strategist's working spec for the version, not a tracked git artifact. It must exist on disk before code changes begin, and the Executor's first action is to read it.
+
+**Version-string bump checklist.** When the version number itself changes, the version
+string is encoded in several places and must be updated together so that new run-ids,
+package metadata, and config all agree. `src/_version.py` is the single source of truth;
+everything else should derive from it rather than hardcode a literal. The checklist:
+
+1. **`src/_version.py`** — the canonical `__version__` string. Update this first; all other
+   references should read from it.
+2. **`pyproject.toml`** — the package `version` field.
+3. **`src/configs/exp_config.yaml`** — `run.version`, if present.
+4. **Run-id stamping** — confirm the trainer derives the run-id version segment from
+   `__version__` (e.g. `config["run"]["version"] = __version__`) so a new run is stamped
+   `vX.Y.Z__<timestamp>__seed<n>`. If any code hardcodes the version literal, fix it to read
+   from `_version.py` so future bumps are single-source.
+5. **`grep -rn` the old version** across `src/ docs/ scripts/ tests/ *.toml *.yaml *.yml`
+   to catch any remaining literal, and update or justify each. Comments and historical
+   prose that legitimately reference a past version (e.g. build-logs, results docs of a
+   prior version) are left as-is.
+6. **`docs/versions/vX.Y.Z/`** — create the new version's working directory (for `changes.md`
+   and build-logs).
+7. **`docs/index.md` STATUS** — the Strategist updates the dashboard (active version, in-flight
+   work); not the Executor.
+8. **Existing artifacts are never renamed.** Prior-version run directories, secured snapshots,
+   ledger rows, and adopted checkpoints keep their original version names; only NEW runs use
+   the bumped version.
+
+Verify after bumping: the printed `__version__` reads the new value, a dry run-id check
+produces the new version segment, the post-bump grep finds no stray old-version literal in
+code, and the test harness stays green (update any test that asserts the version string).
 
 ### 2.2 Implement
 
@@ -65,34 +94,72 @@ As the build/run proceeds, the Executor records a build-log `docs/versions/vX.Y.
 
 ### 2.4 Eval
 
-Final evaluation (`04_eval` §2.2) runs automatically when training completes. The Executor then aggregates the per-seed results into a multi-seed table (`04_eval` §5) — pooled bootstrap CI, mean, sample SD — and writes `data/secured_data/<version>/aggregate/multi_seed_metrics.json` and `multi_seed_report.md` (these paths are written to even before §2.5 close, because the aggregate is the input to the close decision).
+Final evaluation (`04_eval` §2.2) runs automatically when training completes. When a version
+is evaluated across multiple seeds, the Executor aggregates the per-seed results into a
+multi-seed table (`04_eval` §5) — pooled bootstrap CI, mean, sample SD — and writes
+`data/secured_data/<version>/aggregate/multi_seed_metrics.json` and `multi_seed_report.md`.
+A single-seed version reports the single run's full-pool metrics with scene-bootstrap 95%
+CIs instead; the single-seed status is stated explicitly so it is not mistaken for a
+cross-seed result, and multi-seed remains the recommended target (`00_constitution`,
+`04_eval` §5).
+
+**Ledger registration (automatic after every eval).** Whenever a run produces a usable
+evaluation — a full-pool final, an in-loop best, or an eval-only re-evaluation of an
+existing checkpoint under a changed deploy axis — the Executor appends one row to
+`docs/ledger.md` as part of completing the eval task, without waiting for a separate
+instruction. The row uses the current schema
+(`version | date | parent | seeds | eval_source | reach | collision | oob | stuck | timeout | infeas | sat_rate | cps | verdict`),
+filled from the run's real eval artifacts (never approximated; blank any field the eval did
+not record). `eval_source` states provenance: `full_n500`, `inloop_n200@<step>`, or
+`eval_only(<note>)` for a re-evaluation that is not a new training run (e.g. a filter swap on
+an adopted checkpoint). `parent` records the source checkpoint for an eval-only or
+warm-started row. The ledger is a docs file the Executor may edit; protocol files are never
+edited by the Executor.
+
+**Per-version SOTA marking (bold).** For each version block in `docs/ledger.md`, the
+single row with the highest `cps` among rows with `eval_source = full_n500` of that version
+is marked as the version's SOTA by bolding every cell in that row (markdown `**...**`).
+At most one row per version is bolded. Rows with `eval_source` of `inloop_n200@<step>` or
+`eval_only(<note>)` are not eligible for SOTA bolding. When a new full-pool result
+supersedes the previous version SOTA, the previous bold is removed and the new row is
+bolded in the same edit that registers the new row.
+
+**Ledger inclusion and formatting.** Smoke runs and runs that produced no usable
+evaluation row are not registered. Numeric outcome fields (`reach`, `collision`, `oob`,
+`stuck`, `timeout`, `infeasibility`, `saturation_rate`, `cps`) are recorded to 4 decimal
+places; CIs use the same precision when included. Run-ids are recorded verbatim from the
+`<run_id>` directory. The `parent` column may be `-` if the run is not a child of another
+registered run.
 
 ### 2.5 Close
 
-The Researcher authors `docs/versions/vX.Y.Z/results.md` (the Strategist may draft) with four headings. Unlike the Executor's build-logs in the same folder, this is the document that renders the version verdict:
+The Researcher authors `docs/versions/vX.Y.Z/results.md` (the Strategist may draft) — the document that renders the version verdict. Unlike the Executor's build-logs (`docs/versions/vX.Y.Z/<task>.md`), the results document interprets. Both live under the gitignored `docs/versions/` as the local SSOT. It covers at least:
 
-1. **Result.** Pooled `cps` (mean and 95% CI), with per-seed values and the component breakdown.
+1. **Result.** `cps` and the component breakdown with 95% CIs — pooled across seeds for a multi-seed version, or single-run scene-bootstrap CIs for a single-seed version (stated as such).
 2. **Versus motivation.** Did the change do what §2.1 hypothesized? Cite the numbers.
-3. **Improvement verdict.** Improved / no improvement detected / regressed, per the `04_eval` §5 comparison rule (non-overlapping CIs over the previous secured version).
-4. **Next axis.** What the data suggests for the next version. This is a suggestion to the Researcher, not a commitment.
+3. **Improvement verdict.** Improved / no improvement detected / regressed. For multi-seed versions, by the `04_eval` §5 rule (non-overlapping CIs over the previous secured version); for single-seed, by the headline comparison against the previous secured baseline, flagged as single-seed.
+4. **Next axis.** What the data suggests for the next version. A suggestion, not a commitment.
 
-The Executor copies the chosen final runs from `data/<run_id>/` into `data/secured_data/<version>/seed<N>/` (`04_eval` §7.5). "Chosen" usually means all seeds; if any run is unrepresentative (e.g. halted early for an unrelated reason), the Researcher decides whether to include it.
+The Executor copies the chosen final run(s) from `data/<run_id>/` into the secured layout (`04_eval` §7.5), excluding the bulky per-step `metrics.csv`, and writes the `ADOPTED.md` identity record with pinned SHA-256 hashes.
 
 ### 2.6 Push
 
-The Executor recommends — and, after Researcher confirmation, performs — the git operation:
+The Executor recommends — and, after Researcher confirmation, performs — the git operation.
+Since `docs/versions/` is local-only (§6.2), the version's `changes.md`, build-logs, and
+results are not staged; what is committed is the code/config change, the updated dashboard
+and ledger, and the secured snapshot:
 
 ```bash
-git add docs/versions/vX.Y.Z/ \
-        docs/index.md docs/ledger.md \
+git add src/ tests/ \
+        docs/protocol/ docs/index.md docs/ledger.md \
         src/configs/exp_config.yaml \
-        data/secured_data/<version>/
+        data/secured_data/
 git commit -m "vX.Y.Z: <one-line summary>"
 git tag vX.Y.Z
 git push && git push --tags
 ```
 
-`docs/index.md` (the state dashboard) and `docs/ledger.md` (one row per run, with lineage and `cps`) are updated as part of the same commit. The tag `vX.Y.Z` is the authoritative reference to this version's code state; secured artifacts in `data/secured_data/<version>/` are the authoritative reference to its results.
+`docs/index.md` (the state dashboard) and `docs/ledger.md` (one row per run, with lineage and `cps`) are updated as part of the same commit. Protocol edits, if any, are committed in the same step. The tag `vX.Y.Z` is the authoritative reference to this version's code state; secured artifacts in `data/secured_data/` are the authoritative reference to its results. The version's process documents remain in the local-only `docs/versions/` and are not part of the tagged commit.
 
 Between version pushes, the Strategist reads the **last pushed state** (commits, secured data); in-flight, unsecured work is not the Strategist's source of truth.
 
@@ -163,23 +230,46 @@ When sources disagree, follow `00_constitution` §2. Specifically:
 
 ### 6.1 What git tracks
 
-- All of `src/`, `scripts/`, `docs/`, `tests/`, and the top-level files (`README.md`, `LICENSE`, `pyproject.toml`, `mkdocs.yml`, `.gitignore`). This includes every per-version folder `docs/versions/vX.Y.Z/` (its `changes.md`, build-logs, and `results.md`); audit and build-log files live only there, never at the repo root (SSOT, `00_constitution` §6).
-- `data/secured_data/` — both the pools (`data/secured_data/pools/`) and every closed version's snapshot (`data/secured_data/<version>/`).
+- `src/`, `scripts/`, `tests/`, and the top-level files (`README.md`, `LICENSE`,
+  `pyproject.toml`, `mkdocs.yml`, `.gitignore`).
+- Within `docs/`: the protocol (`docs/protocol/`), the state dashboard (`docs/index.md`),
+  the run ledger (`docs/ledger.md`), the MkDocs assets (`docs/javascripts/`), and any
+  top-level docs pages. The committed repository carries the result — code, spec, ledger,
+  dashboard, and the secured baseline — not the development-process documents.
+- `data/secured_data/` — both the pools (`data/secured_data/pools/`) and every closed
+  version's snapshot.
 
 ### 6.2 What is local-only
 
-- Every `data/<run_id>/` directory (in-flight runs). The `.gitignore` pattern in `05_code` §4 enforces this.
-- TensorBoard event files inside `data/<run_id>/tensorboard/` — large and redundant with the CSVs that are secured at close.
+- **`docs/versions/`** — the per-version working directory (`changes.md`, build-logs,
+  `results.md`). These are the development-process record, kept locally as the SSOT
+  the Strategist and Executor read, but excluded from the committed repository. The MkDocs
+  site (built locally) renders them; the git history does not carry them.
+- Every `data/<run_id>/` directory (in-flight and superseded runs) except what is promoted
+  to `data/secured_data/`. The `.gitignore` pattern enforces this (`data/*` ignored,
+  `data/secured_data/` excepted).
+- TensorBoard event files inside `data/<run_id>/tensorboard/` — large and redundant with
+  the CSVs that are secured at close.
 
 ### 6.3 secured_data conventions
 
-- **Pools.** Generated once via `src/eval/build_pools.py` and committed at the start of v2.0.0. They are immutable thereafter: regenerating them is a major version event because `cps` comparisons across versions assume identical pools.
-- **Version snapshots.** Copied at §2.5 close. Contents listed in `04_eval` §7.5. Checkpoint files are committed plain (no LFS) in v2.0.0.
-- **Aggregate.** `data/secured_data/<version>/aggregate/` carries the cross-seed bootstrap and the one-page summary. This is the canonical reference for any future comparison.
+- **Pools.** Generated once via `src/eval/build_pools.py` and committed; they are
+  immutable thereafter. Regenerating them is a major-version event because `cps`
+  comparisons across versions assume identical pools.
+- **Version snapshots.** Copied at §2.5 close into `data/secured_data/<version>/seed<N>/`,
+  containing the adopted checkpoint, config, eval metrics/episodes, pinned SHA-256 hashes,
+  and figures, with an `ADOPTED.md` identity record. Bulky per-step training logs
+  (`metrics.csv`) are excluded from the secured set; the full curve stays in the
+  gitignored original run directory. Checkpoint files are committed plain (no LFS) while
+  they remain small.
+- **Aggregate.** When a version is evaluated across multiple seeds,
+  `data/secured_data/<version>/aggregate/` carries the cross-seed bootstrap and the
+  one-page summary. A single-seed version has no aggregate; its secured snapshot and
+  `ADOPTED.md` are the canonical reference.
 
 ### 6.4 MkDocs and TensorBoard
 
-- **MkDocs site** is built from `docs/` at every push. It is a rendering of the committed truth; it does not show in-flight work.
+- **MkDocs site** is built locally from `docs/` (`mkdocs serve` / `mkdocs build`); it renders the local SSOT, including the gitignored `docs/versions/`. It is not deployed at push by default.
 - **TensorBoard** is the in-flight monitoring channel, served from `data/`. It is the Researcher's primary view during a run.
 - The two never disagree: anything in TensorBoard that matters becomes a row in a secured CSV at version close.
 
@@ -201,7 +291,7 @@ Confirm: which type (retrieve vs execute) — scope — safeguards — done-when
 
 ### 7.3 Before closing a version
 
-Confirm: §2.5 `results.md` drafted — multi-seed aggregate written — secured snapshot copied — `index.md` and `ledger.md` updated — git status reviewed. Then §2.6 push.
+Confirm: §2.5 `results.md` drafted — multi-seed aggregate written (or single-seed status stated) — secured snapshot copied with `ADOPTED.md` — `index.md` and `ledger.md` updated (including SOTA bold per §2.4) — git status reviewed. Then §2.6 push.
 
 ### 7.4 Ending a session
 

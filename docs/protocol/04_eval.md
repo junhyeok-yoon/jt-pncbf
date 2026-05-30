@@ -8,11 +8,11 @@ The evaluation harness is **framework-agnostic**: it runs on any policy + filter
 
 The harness enforces five invariants by construction, each closing a class of measurement error:
 
-- **One metric name, one formula.** A single name (`cps`) and a single formula (§1) carry $(reach - 2 \cdot collision - 0.3 \cdot infeasibility)$. No alternate field name and no simpler $(reach - collision)$ variant exists anywhere.
+- **One metric name, one formula.** A single name (`cps`) and a single formula (§1) carry $(reach - 2 \cdot collision - \text{stuck} - 0.5(\text{oob} + \text{timeout}) - 0.3 \cdot infeasibility)$. No alternate field name and no simpler $(reach - collision)$ variant exists anywhere.
 - **One outcome-priority rule.** Outcomes are resolved by the `01_env` §1.6 predicates verbatim (collision before goal; exact contact, no radius inflation). No evaluation path re-derives them.
 - **One infeasibility definition.** Infeasibility is the mean over active filtered steps of the per-step infeasible flag, then the mean over episodes (§1, `02_control` §4). No other aggregation is used.
 - **Reproducible pools.** Evaluation pools are generated once, serialized, and committed to git (§6); nothing is sampled in memory at evaluation time, so any two reports are on bit-identical scenes.
-- **Variance always reported.** Multi-seed bootstrap CIs are required for any reported number (§5); single-seed point estimates are never the headline.
+- **Variance always reported.** Multi-seed bootstrap CIs are required for any aggregated number (§5). A single-seed result may be reported as a version's headline only when explicitly marked single-seed and supplemented by a scene-bootstrap CI; multi-seed is strongly recommended and is the requirement once additional seeds are available.
 
 ---
 
@@ -66,7 +66,7 @@ The harness exposes exactly two modes. There is no "quick" mode; if cheaper eval
 
 ### 2.1 In-loop evaluation (during training)
 
-Triggered by the trainer every `exp_config.eval.cadence` macro steps. Runs against the **in-loop pool** (`base_config.eval.in_loop`, $N = 200$). One row appended to `data/<run_id>/eval_metrics.csv`; per-episode rows to `data/<run_id>/eval_episodes.csv`; scalars also written to TensorBoard. The trainer updates `data/<run_id>/checkpoints/best.pt` by `cps`. In-loop **also renders the trajectory+control figures** (§3) and the **CBF contour figure** (§3b) to `data/<run_id>/figures/inloop/step_<NNNNNN>_grid_{A,B}.png` and `step_<NNNNNN>_cbf_contour.png` (batched CBF-QP eval makes this cheap). No online insertion in-loop (that is final-only, §4).
+Triggered by the trainer every `exp_config.eval.cadence` macro steps. Runs against the **in-loop pool** (`base_config.eval.in_loop`, $N = 200$). One row appended to `data/<run_id>/eval_metrics.csv`; per-episode rows to `data/<run_id>/eval_episodes.csv`; scalars also written to TensorBoard. The trainer updates `data/<run_id>/checkpoints/best.pt` by `cps`. In-loop **also renders the trajectory+control figures** (§3) and the **CBF contour figure** (§3b) to `data/<run_id>/figures/inloop/step_<NNNNNN>_grid_{A,B}.png` and `step_<NNNNNN>_cbf_contour.png` (batched framework-native filter evaluation — CBF-QP for OC-PNCBF, HardNet for JT — makes this cheap). No online insertion in-loop (that is final-only, §4).
 
 ### 2.2 Final evaluation (after training)
 
@@ -94,7 +94,7 @@ A single fixed format eliminates per-report customization. All plots in the proj
 
 **Selection — intervention episodes only, deterministic, filled to 16.** Only episodes in which the CBF intervened on at least one step (some step with $\|u^{\text{safe}}_t - u^{\text{nom}}_t\| > 10^{-3}$) are plotted; episodes the filter never touched are skipped (they carry no filter behavior to inspect). Selection is deterministic: scan the pool in ascending index order and take the first 16 intervention episodes (the first 8 to figure `A`, the next 8 to figure `B`). The pool's intervention episodes normally far exceed 16, so the 16 panel-pairs are filled. In the rare case the pool yields fewer than 16, plot all available and leave the trailing panel pairs empty; report the shortfall.
 
-**Left panel — trajectory.** As before: arena boundary (thin black square at $[-\text{world\_lim}, \text{world\_lim}]^2$), obstacles as filled gray circles (true radii), start (green circle), goal (red star). The framework's nominal-only rollout is drawn dotted at reduced alpha (LQR-only for OC-PNCBF; for Joint Training the learned no-CBF rollout is the dotted baseline). The filtered trajectory is colored **per step by intervention**: black where the filter was inactive, gray where it intervened. A collision is a red `x` at the first-collision step. Panel title: pool index + resolved outcome word (`Reach` / `Collision` / `OOB` / `Timeout`).
+**Left panel — trajectory.** As before: arena boundary (thin black square at $[-\text{world\_lim}, \text{world\_lim}]^2$), obstacles as filled gray circles (true radii), start (green circle), goal (red star). The framework's nominal-only rollout is drawn dotted at reduced alpha (LQR-only for OC-PNCBF; for Joint Training the learned no-CBF rollout is the dotted baseline). The filtered trajectory is colored **per step by intervention**: black where the filter was inactive, gray where it intervened. A collision is a red `x` at the first-collision step. Panel title: pool index + resolved outcome word (`Reach` / `Collision` / `OOB` / `Stuck` / `Timeout`).
 
 **Right panel — control vs time.** The executed control components are plotted against time step for the filtered run, overlaying pre- and post-projection actions so the projection's effect is visible:
 
@@ -104,7 +104,7 @@ A single fixed format eliminates per-report customization. All plots in the proj
 
 The overlay of $u^{\text{nom}}$ is kept unless it makes a panel unreadable, in which case it may be dropped (the $u^{\text{safe}}$ lines and bounds are the essential content).
 
-**Titles and legend.** The figure suptitle is version-stamped (begins with the project version, e.g. `v2.0.0 · …`). The global legend sits at the figure bottom in **two rows**: row 1 describes the trajectory panel (`Start`, `Goal`, `Trajectory (CBF inactive)`, `Trajectory (CBF active)`, `Nominal-only (dotted)`, `Collision`); row 2 describes the control panel (`u₁ safe`, `u₂ safe`, `u₁ nominal`, `u₂ nominal`, `Control bound`). The full set is shown even when an entry is unused in a given figure. No per-panel legend.
+**Titles and legend.** The figure suptitle is version-stamped (begins with the project version, e.g. `vX.Y.Z · …`). The global legend sits at the figure bottom in **two rows**: row 1 describes the trajectory panel (`Start`, `Goal`, `Trajectory (CBF inactive)`, `Trajectory (CBF active)`, `Nominal-only (dotted)`, `Collision`); row 2 describes the control panel (`u₁ safe`, `u₂ safe`, `u₁ nominal`, `u₂ nominal`, `Control bound`). The full set is shown even when an entry is unused in a given figure. No per-panel legend.
 
 **Files.** Final eval: `data/<run_id>/figures/trajectory_grid_A.png` and `trajectory_grid_B.png`. In-loop eval: `data/<run_id>/figures/inloop/step_<NNNNNN>_grid_{A,B}.png` (§7.1). PNG only.
 
@@ -134,8 +134,8 @@ panels total = two scenes × three velocities.
 grid covering the arena $[-\text{world\_lim}, \text{world\_lim}]^2$ (a resolution that
 renders cleanly, e.g. 100–200 per axis). At each grid point build the full state (swept
 position + the panel's fixed velocity), construct the observation, and evaluate the
-**deployed** $h$ (`make_h_fn(value_net, system)` deployed max-ensemble, `02_control` §3.4/§3.5).
-Render $h$ as a filled color map over the position grid:
+**deployed** $h$ (`make_h_fn(value_net, system)` deployed mean-ensemble, `02_control`
+§3.4/§3.5). Render $h$ as a filled color map over the position grid:
 
 - **Colormap:** diverging, centered at $0$, spanning the clamped range $h \in [-1, 1]$
   (e.g. blue negative/safe → white zero → red positive/unsafe). A shared colorbar.
@@ -150,6 +150,10 @@ Render $h$ as a filled color map over the position grid:
 `data/<run_id>/figures/cbf_contour.png`. In-loop eval:
 `data/<run_id>/figures/inloop/step_<NNNNNN>_cbf_contour.png`. Produced in BOTH in-loop and
 final eval, alongside the trajectory+control grids (§3). PNG only.
+
+---
+
+## 4. Online insertion
 
 A stress test for the filter's reactivity to a scene change mid-episode. An obstacle is inserted on the filtered run only.
 
@@ -168,9 +172,16 @@ Each variant appends one row to `eval_metrics.csv` and per-episode rows to `eval
 
 ## 5. Multi-seed reporting and bootstrap
 
-Single-seed numbers are **never** the headline. Every reported result is a multi-seed aggregate with a bootstrap CI.
+Multi-seed aggregates with bootstrap CIs are the strongly recommended form for any reported result. A single-seed run may be reported as the headline of a version under the following conditions; once additional seeds are run, the multi-seed form takes over and becomes the requirement at version close.
 
-**Seeds.** Minimum 3 seeds; recommend 5+. Three seeds is the floor required for any version to claim improvement over the previous version.
+**Single-seed headline (permitted when marked).** A version may report a single-seed result as its headline iff:
+- the `seeds` column in `docs/ledger.md` lists the one seed (the row is explicitly "single-seed");
+- the `docs/versions/vX.Y.Z/results.md` states "single-seed" prominently in the headline;
+- a **scene-bootstrap 95% CI** on the single seed's episodes (resampling episodes within the seed) is reported alongside the point estimate.
+
+This option exists so that a clearly-marked single-seed result is not categorically barred; it is not a substitute for multi-seed validation and must not be referred to as the version's reproducibility evidence.
+
+**Multi-seed (strongly recommended).** Minimum 3 seeds; recommend 5+. Three seeds is the threshold required for any version to claim improvement over the previous version under the comparison rule below.
 
 **Within-seed bootstrap.** For each seed, sample episodes with replacement `eval.bootstrap.n_resample` times (default 1000) using `eval.bootstrap.seed` (default 20260508). For each resample, compute `cps` and components. The percentile CI is the 2.5/97.5 quantiles of the resample distribution, using NumPy's default linear interpolation method (`numpy.percentile(..., method="linear")`); the method is pinned so CIs are reproducible. The canonical input is the per-episode records of `eval_episodes.csv` (§7.3); the bootstrap consumes already-resolved per-episode outcomes and does not re-derive them.
 
@@ -180,7 +191,7 @@ Single-seed numbers are **never** the headline. Every reported result is a multi
 - Standard deviation across seeds (sample SD, not SE).
 - The pooled within-seed 95% CI (concatenated resamples across seeds, then 2.5/97.5 quantiles).
 
-**Comparison rule.** Version B improves over Version A iff B's pooled mean `cps` is above A's pooled mean `cps` **and** the 95% CIs do not overlap. Overlapping CIs are reported as "no improvement detected"; the absence of a positive result is itself a result.
+**Comparison rule.** Version B improves over Version A iff B's pooled mean `cps` is above A's pooled mean `cps` **and** the 95% CIs do not overlap. Overlapping CIs are reported as "no improvement detected"; the absence of a positive result is itself a result. The comparison rule applies once both versions have multi-seed aggregates available; a single-seed-vs-multi-seed comparison is not run under this rule.
 
 The aggregated multi-seed table lives in `data/secured_data/<version>/aggregate/multi_seed_metrics.json` and is summarized in `multi_seed_report.md`.
 
@@ -201,10 +212,8 @@ Eval scenes are **looser** than training (larger clearance, larger min start-goa
 
 ### 6.2 Pools (committed)
 
-Two pools are pre-generated, serialized, and committed to git under `data/secured_data/pools/`. Every v2 run reads them; nothing is generated in memory at evaluation time.
+Two pools are pre-generated, serialized, and committed to git under `data/secured_data/pools/`. Every run reads them; nothing is generated in memory at evaluation time.
 
-| pool | $N$ | seed | path |
-|---|---|---|---|
 | pool | $N$ | seed | path |
 |---|---|---|---|
 | in-loop | 200 | 12345 | `data/secured_data/pools/eval_inloop_<system>_n200_seed12345.{pkl,manifest.json}` |
@@ -260,19 +269,40 @@ data/<run_id>/
 
 Checkpoint contents follow `03_train` §5 (step, pi_state, v_s_state, v_s_target_state, args).
 
+**Run-id formats.**
+
+- **Training runs:** `vX.Y.Z__YYYYMMDD-HHMMSS__seed<N>`. This is the canonical form.
+- **Eval-only diagnostic runs** (a run that does no training, only re-evaluates an existing checkpoint under an ablation): may use a descriptive suffix
+  `vX.Y.Z__YYYYMMDD-HHMMSS__<descriptive>_seed<N>`, where `<descriptive>` is a short snake_case tag (e.g. `hardnet_oc`, `cbfqp_oc`, `slowmpc`) that identifies the ablation. The descriptive form must never collide with a training run id; a training run is always identified by the canonical form.
+
 ### 7.2 CSV schemas
 
-**`metrics.csv`** — one row per logged macro step. Columns (canonical, additions allowed but no removals):
+**`metrics.csv`** — one row per logged macro step. The canonical column **set** is listed
+below; the listing is the required-membership specification, not an ordering
+specification. The **trainer's actual CSV header is the authoritative order**: any new
+run's header is the ground truth for column order, and downstream tooling reads by
+column name, not by position. Adding a column is allowed; removing a column listed
+below requires a protocol patch.
 
 ```text
-step, wallclock_s, n_sched,
-gamma_disc, target_rhs, sigma, sigma_pi,
-L_R, L_A, L_C, L_V_total,
+step, wallclock_s, schedule_step,
+lambda_disc_active, gamma_disc_active, target_rhs_active, sigma, sigma_pi,
+L_R, L_V_total,
 L_in_task, L_anorm, L_smooth, L_satex, L_pretanh, L_out, L_pi_total,
 grad_norm_VS, grad_norm_pi, grad_leak_VS_from_Lpi,
-proj_mag_ema, sigma_pin_counter,
+rho_unsafe_v, rho_unsafe_pi, collect_proj_mag, collect_infeasible,
+probe_h_min, probe_h_max, probe_h_mean,
 abs_action_mean, abs_action_max, satfrac_a_phi
 ```
+
+The anchor columns `L_A`, `L_C` are written only when the optional anchor mechanism
+(`03_train` §4.3) is active (nonzero $\lambda_A$ or $\lambda_C$); otherwise they are
+omitted. Columns that earlier drafts named differently — `n_sched`, `gamma_disc`,
+`target_rhs`, `proj_mag_ema`, `sigma_pin_counter` — have been replaced by the columns
+above to match the active trainer; their semantics are no longer part of the schema.
+Run artifacts written before the v2.1.0 column rename retain the old names (e.g. the
+v2.0.1 SOTA artifact still carries `target_rhs`); downstream analysis tooling should
+accept both as an alias of `target_rhs_active` when reading historical runs.
 
 **`eval_metrics.csv`** — one row per evaluation. Columns:
 
@@ -354,7 +384,7 @@ data/secured_data/<version>/seed<N>/
 └── report.md
 ```
 
-Per-version aggregate lives at `data/secured_data/<version>/aggregate/`:
+Per-version aggregate lives at `data/secured_data/<version>/aggregate/` (only when multi-seed aggregation is performed):
 
 ```text
 data/secured_data/<version>/aggregate/

@@ -42,9 +42,17 @@ network** (§6.2). The safety filter is one of **CBF-QP** (§5) or **HardNet pro
 
 - **LQR-only** — nominal LQR, no filter. The analytic baseline (per the
   "establish baselines" principle).
-- **CBF-QP filtered** — used by OC-PNCBF at deployment. Not differentiable (§7).
-- **HardNet filtered** — used by Joint Training; differentiable, enabling policy/value
-  co-training through the projection.
+- **CBF-QP filtered** — used by OC-PNCBF for deployment and online insertion. Not
+  differentiable (§7).
+- **HardNet filtered** — used by Joint Training for both co-training and deployment;
+  differentiable, enabling policy/value co-training through the projection.
+
+**Framework-deploy-filter pairing.** The deploy filter for a given evaluation matches the
+framework that produced the value-net: OC-PNCBF deploys through CBF-QP, JT deploys through
+HardNet. The pairing is enforced because the value-net and policy are calibrated end-to-end
+for their training-time filter; running JT's value-net under CBF-QP (or OC's under HardNet)
+is an eval-only ablation and must be flagged as such (see `04_eval` §7.1 on eval-only
+diagnostic naming).
 
 ---
 
@@ -100,7 +108,7 @@ is $C^\infty$. $\beta = 20$ keeps the activation close to ReLU's expressiveness 
 remaining smooth.
 
 Weight initialization is PyTorch's default `nn.Linear` initialization; no custom
-initializer is used in v2.0.0.
+initializer is used.
 
 **Output head: unbounded linear, clipped to $[-1, 1]$ only at read-out.** The network
 `forward` produces a raw linear scalar (no bounding activation). The clip to $[-1, 1]$ is
@@ -157,10 +165,9 @@ action within the control bounds. Concretely, per active filtered step:
   box-aware mode, the half-space and the control box have empty intersection so the
   projection must fall back to the least-violating action.
 
-Aggregation (canonical, per the agreed metric): per episode, infeasibility is the **mean
-over active steps** of the per-step infeasible flag; the reported `infeasibility` is the
-mean over episodes. This is the `infeasibility` term consumed by `cps` in `03_train` /
-`04_eval`.
+The episode-level **infeasibility rate** is the **mean over active steps** of the per-step
+infeasible flag; the reported `infeasibility` is the mean over episodes. This is the
+`infeasibility` term consumed by `cps` in `03_train` / `04_eval`.
 
 ### 4.1 Saturation rate
 
@@ -184,7 +191,8 @@ diagnostic in `04_eval`, never folded into `cps`.
 
 ## 5. Safety filter A — CBF-QP (proxsuite)
 
-Used by OC-PNCBF (and as the deployment filter generally).
+Analytic projection. **OC-PNCBF** uses CBF-QP for deployment and online insertion. Not
+differentiable (§7), so it is not used as a JT training-time filter.
 
 ### 5.1 Formulation
 
@@ -211,13 +219,14 @@ $\text{eps\_abs} = 10^{-9}$. The batched solve parallelizes per-row over at most
 solver does not expose a vectorized API.
 
 **Relative-degree remark (REQUIRED reading).** The first-order CBF row above only
-constrains the action when $L_g h \neq 0$. For both v2.0.0 systems the *instantaneous
-geometric* signed-h of `01_env` §1.4 depends only on position; since the action enters
-acceleration/turn-rate, not position, geometric-h is **relative degree 2** and yields
-$L_g h = 0$ — a first-order CBF-QP has no control authority on it. Therefore geometric-h
-is valid only for labels, outcomes, and structural tests, **never** as a deployment
-`h_fn`. A usable `h_fn` must have nonzero $L_g h$, which the learned policy-conditioned
-value $V_S$ provides because it depends on velocity through the observation (§3.5).
+constrains the action when $L_g h \neq 0$. For the 2-D action systems covered by this spec
+the *instantaneous geometric* signed-h of `01_env` §1.4 depends only on position; since the
+action enters acceleration/turn-rate, not position, geometric-h is **relative degree 2**
+and yields $L_g h = 0$ — a first-order CBF-QP has no control authority on it. Therefore
+geometric-h is valid only for labels, outcomes, and structural tests, **never** as a
+deployment `h_fn`. A usable `h_fn` must have nonzero $L_g h$, which the learned
+policy-conditioned value $V_S$ provides because it depends on velocity through the
+observation (§3.5).
 
 ### 5.2 Solver correctness (REQUIRED)
 
@@ -225,8 +234,8 @@ A verification harness in `src/common/` runs unit tests that must pass before an
 framework is allowed to use the filter (`05_code` §5). On a fixed battery of
 $(h, L_f h, L_g h, u^{\text{nom}}, \text{bounds})$ cases the tests check:
 
-1. the solver-reported primal and dual residuals are below tolerance (this is the
-   accepted operational definition of "KKT residual" for v2.0.0; the implementation is not
+1. the solver-reported primal and dual residuals are below tolerance (this is the accepted
+   operational definition of "KKT residual" used by this spec; the implementation is not
    required to independently assemble stationarity / complementarity / active-set
    residuals);
 2. the returned $u$ satisfies the CBF and box constraints within tolerance (slack
@@ -240,7 +249,8 @@ half-space, box-inactive, feasible cases.
 
 ## 6. Safety filter B — HardNet projection and the control network
 
-Used by Joint Training; differentiable, so policy and value co-train through it.
+Used by Joint Training; differentiable, so policy and value co-train through it, and JT
+also deploys through HardNet so deployment matches training.
 
 ### 6.1 Closed-form projection
 
@@ -258,19 +268,19 @@ identically — geometric-h ($L_g h = 0$) is not a valid HardNet `h_fn`, only a
 velocity-dependent learned $V_S$ is.
 
 A **box-aware** mode (`base_config.filter.hardnet.box_aware = true`) selects the exact
-closest point of $\{A \cdot u \leq b\} \cap [\text{bounds}]$. For the **2-D action**
-systems of v2.0.0 the candidate set is finite and enumerated explicitly: the clamped
-nominal action, the clamped base projection, the four box corners, and the intersections
-of the half-space boundary with each box edge. The closest feasible candidate is selected
-(`torch.argmin` on squared distance, ties resolved by lowest candidate index); if none is
-feasible, the least-violating candidate is returned and the step is flagged infeasible
-(§4). Candidate selection is non-differentiable, but gradients flow through the selected
-candidate. Numerical tolerances ($10^{-9}$ for feasibility, $10^{-12}$ for degenerate
-edges) are local constants. **Scope:** this enumerator is defined only for 2-D action
-spaces; before adding a higher-action system (e.g. a 6-D quadrotor) it must be replaced by
-a dimension-general exact box/half-space projection, or its finite-candidate rule and
+closest point of $\{A \cdot u \leq b\} \cap [\text{bounds}]$. For 2-D action systems the
+candidate set is finite and enumerated explicitly: the clamped nominal action, the clamped
+base projection, the four box corners, and the intersections of the half-space boundary
+with each box edge. The closest feasible candidate is selected (`torch.argmin` on squared
+distance, ties resolved by lowest candidate index); if none is feasible, the
+least-violating candidate is returned and the step is flagged infeasible (§4). Candidate
+selection is non-differentiable, but gradients flow through the selected candidate.
+Numerical tolerances ($10^{-9}$ for feasibility, $10^{-12}$ for degenerate edges) are
+local constants. **Scope:** this enumerator is defined only for 2-D action spaces; before
+adding a higher-action system (e.g. a 6-D quadrotor) it must be replaced by a
+dimension-general exact box/half-space projection, or its finite-candidate rule and
 approximation status must be re-specified. This is a one-axis prerequisite for any new
-high-dimensional system, not a v2.0.0 task.
+high-dimensional system.
 
 ### 6.2 Main control network (learned policy)
 
@@ -292,8 +302,8 @@ it.
 
 ### 6.3 Role
 
-Because this path is differentiable (§7), it is the filter used for JT co-training. The
-CBF-QP path (§5) is for OC-PNCBF / deployment.
+Because this path is differentiable (§7), it is the filter used for JT co-training and JT
+deployment. The CBF-QP path (§5) is for OC-PNCBF deployment.
 
 ---
 

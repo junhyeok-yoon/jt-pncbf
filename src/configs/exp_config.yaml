@@ -2,7 +2,7 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.0.0"
+  version: "v2.0.1"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
   system: double_integrator         # double_integrator | unicycle
@@ -14,6 +14,7 @@ training:
     K_V: 3
     K_pi: 1
     bptt_T: 30
+    schedule_n_steps: 10000
   oc_pncbf:
     epochs: 1000
     grad_steps_per_epoch: 500
@@ -43,9 +44,8 @@ schedules:
     sigma_min: 0.3
     sigma_max: 2.0
     init: 0.5
-    beta_proj: 0.05
+    rho_target: 0.10
     beta_sigma: 0.05
-    alpha_dom: 1.0
   sigma_pi:
     init: 0.0
     decay_steps: 5000
@@ -77,7 +77,7 @@ loss:
     sat_excess_threshold: 2.0
     lambda_pretanh: 1.0
     z_target: 0.867                 # atanh(0.70)
-    vs_gated_pretanh: false
+    vs_gated_pretanh: true
     vs_gate_tau: 0.05
 
 labeling:
@@ -98,4 +98,4 @@ filter:
   alpha_unsafe: 100.0
 
 eval:
-  cadence: 20000                    # in-loop eval every this many value steps
+  cadence: 2000                     # in-loop eval every this many value steps

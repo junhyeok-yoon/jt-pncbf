@@ -128,9 +128,12 @@ Evaluation values are not restated here. See `04_eval` for the eval-side paramet
 
 ## 2. Common value-learning scaffold
 
-Both frameworks learn the value network of `02_control` (signed $h$, tanh-bounded
-$[-1, 1]$) with the same target form and the same optimizer/Polyak convention. Only the
-data distribution and the policy involvement differ.
+Both frameworks learn the value network of `02_control` (signed $h$ with the raw-linear
+output head clipped to $[-1, 1]$ only at read-out, per `02_control` §3.2) with the same
+target form and the same optimizer/Polyak convention. The training MSE regresses the raw
+forward output against the clamped target; deployed $h$ uses the mean-ensemble clipped
+value and the target uses the min-ensemble clipped value (`02_control` §3.4). Only the
+data distribution and the policy involvement differ between the frameworks.
 
 ### 2.1 Value target (switchable)
 
@@ -188,25 +191,21 @@ $\beta \to \infty$. The $\tfrac{1}{H+1}$ normalization makes the target **horizo
 (the un-normalized log-sum-exp carries a $\tfrac{1}{\beta}\log(H+1)$ bias that depends on
 $H$ and consumes a meaningful fraction of the clamped $[-1,1]$ range). When
 `value_target.type` is `rpcbf`, $V^{\text{rp}}_t$ replaces $\tilde A_t$ as the regression
-target. (A blend $(1-\rho)\tilde A_t + \rho V^{\text{rp}}_t$ is a one-axis addition, §7.)
+target. A blend $(1-\rho)\tilde A_t + \rho V^{\text{rp}}_t$ is reserved as a one-axis
+addition (§7).
 
-**Trade-off — loss of the $V \ge h$ upper bound (deliberate v2.0.0 choice).** The PNCBF /
-RPCBF guarantee that the policy value function is a valid CBF rests on
-$V^{h,\pi}(x) \ge h(x)$: the value upper-bounds the worst future safety cost, so its zero
-sublevel set is forward-invariant (So et al. 2024, Thm. 1; Knoedler 2025, Eq. 7). The
-**un-normalized** log-sum-exp target satisfies this automatically, since it is always
-$\ge \max_k h(x_{t+k}) \ge h(x_t)$. The **normalized** log-mean-exp target chosen here does
-**not**: lying between mean and max, it can fall below $\max_k h$, so the regressed $V_S$ is
-a smooth under-estimate of the true max-over-time value and is therefore slightly
-**optimistic on the unsafe side** (it may report a state as less dangerous than the
-worst-case bound would). This is accepted in v2.0.0 for two reasons: (1) horizon-invariance
-and avoidance of tanh-head saturation within $[-1,1]$, as above; (2) the $\mathcal{D}_A$
-unsafe anchor (§4.3) independently forces $V_S \ge \gamma_{\text{margin}}$ on pre-collision
-and near-unsafe states, supplying the lower bound on $V_S$ over the unsafe region that the
-log-mean-exp target gives up — so conservativeness is recovered through supervision rather
-than through the target's analytic upper-bound property. Restoring the strict $V \ge h$
-target (un-normalized log-sum-exp, accepting the $H$-dependent bias) is available as a
-one-axis alternative (§7) should the anchor compensation prove insufficient.
+**Trade-off — loss of the $V \ge h$ upper bound.** The PNCBF / RPCBF guarantee that the
+policy value function is a valid CBF rests on $V^{h,\pi}(x) \ge h(x)$: the value
+upper-bounds the worst future safety cost, so its zero sublevel set is forward-invariant
+(So et al. 2024, Thm. 1; Knoedler 2025, Eq. 7). The **un-normalized** log-sum-exp target
+satisfies this automatically, since it is always $\ge \max_k h(x_{t+k}) \ge h(x_t)$. The
+**normalized** log-mean-exp target defined above does **not**: lying between mean and max,
+it can fall below $\max_k h$, so the regressed $V_S$ is a smooth under-estimate of the
+true max-over-time value and is therefore slightly **optimistic on the unsafe side**.
+The default value loss accepts this trade-off for horizon-invariance and to avoid
+output-head saturation within $[-1, 1]$; conservativeness on the unsafe region can be
+restored either by the optional unsafe anchor (§4.3, inactive by default) or by switching
+the value target to the un-normalized log-sum-exp form as a one-axis alternative (§7).
 
 ### 2.2 Value loss, optimizer, target network
 
@@ -220,7 +219,7 @@ $$
 \Big(V_S^{(m)}(x_t,\, \text{obs}_t) - y_t\Big)^2.
 $$
 
-JT adds the weak-supervision anchors of §4.3; OC-PNCBF does not. The total value loss is
+Both frameworks use the same value-loss form
 
 $$
 \mathcal{L}_{V} = \lambda_R\, \mathcal{L}_{R} + \lambda_A\, \mathcal{L}_{A}
@@ -228,8 +227,10 @@ $$
 \qquad \lambda_R, \lambda_A, \lambda_C \in \texttt{loss.value}.
 $$
 
-The ensemble training target uses $\min_m$ over members; the deployed $h$ uses $\max_m$,
-per `02_control` §3.4.
+**By default $\lambda_A = \lambda_C = 0$ for both frameworks** (pure PNCBF MSE
+recurrence). §4.3 defines the anchor mechanism that those terms invoke; it is retained in
+the spec for optional reactivation by setting nonzero anchor weights, but it is inactive
+in the JT and OC-PNCBF defaults.
 
 **Optimizer.** AdamW with `optim.lr_VS`, `optim.weight_decay`. Weight decay is applied to
 all parameters in the value network (no exclusions). After each backward pass, gradients
@@ -254,9 +255,9 @@ $$
 $$
 
 applied parameter-wise to every registered parameter (including every ensemble member).
-In v2.0.0 this update runs **per value optimizer step** (`optim.polyak_per_v_step = true`).
-The macro-step alternative (one Polyak update per macro step regardless of $K_V$) is
-available but not the default.
+The Polyak update runs **per value optimizer step** (`optim.polyak_per_v_step = true` is
+the default). The macro-step alternative (one Polyak update per macro step regardless of
+$K_V$) is available but not the default.
 
 ### 2.3 Collection distribution and the V-to-zero collapse
 
@@ -272,7 +273,8 @@ self-regularizing. **Joint Training** extends OC-PNCBF by learning the policy th
 HardNet (lifting the LQR ceiling), but inherits the matching risk: once policy + filter
 are good, rollouts become safe and the unsafe signal vanishes. This is structural, not a
 transient bug. The mitigation is to collect the value buffer under action noise
-$\sigma > 0$ (§4.2), so perturbed actions still reach unsafe states.
+$\sigma > 0$ (§4.2), with $\sigma$ targeted by an adaptive rule based on the unsafe
+fraction of recent rollouts (§4.6).
 
 ---
 
@@ -302,8 +304,8 @@ Per epoch (`exp_config.training.oc_pncbf`):
 1. Collect `collection.oc_pncbf.collect_size` rollouts of length
    `training.oc_pncbf.horizon`.
 2. Take `training.oc_pncbf.grad_steps_per_epoch` gradient steps on $\mathcal{L}_V$
-   (with $\lambda_A = \lambda_C = 0$, since OC-PNCBF does not use weak anchors) over
-   minibatches of size `optim.batch_size_oc`.
+   (with $\lambda_A = \lambda_C = 0$ by default) over minibatches of size
+   `optim.batch_size_oc`.
 3. Polyak-update the target network per the convention of §2.2.
 
 Total epochs `training.oc_pncbf.epochs`.
@@ -327,10 +329,17 @@ text below details each component.
 
 1. (Optional) collect rollouts into the two buffers if
    $n \bmod \texttt{collection.jt.collect\_every} = 0$ (§4.2).
-2. $K_V$ value steps on $\mathcal{L}_V$ (§2.2 + §4.3) over minibatches of size
-   `optim.batch_size_jt`. Polyak target update after each value step.
+2. $K_V$ value steps on $\mathcal{L}_V$ (§2.2, §4.3 optional anchors) over minibatches of
+   size `optim.batch_size_jt_value` drawn from $\mathcal{D}_V$. Polyak target update after
+   each value step.
 3. After the value-only warmup (§4.5), $K_\pi$ policy steps on $\mathcal{L}_\pi$ (§4.4)
-   over BPTT rollouts of length `training.jt.bptt_T`.
+   over BPTT rollouts of length `training.jt.bptt_T` and policy minibatches of size
+   `optim.batch_size_jt` (BPTT memory budget) drawn from $\mathcal{D}_\pi$.
+
+The value-step minibatch size and the policy-step BPTT minibatch size are independent
+config keys (`optim.batch_size_jt_value` vs `optim.batch_size_jt`). This separation is
+necessary because the BPTT minibatch is memory-bounded by `bptt_T` while the value step
+is not, so the value update can use a much larger batch than the policy update.
 
 ### 4.2 Two-buffer collection
 
@@ -347,11 +356,18 @@ Two buffers serve the two updates:
 Both rollouts are detached (collection does not back-prop). Per collection cycle,
 `collection.jt.episodes_per_collect` episodes feed each buffer; buffer capacity is
 `collection.jt.buffer_cap`. Each buffer stores both a trajectory view (for labeling) and a
-transition view (for V minibatching).
+transition view (for V and policy minibatching).
 
-### 4.3 Weak value supervision and minibatch composition
+### 4.3 Weak value supervision and minibatch composition (optional, inactive by default)
 
-In addition to the avoid target, $V_S$ is anchored by two weak label sets re-extracted
+*This section defines an optional anchor mechanism for $V_S$. In the default value-loss
+configuration the anchor weights $\lambda_A = \lambda_C = 0$ and per-iteration anchor
+minibatches are not built; the value step uses only the transition minibatch with
+$\mathcal{L}_R$ (§2.2). The mechanism is retained here so it can be reactivated by setting
+nonzero anchor weights in a future variant. When inactive, references to anchor labels in
+§5 are skipped.*
+
+In addition to the avoid target, $V_S$ may be anchored by two weak label sets re-extracted
 from collected trajectories at every value-step iteration. With per-trajectory step index
 $t$, time-to-next-collision $\tau^{\text{col}}_t$ (steps until the next collision, $\infty$
 if the trajectory is collision-free), and future signed-h window
@@ -377,17 +393,18 @@ $$
 Labeling constants: $k_A$, $\delta_C$, $k_{\text{safe}}$, $m_{\text{phys}}$ from
 `labeling.*` in `exp_config.yaml`.
 
-**Per-iteration minibatch composition.** Each value step builds a minibatch with:
+**Per-iteration minibatch composition (when anchors are active).** Each value step builds
+a minibatch with:
 
-- $|\mathcal{B}_{\text{trans}}| = \texttt{optim.batch\_size\_jt}$ transitions sampled
-  uniformly from the transition view of $\mathcal{D}_V$ (carries $\mathcal{L}_R$);
-- $|\mathcal{B}_A| = \texttt{optim.batch\_size\_jt} / 4$ states sampled with replacement
-  from the freshly labeled $\mathcal{D}_A$;
-- $|\mathcal{B}_C| = \texttt{optim.batch\_size\_jt} / 4$ states sampled with replacement
-  from the freshly labeled $\mathcal{D}_C$.
+- $|\mathcal{B}_{\text{trans}}| = \texttt{optim.batch\_size\_jt\_value}$ transitions
+  sampled uniformly from the transition view of $\mathcal{D}_V$ (carries $\mathcal{L}_R$);
+- $|\mathcal{B}_A| = \texttt{optim.batch\_size\_jt\_value} / 4$ states sampled with
+  replacement from the freshly labeled $\mathcal{D}_A$;
+- $|\mathcal{B}_C| = \texttt{optim.batch\_size\_jt\_value} / 4$ states sampled with
+  replacement from the freshly labeled $\mathcal{D}_C$.
 
 If a label set is empty (rare early in training), that anchor contributes zero loss for
-that iteration.
+that iteration. When anchors are inactive, only $\mathcal{B}_{\text{trans}}$ is built.
 
 ### 4.4 Policy loss — BPTT through HardNet and dynamics
 
@@ -471,7 +488,8 @@ with $z^{\text{target}} = \mathrm{atanh}(0.70) \approx 0.867$
 (`loss.policy.z_target`) and the optional $V_S$-gated weight
 
 $$
-g_{\text{vs}}(x) = \sigma\!\big((-V_S^{\text{det}}(x) - 0.02) / \tau_{\text{vs-gate}}\big)
+g_{\text{vs}}(x) = \sigma\!\big((-V_S^{\text{det}}(x) - 0.02) / \tau_{\text{vs-gate}}\big),
+\qquad \tau_{\text{vs-gate}} = \texttt{loss.policy.vs\_gate\_tau}
 $$
 
 active iff `loss.policy.vs_gated_pretanh = true`; otherwise $g_{\text{vs}} \equiv 1$.
@@ -481,11 +499,21 @@ Total: $\mathcal{L}_{\text{reg}} = \mathcal{L}_{\text{a}} + \mathcal{L}_{\text{s
 **Optimizer.** AdamW with `optim.lr_pi`, same `weight_decay` and `grad_clip` as the value
 optimizer (§2.2).
 
-### 4.5 $V_S$ warmup and schedule offset
+### 4.5 $V_S$ warmup and schedule clock
 
-$V_S$ is trained alone for `training.jt.vs_warmup_steps` macro steps before policy updates
-begin (during warmup, $K_\pi$ is forced to 0). All curriculum schedules use an **offset
-step**
+Two integer clocks govern Joint Training and are **independent**:
+
+- $n_{\text{steps}} = \texttt{training.jt.n\_steps}$ — total macro steps to train.
+- $n_{\text{sched\_total}} = \texttt{training.jt.schedule\_n\_steps}$ — total macro steps
+  over which curriculum schedules unroll. **Independent of $n_{\text{steps}}$**; may be
+  larger (schedule does not fully unroll within training), smaller (schedule completes
+  before training ends), or equal. If unset, defaults to $n_{\text{steps}}$.
+
+The CLI exposes both as `--jt-n-steps` and `--schedule-n-steps`.
+
+$V_S$ is trained alone for $\texttt{training.jt.vs\_warmup\_steps}$ macro steps before
+policy updates begin (during warmup, $K_\pi$ is forced to 0). Curriculum schedules use the
+**offset step**
 
 $$
 n_{\text{sched}} = \max\!\big(0,\ n - \texttt{vs\_warmup\_steps}\big),
@@ -496,10 +524,21 @@ the curriculum advances during warmup and the policy activates mid-curriculum.
 
 ### 4.6 Schedules
 
-All schedules use the offset step $n_{\text{sched}}$ above and operate over the effective
-horizon $N_{\text{eff}} = n_{\text{steps}} - \texttt{vs\_warmup\_steps}$. Each schedule is
-parameterized by an initial value $v_0$, a final value $v_\infty$, a warmup fraction
-$f_w$, and a phase-1 fraction $f_1$:
+All schedules use the offset step $n_{\text{sched}}$ above and operate over the **schedule
+effective horizon**
+
+$$
+N_{\text{eff}} = n_{\text{sched\_total}} - \texttt{vs\_warmup\_steps}.
+$$
+
+When $n_{\text{sched\_total}} > n_{\text{steps}}$ the schedule unrolls only partially over
+training; when $n_{\text{sched\_total}} \le n_{\text{steps}}$ schedules reach and hold
+their final values before training ends. Setting $n_{\text{sched\_total}}$ independently
+of $n_{\text{steps}}$ is the canonical way to gentle or steepen the bootstrap/horizon
+ramp without changing training length.
+
+Each schedule is parameterized by an initial value $v_0$, a final value $v_\infty$, a
+warmup fraction $f_w$, and a phase-1 fraction $f_1$. The base **two-segment** form
 
 $$
 \text{val}(s) =
@@ -511,47 +550,71 @@ v_\infty & s \geq f_1 N_{\text{eff}}.
 \end{cases}
 $$
 
-**`gamma_disc`** — the avoid-value discount $\gamma_t$ used in the §2.1 recurrence, derived
-from a continuous rate $\lambda_t$ via $\gamma_t = \exp(-\lambda_t\, dt)$. The schedule is
-**horizon-anchored**, not a direct $\gamma$ ramp: it interpolates an effective horizon
-$H_t$ (in steps) and maps it to the rate by $\lambda_t = -\ln(1 - 1/H_t) / dt$. Anchors:
-horizon $H_0 = 20$ steps (warmup), ramping to $H_\infty = 100$ steps, with a final
-rate floor $\lambda_{\text{floor}} = 0.05$; warmup fraction $f_w = 0.10$, phase-1 fraction
-$f_1 = 0.80$. Because the horizon is expressed in steps and $\lambda$ divides by $dt$, the
-resulting $\gamma$ is automatically correct at any $dt$ (the discount horizon in real time
-scales with $dt$, but the step-horizon is invariant). The discount is never specified as a
-raw $\gamma$ literal; it is always computed from $H_t$ and $dt$.
+is used by `target_rhs` and `sigma_pi`. The `gamma_disc` schedule uses a **three-segment**
+form (below) because both the effective horizon $H$ and the rate $\lambda$ ramp.
 
-**`target_rhs`** — mixing of the target toward the full bootstrap (§2.1): $\beta_t$ ramps
-from $0$ (pure MC max-over-time) to a hold value, engaging the discounted TD-bootstrap
-correction only after $V_S$ has stabilized. Defaults: $v_0 = 0.0$, $v_\infty = 0.9$,
-$f_w = 0.10$, $f_1 = 0.80$.
+**`gamma_disc`** — the avoid-value discount $\gamma_t = \exp(-\lambda_t\, dt)$. The
+schedule is horizon-anchored over three segments:
 
-**`sigma`** — $\mathcal{D}_V$ collection noise (§4.2), **adaptive** by an EMA on the
-projection magnitude. Let
+1. **Warmup** ($s < f_w N_{\text{eff}}$): hold horizon at $H_0$, so
+   $\lambda_t = -\ln(1 - 1/H_0)/dt$.
+2. **Phase 1** ($f_w N_{\text{eff}} \le s < f_1 N_{\text{eff}}$): ramp horizon linearly
+   from $H_0$ to $H_\infty$; compute $\lambda_t = -\ln(1 - 1/H_t)/dt$ at every step.
+3. **Phase 2** ($s \ge f_1 N_{\text{eff}}$): hold horizon at $H_\infty$ and ramp
+   $\lambda_t$ linearly from its phase-1 endpoint down to the floor
+   $\lambda_{\text{floor}}$ over the remaining schedule horizon.
+
+Anchors: $H_0 = 20$ steps, $H_\infty = 100$ steps, $\lambda_{\text{floor}} = 0.05$,
+$f_w = 0.10$, $f_1 = 0.80$. Because horizons are expressed in steps and $\lambda$ divides
+by $dt$, the resulting $\gamma$ is correct at any $dt$ (the discount horizon in real time
+scales with $dt$, but the step-horizon is invariant). The discount is never specified as
+a raw $\gamma$ literal; it is always computed from $H_t$ (or $\lambda_t$ in phase 2) and
+$dt$.
+
+**`target_rhs`** — mixing of the target toward the full bootstrap (§2.1): ramps from $0$
+(pure MC max-over-time) to a hold value, engaging the discounted TD-bootstrap correction
+only after $V_S$ has stabilized. Defaults: $v_0 = 0.0$, $v_\infty = 0.9$, $f_w = 0.10$,
+$f_1 = 0.80$.
+
+**`sigma`** — $\mathcal{D}_V$ collection noise (§4.2), **adaptive by unsafe-fraction
+target**. Let
 
 $$
-p_n = \frac{1}{|\mathcal{B}_{\text{coll}}|}\sum_t \|u^{\text{safe}}_t - u^{\text{nom}}_t\|
+\rho_n^{\text{unsafe}} = \frac{1}{|\mathcal{B}_{\text{coll}}|}\sum_{\text{episode}}\!
+\mathbf{1}\!\big[\exists t:\ h_{\text{geom}}(x_t) > 0\big]
 $$
 
-be the average projection magnitude over the latest collection batch. The two EMAs are
+be the unsafe-episode fraction in the latest collection batch (using the instantaneous
+geometric signed-h of `01_env` §1.4, not the value network). The target sigma is
 
 $$
-\bar p_n = (1 - \beta_p)\, \bar p_{n-1} + \beta_p\, p_n,
-\qquad
-\sigma^{\text{tgt}}_n = \mathrm{clip}\!\big(\alpha_{\text{dom}}\cdot \bar p_n,\
-\sigma_{\min},\ \sigma_{\max}\big),
+\sigma_n^{\text{tgt}} =
+\begin{cases}
+\sigma_{\max} & \text{if } \rho_n^{\text{unsafe}} < \rho_{\text{target}}, \\
+\sigma_{\min} & \text{otherwise},
+\end{cases}
 $$
+
+and sigma EMAs toward target:
 
 $$
 \sigma_n = \mathrm{clip}\!\big((1 - \beta_\sigma)\, \sigma_{n-1} + \beta_\sigma\,
-\sigma^{\text{tgt}}_n,\ \sigma_{\min},\ \sigma_{\max}\big),
+\sigma_n^{\text{tgt}},\ \sigma_{\min},\ \sigma_{\max}\big),
 $$
 
-with $\beta_p = \texttt{schedules.sigma.beta\_proj}$,
-$\beta_\sigma = \texttt{schedules.sigma.beta\_sigma}$,
-$\alpha_{\text{dom}} = \texttt{schedules.sigma.alpha\_dom}$. The pinning of
-$\sigma^{\text{tgt}}_n$ at $\sigma_{\max}$ for several cycles is a halt signal (§4.7).
+with $\rho_{\text{target}} = \texttt{schedules.sigma.rho\_target}$ (default $0.10$),
+$\beta_\sigma = \texttt{schedules.sigma.beta\_sigma}$ (default $0.05$),
+$\sigma_{\min} = \texttt{schedules.sigma.sigma\_min}$ (default $0.30$),
+$\sigma_{\max} = \texttt{schedules.sigma.sigma\_max}$ (default $2.0$),
+$\sigma_0 = \texttt{schedules.sigma.init}$ (default $0.5$). The mechanism is: when the
+collection batch is too safe, push $\sigma$ toward the noise ceiling so perturbed actions
+reach unsafe states; when unsafe signal is already adequate, decay $\sigma$ toward the
+floor. The pinning of $\sigma_n^{\text{tgt}}$ at $\sigma_{\max}$ for several consecutive
+cycles is reserved as a halt signal (§4.7; currently inactive).
+
+*Note: earlier protocol drafts defined `sigma` by an EMA of projection magnitude with
+knobs `beta_proj`, `alpha_dom`. Those knobs remain in `exp_config.yaml` for compatibility
+but are unused by the active JT trainer and are not part of this spec.*
 
 **`sigma_pi`** — $\mathcal{D}_\pi$ noise decay (§4.2):
 
@@ -562,13 +625,15 @@ $$
 D = \texttt{schedules.sigma\_pi.decay\_steps}.
 $$
 
-In v2.0.0 the default $\sigma_{\pi,0} = 0$ (no decay needed; on-policy collection is
-already zero-noise). Late-training schedule additions are listed in §7.
+Default $\sigma_{\pi,0} = 0$ (on-policy collection is zero-noise; the policy buffer
+already reflects executed behavior). Late-training schedule additions are listed in §7.
 
 ### 4.7 Halt protocol
 
-The trainer halts and writes a final checkpoint whenever any of the conditions below
-triggers. Thresholds in `exp_config.halt`.
+The trainer halts and writes a final checkpoint whenever any of the **active** conditions
+below triggers. Thresholds in `exp_config.halt`.
+
+**Active halts:**
 
 1. **NaN / Inf in $V$ or policy loss.** Hard halt at the offending step; save current
    state.
@@ -576,7 +641,15 @@ triggers. Thresholds in `exp_config.halt`.
    $\|\nabla_{V_S\text{params}} \mathcal{L}_\pi\|_2$; if this exceeds
    `halt.vs_grad_leak_threshold` ($10^{-9}$), halt. This enforces the detach convention
    of `02_control` §7.
-3. **$\sigma$ pinned at $\sigma_{\max}$.** If $\sigma^{\text{tgt}}_n$ equals
+
+**Reserved halts (defined in spec, not currently activated by the trainer):** the
+following halt conditions are specified here so their semantics, thresholds, and config
+keys are fixed, but the JT trainer does not currently wire them into its halt path.
+Activation of any reserved halt is a one-axis future addition (§7) and must be added to
+the trainer's halt path before the corresponding `exp_config.halt.*` threshold has any
+runtime effect.
+
+3. **$\sigma$ pinned at $\sigma_{\max}$.** If $\sigma_n^{\text{tgt}}$ equals
    $\sigma_{\max}$ for `halt.sigma_max_cycles` consecutive collection cycles, halt:
    exploration is failing to find unsafe signal even at the noise ceiling.
 4. **`cps` floor.** Once warmup is past, if the in-loop `cps` drops below
@@ -584,15 +657,15 @@ triggers. Thresholds in `exp_config.halt`.
 5. **Early stop on no improvement.** If the best in-loop `cps` has not improved by
    `halt.early_stop_min_delta` within `halt.early_stop_patience` macro steps, halt.
 
-Two additional detectors are listed as planned but **not** included in v2.0.0: a
-deep-saturation detector (fraction of value-head outputs with $|h| > 0.95$ sustained
-above a threshold) and a catastrophic-failure detector (per-eval `cps` slope below a
-threshold). They are reserved as one-axis additions (§7) until v2.0.0 establishes the
-baseline statistics needed to set their thresholds.
+Two further detectors are listed as reserved one-axis additions only and have no spec or
+config keys yet: a deep-saturation detector (fraction of value-head outputs with
+$|h| > 0.95$ sustained above a threshold) and a catastrophic-failure detector (per-eval
+`cps` slope below a threshold). Their thresholds depend on baseline statistics not yet
+collected.
 
 ---
 
-## 5. Algorithm — one macro step of v2.0.0 Joint Training
+## 5. Algorithm — one macro step of Joint Training
 
 The following is the authoritative ordering. The OC-PNCBF loop is a subset (only the
 collection and value blocks; no policy step; no warmup).
@@ -600,7 +673,8 @@ collection and value blocks; no policy step; no warmup).
 > **Inputs:** macro-step index $n$, value net $V_S$, target $V_S^{\text{target}}$, policy
 > $\pi_\theta$, buffers $\mathcal{D}_V, \mathcal{D}_\pi$, configs.
 >
-> 1. $n_{\text{sched}} \leftarrow \max(0,\ n - \texttt{vs\_warmup\_steps})$.
+> 1. $n_{\text{sched}} \leftarrow \max(0,\ n - \texttt{vs\_warmup\_steps})$ over
+>    $N_{\text{eff}} = n_{\text{sched\_total}} - \texttt{vs\_warmup\_steps}$.
 > 2. $\gamma_{\text{disc},n} \leftarrow \texttt{schedules.gamma\_disc}(n_{\text{sched}})$,
 >    $\tau_{\text{rhs},n} \leftarrow \texttt{schedules.target\_rhs}(n_{\text{sched}})$.
 > 3. **Collection** (if $n = 1$ or $n \bmod \texttt{collect\_every} = 0$):
@@ -609,25 +683,26 @@ collection and value blocks; no policy step; no warmup).
 >       $V_S^{\text{target}}$; append to $\mathcal{D}_V$ (trajectory + transition views).
 >    3. Roll out $\pi_\theta + \mathcal{N}(0, \sigma_{\pi,n}^2 I) +$ HardNet on
 >       $V_S^{\text{target}}$; append to $\mathcal{D}_\pi$.
->    4. Update $\bar p_n, \sigma^{\text{tgt}}_n, \sigma_n$ (§4.6); update the sigma-pinning
->       counter for halt (§4.7-3).
+>    4. Measure $\rho_n^{\text{unsafe}}$ over the latest collection batch and update
+>       $\sigma_n$ via the EMA-toward-target rule (§4.6).
 > 4. **Value updates.** For $k = 1 \ldots K_V$:
->    1. Sample $\texttt{v\_label\_episodes}$ trajectories from $\mathcal{D}_V$; rebuild
->       labels $\mathcal{D}_A, \mathcal{D}_C$ (§4.3).
->    2. Build minibatch:
->       $\mathcal{B}_{\text{trans}}\sim\mathcal{D}_V^{\text{trans}}$,
->       $\mathcal{B}_A\sim\mathcal{D}_A$, $\mathcal{B}_C\sim\mathcal{D}_C$
->       at sizes specified in §4.3.
+>    1. (Optional, anchors active only) Sample $\texttt{v\_label\_episodes}$ trajectories
+>       from $\mathcal{D}_V$ and rebuild labels $\mathcal{D}_A, \mathcal{D}_C$ (§4.3).
+>    2. Build minibatch: $\mathcal{B}_{\text{trans}}\sim\mathcal{D}_V^{\text{trans}}$ of
+>       size $\texttt{optim.batch\_size\_jt\_value}$, plus $\mathcal{B}_A, \mathcal{B}_C$
+>       at sizes specified in §4.3 only when anchors are active.
 >    3. Compute the value target $y$ (§2.1; RPCBF override if active).
 >    4. Compute $\mathcal{L}_V = \lambda_R \mathcal{L}_R + \lambda_A \mathcal{L}_A
->       + \lambda_C \mathcal{L}_C$; finite-check; halt on NaN/Inf (§4.7-1).
+>       + \lambda_C \mathcal{L}_C$ (with $\lambda_A = \lambda_C = 0$ by default);
+>       finite-check; halt on NaN/Inf (§4.7-1).
 >    5. Zero V grads; backward; clip $\|\nabla_{\theta_V}\|_2 \leq
 >       \texttt{grad\_clip}$; `opt_vs.step()`.
 >    6. Polyak update $V_S^{\text{target}} \leftarrow (1-\tau_P)V_S^{\text{target}}
 >       + \tau_P V_S$ (§2.2, per-V-step convention).
 > 5. **Policy updates** (skip if $n \leq \texttt{vs\_warmup\_steps}$). For
 >    $k = 1 \ldots K_\pi$:
->    1. Sample $x_0$, goal, obstacles from $\mathcal{D}_\pi^{\text{trans}}$.
+>    1. Sample $x_0$, goal, obstacles from $\mathcal{D}_\pi^{\text{trans}}$ at
+>       minibatch size $\texttt{optim.batch\_size\_jt}$.
 >    2. With $V_S$ params set to `requires_grad = False`, BPTT-roll out $T$ steps under
 >       $\pi_\theta +$ HardNet $+$ RK4; accumulate $R$ (§4.4).
 >    3. Compute $\mathcal{L}_\pi$; finite-check; halt on NaN/Inf (§4.7-1).
@@ -638,10 +713,10 @@ collection and value blocks; no policy step; no warmup).
 >    loss components, schedule values, and gradient diagnostics.
 > 7. **In-loop evaluation.** If $n \bmod \texttt{eval.cadence} = 0$, run a full pool
 >    rollout (`04_eval` §2.1), append a row to `eval_metrics.csv`, append per-episode
->    rows to `eval_episodes.csv`, log to TensorBoard, and update `best.pt` by `cps`
->    (`exp_config.halt.early_stop_min_delta` threshold).
-> 8. **Halt checks** (cps floor §4.7-4, early-stop patience §4.7-5).
-> 9. **Final.** When $n = n_{\text{steps}}$ or any halt triggers, save `final.pt`,
+>    rows to `eval_episodes.csv`, log to TensorBoard, and update `best.pt` by `cps`.
+> 8. **Halt checks** (active halts §4.7-1, §4.7-2 only; reserved halts §4.7-3..5 are
+>    not currently wired into this step).
+> 9. **Final.** When $n = n_{\text{steps}}$ or an active halt triggers, save `final.pt`,
 >    auto-generate `report.md`, run the full evaluation (`04_eval` §2.2).
 
 ---
@@ -657,6 +732,7 @@ before any real run. Smoke mode automatically applies the following caps:
 | `collect_every` | 1 |
 | `episodes_per_collect` | $\min(\cdot, 8)$ |
 | `batch_size_jt` | $\min(\cdot, 64)$ |
+| `batch_size_jt_value` | $\min(\cdot, 64)$ |
 | `v_label_episodes` | $\min(\cdot, 8)$ |
 | `log_every` | 1 |
 | `eval.cadence` | 5 |
@@ -674,28 +750,30 @@ any full run is launched** for the same `exp_config`.
 
 ---
 
-## 7. One-axis additions (planned, not in v2.0.0)
+## 7. One-axis additions
 
 Mechanisms reserved for later versions, each to be introduced individually with a stated
 hypothesis and a clean ablation against the baseline:
 
+- **Anchor reactivation** — turn on $\mathcal{L}_A$ and/or $\mathcal{L}_C$ from §4.3 by
+  setting nonzero anchor weights; the minibatch composition rule of §4.3 then applies.
 - **Value-target blend** — $\rho V^{\text{rp}} + (1-\rho)\tilde A$ instead of the binary
-  v2.0.0 choice between PNCBF and RPCBF.
+  choice between PNCBF and RPCBF.
 - **Un-normalized RPCBF target** — the strict $V \ge h$ log-sum-exp form
-  $\frac{1}{\beta}\log\sum_k \exp(\beta h_{t+k})$ instead of the v2.0.0 normalized
-  log-mean-exp (§2.1.2), recovering the analytic CBF upper-bound at the cost of an
-  $H$-dependent bias. To try if the $\mathcal{D}_A$ anchor proves insufficient to keep
-  $V_S$ conservative on the unsafe region.
+  $\frac{1}{\beta}\log\sum_k \exp(\beta h_{t+k})$ instead of the normalized log-mean-exp
+  (§2.1.2), recovering the analytic CBF upper-bound at the cost of an $H$-dependent bias.
 - **Auxiliary value-loss terms** — $\varepsilon$-gradient floor, consistency loss,
   Lipschitz loss.
 - **Additional anchors** — $\mathcal{D}_{\text{far}}$, $\mathcal{D}_{\text{brake}}$.
 - **Late-floor sigma** on $\mathcal{D}_V$ collection noise.
 - **Lateral/collinear bonus** in the policy task return, and collinear scene sampling.
 - **Policy action smoothness curriculum** (smoothness weight ramped over training).
-- **Unbounded value head** with cost-domain target clamping (alternative to the tanh head
-  of `02_control` §3.2).
+- **Alternative output heads** for the value network.
 - **Policy architecture variants** — residual head, attention encoder.
-- **Saturation and catastrophic-failure halt detectors** (§4.7 remarks).
+- **Reserved halts (§4.7-3..5) activation** — wire the sigma-pin, cps-floor, and
+  early-stop halts into the trainer's halt path.
+- **Saturation and catastrophic-failure halt detectors** with thresholds set once baseline
+  statistics are available.
 - **Per-step action rate limiting.**
 
 Each introduction follows the one-axis recommendation of the constitution.
@@ -709,9 +787,13 @@ All values are in `src/configs/`:
 - `base_config.yaml` — task (env, obstacle, scene_train), filter constants
   (HardNet $\varepsilon$, CBF-QP parameters, $\gamma_{\text{margin}}$), network structure
   (value, control), LQR weights, eval pools and scene. Locked.
-- `exp_config.yaml` — `run` identity; `training.{jt|oc_pncbf}`; `optim`; `value_target`;
-  `schedules`; `collection`; `loss.{value|policy}`; `labeling`; `halt`;
-  `filter.alpha_{safe|unsafe}`; `eval.cadence`.
+- `exp_config.yaml` — `run` identity; `training.{jt|oc_pncbf}` (including
+  `training.jt.n_steps`, `training.jt.schedule_n_steps`, `training.jt.vs_warmup_steps`,
+  `training.jt.K_V`, `training.jt.K_pi`, `training.jt.bptt_T`); `optim` (including
+  `optim.batch_size_jt`, `optim.batch_size_jt_value`, `optim.batch_size_oc`,
+  `optim.lr_VS`, `optim.lr_pi`, `optim.weight_decay`, `optim.grad_clip`,
+  `optim.tau_polyak`); `value_target`; `schedules`; `collection`; `loss.{value|policy}`;
+  `labeling`; `halt`; `filter.alpha_{safe|unsafe}`; `eval.cadence`.
 
 This document does not duplicate values; conflicts are resolved in favor of the configs,
 which are written into every run's `data/<run_id>/config.yaml` (per `05_code` §3).

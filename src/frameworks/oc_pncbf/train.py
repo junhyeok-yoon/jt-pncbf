@@ -155,6 +155,7 @@ def run_training(
     obstacle_distribution: str | None = None,
 ) -> TrainingResult:
     config = load_effective_config()
+    config["run"]["version"] = __version__
     config["run"]["framework"] = "oc_pncbf"
     if seed is not None:
         config["run"]["seed"] = int(seed)
