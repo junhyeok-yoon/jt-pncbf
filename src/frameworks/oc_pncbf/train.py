@@ -432,9 +432,12 @@ def run_training(
 
 def load_framework_from_checkpoint(
     checkpoint_path: Path,
+    config_overrides: Mapping[str, Any] | None = None,
 ) -> tuple[OCPNCBFFramework, Mapping[str, Any], dict[str, Any]]:
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-    config = checkpoint["config"]
+    config = deepcopy(checkpoint["config"])
+    if config_overrides:
+        config = _deep_merge(config, config_overrides)
     system = make_system(config)
     first_tensor = next(iter(checkpoint["v_s_state"].values()))
     value_net = ValueNetEnsemble(system.obs_dim, config).to(dtype=first_tensor.dtype)

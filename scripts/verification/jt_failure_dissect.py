@@ -28,7 +28,7 @@ from src.eval.run_full import _load_framework
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CKPT = (
     REPO_ROOT
-    / "data/v2.0.1__20260529-171057__seed42/checkpoints/best.pt"
+    / "data/secured_data/v2.0.1/seed42/checkpoints/best.pt"
 )
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "data/diagnostics"
 

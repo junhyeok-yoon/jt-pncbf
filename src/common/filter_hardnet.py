@@ -6,6 +6,7 @@ from typing import Any, Callable, Mapping
 
 import torch
 
+from src.common.rk4 import rk4_step
 from src.common.system import System
 
 
@@ -22,6 +23,11 @@ class _HardNetParams:
     box_aware: bool
     alpha_safe: float
     alpha_unsafe: float
+    lookahead_enabled: bool
+    lookahead_n: int
+    lookahead_beta: float
+    lookahead_delta: float
+    dt: float
 
 
 class HardNetFilter:
@@ -30,9 +36,12 @@ class HardNetFilter:
         system: System,
         h_fn: Callable[[Tensor, Any], Tensor],
         config: Mapping[str, Any],
+        *,
+        policy_fn: Callable[[Tensor, Any], Tensor] | None = None,
     ) -> None:
         self.system = system
         self.h_fn = h_fn
+        self.policy_fn = policy_fn
         self.params = _hardnet_params(config)
 
     def __call__(
@@ -46,12 +55,32 @@ class HardNetFilter:
         if x.shape[0] != u_nom.shape[0]:
             raise ValueError("x and u_nom batch sizes must match.")
 
-        h, lf_h, lg_h = _cbf_terms(self.system, self.h_fn, x, scene, u_nom)
-        alpha = torch.where(
-            h <= 0.0,
-            torch.full_like(h, self.params.alpha_safe),
-            torch.full_like(h, self.params.alpha_unsafe),
+        h, lf_h, lg_h = _cbf_terms(
+            self.system,
+            self.h_fn,
+            x,
+            scene,
+            u_nom,
+            create_graph=True,
         )
+        alpha = _base_alpha(h, self.params)
+        if (
+            self.params.lookahead_enabled
+            and self.params.lookahead_n > 0
+            and self.params.lookahead_beta != 0.0
+        ):
+            if self.policy_fn is None:
+                raise ValueError("HardNet lookahead requires a policy_fn.")
+            h_peak = _lookahead_peak_h(
+                system=self.system,
+                h_fn=self.h_fn,
+                policy_fn=self.policy_fn,
+                x=x,
+                scene=scene,
+                params=self.params,
+            )
+            gap = torch.relu((h_peak - h.detach()) / self.params.lookahead_delta)
+            alpha = alpha * (1.0 + self.params.lookahead_beta * gap)
         row_upper = -lf_h - alpha * h
         bounds = self.system.u_bounds.to(device=u_nom.device, dtype=u_nom.dtype)
 
@@ -78,27 +107,31 @@ def _cbf_terms(
     x: Tensor,
     scene: Any,
     u_nom: Tensor,
+    *,
+    create_graph: bool = True,
 ) -> tuple[Tensor, Tensor, Tensor]:
-    x_req = x if x.requires_grad else x.detach().clone().requires_grad_(True)
-    h = h_fn(x_req, scene).reshape(-1)
-    grad_h = torch.autograd.grad(
-        h.sum(),
-        x_req,
-        create_graph=True,
-        retain_graph=True,
-    )[0]
+    x_req = x if x.requires_grad and create_graph else x.detach().clone()
+    x_req = x_req.requires_grad_(True)
+    with torch.enable_grad():
+        h = h_fn(x_req, scene).reshape(-1)
+        grad_h = torch.autograd.grad(
+            h.sum(),
+            x_req,
+            create_graph=create_graph,
+            retain_graph=create_graph,
+        )[0]
 
-    zero_u = torch.zeros_like(u_nom)
-    f_x = system.dynamics(x_req, zero_u)
-    g_columns = []
-    for action_idx in range(u_nom.shape[1]):
-        basis = torch.zeros_like(u_nom)
-        basis[:, action_idx] = 1.0
-        g_columns.append(system.dynamics(x_req, basis) - f_x)
-    g_x = torch.stack(g_columns, dim=2)
+        zero_u = torch.zeros_like(u_nom)
+        f_x = system.dynamics(x_req, zero_u)
+        g_columns = []
+        for action_idx in range(u_nom.shape[1]):
+            basis = torch.zeros_like(u_nom)
+            basis[:, action_idx] = 1.0
+            g_columns.append(system.dynamics(x_req, basis) - f_x)
+        g_x = torch.stack(g_columns, dim=2)
 
-    lf_h = torch.sum(grad_h * f_x, dim=1)
-    lg_h = torch.einsum("bs,bsa->ba", grad_h, g_x)
+        lf_h = torch.sum(grad_h * f_x, dim=1)
+        lg_h = torch.einsum("bs,bsa->ba", grad_h, g_x)
     return h, lf_h, lg_h
 
 
@@ -235,9 +268,67 @@ def _replace_column(tensor: Tensor, column_idx: int, values: Tensor) -> Tensor:
 
 def _hardnet_params(config: Mapping[str, Any]) -> _HardNetParams:
     hardnet_cfg = config["filter"]["hardnet"]
+    lookahead_cfg = config["filter"].get("lookahead", {})
     return _HardNetParams(
         epsilon=float(hardnet_cfg["epsilon"]),
         box_aware=bool(hardnet_cfg["box_aware"]),
         alpha_safe=float(config["filter"]["alpha_safe"]),
         alpha_unsafe=float(config["filter"]["alpha_unsafe"]),
+        lookahead_enabled=bool(lookahead_cfg.get("enabled", False)),
+        lookahead_n=int(lookahead_cfg.get("N", 0)),
+        lookahead_beta=float(lookahead_cfg.get("beta", 0.0)),
+        lookahead_delta=max(float(lookahead_cfg.get("delta", 0.1)), 1.0e-8),
+        dt=float(config.get("env", {}).get("dt", 0.05)),
     )
+
+
+def _base_alpha(h: Tensor, params: _HardNetParams) -> Tensor:
+    return torch.where(
+        h <= 0.0,
+        torch.full_like(h, params.alpha_safe),
+        torch.full_like(h, params.alpha_unsafe),
+    )
+
+
+def _lookahead_peak_h(
+    *,
+    system: System,
+    h_fn: Callable[[Tensor, Any], Tensor],
+    policy_fn: Callable[[Tensor, Any], Tensor],
+    x: Tensor,
+    scene: Any,
+    params: _HardNetParams,
+) -> Tensor:
+    horizon = max(0, int(params.lookahead_n))
+    x_la = system.wrap_state(x.detach())
+    with torch.no_grad():
+        h_peak = h_fn(x_la, scene).reshape(-1).detach()
+    bounds = system.u_bounds.to(device=x_la.device, dtype=x_la.dtype)
+
+    for _ in range(horizon):
+        with torch.no_grad():
+            u_nom = policy_fn(x_la, scene).detach()
+        h, lf_h, lg_h = _cbf_terms(
+            system,
+            h_fn,
+            x_la,
+            scene,
+            u_nom,
+            create_graph=False,
+        )
+        alpha = _base_alpha(h, params)
+        row_upper = -lf_h - alpha * h
+        projected = _base_projection(u_nom, lg_h, row_upper, bounds, params)
+        if params.box_aware:
+            projected, _ = _box_aware_projection(
+                u_nom,
+                projected,
+                lg_h,
+                row_upper,
+                bounds,
+            )
+        with torch.no_grad():
+            x_la = rk4_step(system, x_la, projected.detach(), params.dt)
+            h_next = h_fn(x_la, scene).reshape(-1).detach()
+            h_peak = torch.maximum(h_peak, h_next)
+    return h_peak

@@ -4,14 +4,19 @@ import argparse
 import csv
 from dataclasses import dataclass
 from dataclasses import replace
+from datetime import datetime
 import json
 from pathlib import Path
+import shutil
+import subprocess
 from typing import Any, Mapping
 
 from matplotlib import image as mpimg
 import numpy as np
 import torch
+import yaml
 
+from src._version import __version__
 from src.common.outcomes import StepOutcomeMasks, resolve_outcome, step_outcomes
 from src.common.rk4 import rk4_step
 from src.common.signed_h import signed_h
@@ -61,9 +66,15 @@ def run_full_eval(
     ckpt_path: Path | None = None,
     use_last: bool = False,
     max_scenes: int | None = None,
+    config_overrides: Mapping[str, Any] | None = None,
+    include_insertion: bool = True,
 ) -> FullEvalResult:
     checkpoint_path = _checkpoint_path(run_dir, ckpt_path, use_last)
-    framework, config, checkpoint = _load_framework(checkpoint_path)
+    framework, config, checkpoint = _load_framework(
+        checkpoint_path,
+        config_overrides=config_overrides,
+    )
+    _initialize_eval_dir_if_needed(run_dir, config, checkpoint_path)
     pool_path = _full_pool_path(config)
     eval_result = evaluate(
         framework,
@@ -102,15 +113,16 @@ def run_full_eval(
         contour_path,
         int(checkpoint["step"]),
     )
-    insertion_eval_rows, insertion_episode_rows = _run_online_insertion(
-        framework,
-        eval_result,
-        config,
-        step=int(checkpoint["step"]),
-        ckpt_name=checkpoint_path.name,
-    )
-    _append_csv(run_dir / "eval_metrics.csv", EVAL_METRIC_COLUMNS, insertion_eval_rows)
-    _append_csv(run_dir / "eval_episodes.csv", EVAL_EPISODE_COLUMNS, insertion_episode_rows)
+    if include_insertion:
+        insertion_eval_rows, insertion_episode_rows = _run_online_insertion(
+            framework,
+            eval_result,
+            config,
+            step=int(checkpoint["step"]),
+            ckpt_name=checkpoint_path.name,
+        )
+        _append_csv(run_dir / "eval_metrics.csv", EVAL_METRIC_COLUMNS, insertion_eval_rows)
+        _append_csv(run_dir / "eval_episodes.csv", EVAL_EPISODE_COLUMNS, insertion_episode_rows)
     filter_works_count = sum(
         1
         for trajectory in eval_result.trajectories[:32]
@@ -129,17 +141,26 @@ def run_full_eval(
     )
 
 
-def _load_framework(checkpoint_path: Path) -> tuple[Any, Mapping[str, Any], dict[str, Any]]:
+def _load_framework(
+    checkpoint_path: Path,
+    config_overrides: Mapping[str, Any] | None = None,
+) -> tuple[Any, Mapping[str, Any], dict[str, Any]]:
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     framework = str(checkpoint.get("framework", "oc_pncbf"))
     if framework == "oc_pncbf":
         from src.frameworks.oc_pncbf.train import load_framework_from_checkpoint
 
-        return load_framework_from_checkpoint(checkpoint_path)
+        return load_framework_from_checkpoint(
+            checkpoint_path,
+            config_overrides=config_overrides,
+        )
     if framework == "jt_pncbf":
         from src.frameworks.jt_pncbf.train import load_framework_from_checkpoint
 
-        return load_framework_from_checkpoint(checkpoint_path)
+        return load_framework_from_checkpoint(
+            checkpoint_path,
+            config_overrides=config_overrides,
+        )
     raise ValueError(f"Unsupported checkpoint framework: {framework!r}")
 
 
@@ -691,8 +712,11 @@ def _append_csv(path: Path, columns: list[str], rows: list[Mapping[str, Any]]) -
     if not rows:
         return
     _ensure_csv_columns(path, columns)
+    needs_header = not path.exists() or path.stat().st_size == 0
     with path.open("a", newline="", encoding="utf-8") as file_obj:
         writer = csv.DictWriter(file_obj, fieldnames=columns, extrasaction="ignore")
+        if needs_header:
+            writer.writeheader()
         for row in rows:
             writer.writerow({column: row.get(column, "") for column in columns})
 
@@ -723,6 +747,56 @@ def _ensure_csv_columns(path: Path, columns: list[str]) -> None:
         writer.writeheader()
         for row in rows:
             writer.writerow({column: row.get(column, "") for column in columns})
+
+
+def _initialize_eval_dir_if_needed(
+    run_dir: Path,
+    config: Mapping[str, Any],
+    checkpoint_path: Path,
+) -> None:
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "figures").mkdir(exist_ok=True)
+    (run_dir / "tensorboard").mkdir(exist_ok=True)
+    config_path = run_dir / "config.yaml"
+    if not config_path.exists():
+        config_path.write_text(
+            yaml.safe_dump(_plain_data(config), sort_keys=False),
+            encoding="utf-8",
+        )
+    git_path = run_dir / "git_commit.txt"
+    if not git_path.exists():
+        git_path.write_text(_git_commit_text() + "\n", encoding="utf-8")
+    source_manifest = checkpoint_path.parent.parent / "pool_manifest.json"
+    target_manifest = run_dir / "pool_manifest.json"
+    if source_manifest.exists() and not target_manifest.exists():
+        shutil.copy2(source_manifest, target_manifest)
+
+
+def _plain_data(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {key: _plain_data(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_plain_data(item) for item in value]
+    if isinstance(value, tuple):
+        return [_plain_data(item) for item in value]
+    return value
+
+
+def _git_commit_text() -> str:
+    try:
+        commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=REPO_ROOT,
+            text=True,
+        ).strip()
+        dirty = subprocess.run(
+            ["git", "diff", "--quiet"],
+            cwd=REPO_ROOT,
+            check=False,
+        ).returncode != 0
+    except Exception:
+        return "unknown"
+    return f"{commit} DIRTY" if dirty else commit
 
 
 def _write_status_done(
@@ -766,16 +840,36 @@ def _now_iso() -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run OC-PNCBF final evaluation.")
-    parser.add_argument("--run-dir", type=Path, required=True)
+    parser.add_argument("--run-dir", type=Path, default=None)
     parser.add_argument("--ckpt", type=Path, default=None)
     parser.add_argument("--last", action="store_true")
     parser.add_argument("--max-scenes", type=int, default=None)
+    parser.add_argument("--output-root", type=Path, default=REPO_ROOT / "data")
+    parser.add_argument("--eval-only-tag", type=str, default=None)
+    parser.add_argument("--lookahead-enabled", action="store_true")
+    parser.add_argument("--lookahead-n", type=int, default=None)
+    parser.add_argument("--lookahead-beta", type=float, default=None)
+    parser.add_argument("--lookahead-delta", type=float, default=None)
+    parser.add_argument("--skip-insertion", action="store_true")
     args = parser.parse_args()
+    run_dir = args.run_dir
+    if run_dir is None:
+        if args.ckpt is None or args.eval_only_tag is None:
+            parser.error("--run-dir is required unless --ckpt and --eval-only-tag are provided.")
+        run_dir = _fresh_eval_only_dir(args.output_root, args.eval_only_tag)
+    config_overrides = _lookahead_config_overrides(
+        enabled=args.lookahead_enabled,
+        n=args.lookahead_n,
+        beta=args.lookahead_beta,
+        delta=args.lookahead_delta,
+    )
     result = run_full_eval(
-        args.run_dir,
+        run_dir,
         ckpt_path=args.ckpt,
         use_last=args.last,
         max_scenes=args.max_scenes,
+        config_overrides=config_overrides,
+        include_insertion=not args.skip_insertion,
     )
     for path in result.figure_paths:
         print(path)
@@ -786,6 +880,36 @@ def main() -> int:
         f"{result.plotted_episode_count}/{EPISODES_PER_REPORT}"
     )
     return 0
+
+
+def _lookahead_config_overrides(
+    *,
+    enabled: bool,
+    n: int | None,
+    beta: float | None,
+    delta: float | None,
+) -> dict[str, Any]:
+    if not enabled and n is None and beta is None and delta is None:
+        return {}
+    lookahead: dict[str, Any] = {"enabled": bool(enabled)}
+    if n is not None:
+        lookahead["N"] = int(n)
+    if beta is not None:
+        lookahead["beta"] = float(beta)
+    if delta is not None:
+        lookahead["delta"] = float(delta)
+    return {"filter": {"lookahead": lookahead}}
+
+
+def _fresh_eval_only_dir(output_root: Path, tag: str) -> Path:
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    base = output_root / f"{__version__}__{timestamp}__{tag}"
+    candidate = base
+    suffix = 1
+    while candidate.exists():
+        candidate = output_root / f"{base.name}_{suffix}"
+        suffix += 1
+    return candidate
 
 
 if __name__ == "__main__":

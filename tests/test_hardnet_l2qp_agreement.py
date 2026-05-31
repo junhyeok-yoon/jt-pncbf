@@ -93,6 +93,44 @@ def test_hardnet_matches_l2_qp_with_inactive_box() -> None:
         assert np.allclose(u_safe.detach().numpy()[0], reference, atol=1.0e-6), case
 
 
+def test_hardnet_lookahead_disabled_and_zero_beta_are_identity() -> None:
+    bounds = torch.tensor([[-100.0, 100.0], [-100.0, 100.0]], dtype=DTYPE)
+    system = LinearDynamicsSystem(torch.zeros(2, dtype=DTYPE), bounds)
+    scene = LinearScene(h_grad=torch.tensor([1.0, 0.0], dtype=DTYPE))
+    h_fn = lambda x, linear_scene: x @ linear_scene.h_grad
+    base_config = {
+        "env": {"dt": 0.05},
+        "filter": {
+            "hardnet": {"epsilon": 0.0, "box_aware": False},
+            "alpha_safe": 2.0,
+            "alpha_unsafe": 100.0,
+        },
+    }
+    lookahead_config = {
+        "env": {"dt": 0.05},
+        "filter": {
+            "hardnet": {"epsilon": 0.0, "box_aware": False},
+            "alpha_safe": 2.0,
+            "alpha_unsafe": 100.0,
+            "lookahead": {"enabled": True, "N": 5, "beta": 0.0, "delta": 0.1},
+        },
+    }
+    x = torch.tensor([[0.2, 0.0]], dtype=DTYPE)
+    u_nom = torch.tensor([[1.0, 0.25]], dtype=DTYPE)
+    policy_fn = lambda policy_x, policy_scene: u_nom.expand(policy_x.shape[0], -1)
+
+    base_u, base_infeasible = HardNetFilter(system, h_fn, base_config)(x, scene, u_nom)
+    lookahead_u, lookahead_infeasible = HardNetFilter(
+        system,
+        h_fn,
+        lookahead_config,
+        policy_fn=policy_fn,
+    )(x, scene, u_nom)
+
+    assert torch.allclose(lookahead_u, base_u)
+    assert torch.equal(lookahead_infeasible, base_infeasible)
+
+
 def _l2_qp_reference(
     normal: np.ndarray,
     upper: float,

@@ -29,3 +29,4 @@ from the best in-loop eval row, including the step, for runs that have no final 
 | v2.0.1 | 2026-05-30 00:30:59 | - | 99 | full_n500 | 0.9540 | 0.0040 | 0.0000 | 0.0280 | 0.0140 | 0.1351 | 0.1206 | 0.8705 | multi-seed validation seed 99 |
 
 Note: eval-only HardNet rows report projection infeasibility (`||L_g h|| < 5e-4` or empty half-space/box intersection), not the CBF-QP slack-active fraction.
+Note: v2.1.0 ran no training run; SOTA unchanged (v2.0.1 seed-42, cps 0.8852, remains version-SOTA). A lookahead-alpha filter was tested as a 6-arm x 3-seed eval_only ablation (L0-L5); all arms regressed vs L0 and the axis was rejected, so these eval_only runs are recorded in docs/versions/v2.1.0_results.md (with the failure diagnosis) rather than as ledger rows. Saved eval outputs for the 18 runs are retained on disk.

@@ -115,7 +115,12 @@ class JTPNCBFFramework:
         self.value_net = value_net
         self.policy_net = policy_net
         self.config = config
-        self._filter = HardNetFilter(system, make_h_fn(value_net, system), config)
+        self._filter = HardNetFilter(
+            system,
+            make_h_fn(value_net, system),
+            config,
+            policy_fn=self.policy,
+        )
 
     def policy(self, x: Tensor, scene: Any) -> Tensor:
         return self.policy_net(self.system.observation(x, scene))
@@ -1016,9 +1021,12 @@ def _resolve_train_dtype(dtype_name: str) -> torch.dtype:
 
 def load_framework_from_checkpoint(
     checkpoint_path: Path,
+    config_overrides: Mapping[str, Any] | None = None,
 ) -> tuple[JTPNCBFFramework, Mapping[str, Any], dict[str, Any]]:
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-    config = checkpoint["config"]
+    config = deepcopy(checkpoint["config"])
+    if config_overrides:
+        config = _deep_merge(config, config_overrides)
     system = make_system(config)
     first_tensor = next(iter(checkpoint["v_s_state"].values()))
     value_net = ValueNetEnsemble(system.obs_dim, config).to(dtype=first_tensor.dtype)

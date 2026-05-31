@@ -2,7 +2,7 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.0.1"
+  version: "v2.1.0"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
   system: double_integrator         # double_integrator | unicycle
@@ -96,6 +96,11 @@ halt:
 filter:
   alpha_safe: 2.0
   alpha_unsafe: 100.0
+  lookahead:
+    enabled: false
+    N: 0
+    beta: 0.0
+    delta: 0.1
 
 eval:
   cadence: 2000                     # in-loop eval every this many value steps
