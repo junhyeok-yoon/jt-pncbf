@@ -7,7 +7,8 @@ from typing import Any, Iterator, Mapping
 import torch
 from torch import nn
 
-from src.common.filter_hardnet import HardNetFilter
+from src.common.filter_hardnet import HardNetFilter, _base_alpha, _cbf_terms, _hardnet_params
+from src.common.observation import top_k_obstacles
 from src.common.rk4 import rk4_step
 from src.common.system import System
 from src.common.value_net import ValueNetEnsemble, make_h_fn
@@ -86,6 +87,128 @@ def value_targets(
         bootstrap_tail,
     ).detach()
     return targets.gather(0, batch.step_indices.unsqueeze(0)).squeeze(0)
+
+
+@dataclass(frozen=True)
+class CBFDerivLossResult:
+    loss_raw: Tensor               # unweighted mean ReLU(m + gamma) over kept gate states
+    diagnostics: dict[str, float]  # gate_* + lg_norm_gate_* scalars for logging
+
+
+def cbf_deriv_feasibility_loss(
+    *,
+    system: System,
+    value_net: ValueNetEnsemble,
+    scene: BatchedScene,
+    config: Mapping[str, Any],
+    generator: torch.Generator | None = None,
+    collect_diagnostics: bool = True,
+) -> CBFDerivLossResult:
+    """v2.2.1 box-feasibility CBF-derivative auxiliary term L_feas (value-side; oracle-free).
+
+    Builds a fresh gate set S_gate of near-boundary fast-approach states on the given (real) scene
+    layouts, drops doomed states (unavoidable-collision predicate), then restricts to the recoverable
+    boundary via an h-band mask (deployed h in [h_band_lo, h_band_hi]), and penalizes states where no
+    in-box action satisfies the descent condition:
+        m(x) = L_f h + alpha(h) h - u_max * ||L_g h||_1 ,  L_feas = mean ReLU(m + gamma_strict).
+    Reducible only by growing ||L_g h|| = ||dh/dv|| in the braking direction. Uses the DEPLOYED
+    (mean-ensemble) h via make_h_fn + _cbf_terms; never the analytic 2(p-c).
+    """
+    cfg = config["loss"]["value"]["cbf_deriv"]
+    gamma_strict = float(cfg["gamma_strict"])
+    d_lo, d_gate = float(cfg["d_lo"]), float(cfg["d_gate"])
+    s_lo, s_hi = float(cfg["s_lo"]), float(cfg["s_hi"])
+    lateral_frac = float(cfg["lateral_frac"])
+    exclude_doomed = bool(cfg["exclude_doomed"])
+    # v2.2.1: recoverable-boundary h-band. Absent keys -> [-inf, +inf] (no band filter; backward compat).
+    h_band_lo = float(cfg.get("h_band_lo", float("-inf")))
+    h_band_hi = float(cfg.get("h_band_hi", float("inf")))
+    di = config["env"]["bounds"]["double_integrator"]
+    u_max = float(di["u_max"])
+    v_max = float(di["v_max"])
+    delta_feas = float(config["scene_train"]["init_feasibility_margin"])
+
+    centers = scene.obstacle_centers          # [B, nmax, 2]
+    radii = scene.obstacle_radii              # [B, nmax]
+    active = scene.obstacle_active            # [B, nmax] bool
+    B = centers.shape[0]
+    device, dtype = centers.device, centers.dtype
+    eps = 1.0e-9
+
+    # placement obstacle: one random ACTIVE obstacle per scene (n_min=1 guarantees >=1 active)
+    weights = active.to(dtype)
+    weights = torch.where(weights.sum(dim=1, keepdim=True) > 0, weights, torch.ones_like(weights))
+    sel = torch.multinomial(weights, 1, generator=generator).squeeze(1)        # [B]
+    bidx = torch.arange(B, device=device)
+    c0 = centers[bidx, sel]                                                     # [B,2]
+    r0 = radii[bidx, sel]                                                       # [B]
+
+    g = torch.randn(B, 2, generator=generator, device=device, dtype=dtype)
+    u_rad = g / torch.linalg.norm(g, dim=1, keepdim=True).clamp_min(eps)        # outward unit dir
+    d = d_lo + (d_gate - d_lo) * torch.rand(B, generator=generator, device=device, dtype=dtype)
+    p = c0 + (r0 + d).unsqueeze(1) * u_rad                                      # [B,2]
+    s = s_lo + (s_hi - s_lo) * torch.rand(B, generator=generator, device=device, dtype=dtype)
+    v_in = -s.unsqueeze(1) * u_rad
+    perp = torch.stack([-u_rad[:, 1], u_rad[:, 0]], dim=1)
+    lat = (lateral_frac * s) * (2.0 * torch.rand(B, generator=generator, device=device, dtype=dtype) - 1.0)
+    v = v_in + lat.unsqueeze(1) * perp
+    vnorm = torch.linalg.norm(v, dim=1, keepdim=True)
+    v = torch.where(vnorm > v_max, v * (v_max / vnorm.clamp_min(eps)), v)       # env velocity clamp
+    x = torch.cat([p, v], dim=1)                                               # [B,4]
+
+    # realized nearest active obstacle (env helper) for the doomed predicate
+    top_rel, top_radii = top_k_obstacles(p, centers, radii, active, 1)
+    cp = top_rel[:, 0, :]                                                       # c - p
+    rr = top_radii[:, 0]
+    dist = torch.linalg.norm(cp, dim=1)
+    surf_clr = dist - rr
+    v_close = torch.relu(torch.sum(v * cp, dim=1) / dist.clamp_min(eps))
+    d_stop = v_close * v_close / (2.0 * u_max)
+    doomed = surf_clr < (d_stop + delta_feas)                                   # unavoidable-collision
+    keep_recoverable = ~doomed if exclude_doomed else torch.ones_like(doomed)
+
+    # descent-condition margin on the DEPLOYED h; create_graph so gradients reach V_S params.
+    # h is computed ONCE here and reused both for m(x) and for the h-band mask (no second forward).
+    params = _hardnet_params(config)
+    h_fn = make_h_fn(value_net, system)
+    u_zero = torch.zeros(B, system.action_dim, device=device, dtype=dtype)
+    h, lf_h, lg_h = _cbf_terms(system, h_fn, x, scene, u_zero, create_graph=True)
+    alpha = _base_alpha(h, params)
+    m = lf_h + alpha * h - u_max * torch.sum(torch.abs(lg_h), dim=1)            # u_max*||L_g h||_1
+    viol = torch.relu(m + gamma_strict)
+
+    # v2.2.1 h-band: ADDITIONAL filter (after doomed-exclusion) restricting S_gate to the
+    # recoverable boundary, deployed h in [h_band_lo, h_band_hi]. Same deployed h as in m(x).
+    h_det = h.detach()
+    in_band = (h_det >= h_band_lo) & (h_det <= h_band_hi)
+    keep = keep_recoverable & in_band                                          # final S_gate mask
+    keepf = keep.to(dtype)
+    # Masked mean with a >=1 denominator: numerically identical to sum(viol*keepf)/keepf.sum() when any
+    # state is kept (clamp is the identity since keepf.sum() is an integer count >= 1), and 0 when none
+    # are kept -- so the loss has NO per-step host sync (no int(keep.sum().item()) control-flow branch).
+    loss_raw = torch.sum(viol * keepf) / keepf.sum().clamp_min(1.0)
+
+    if collect_diagnostics:
+        # pure-logging scalars (host syncs) -- computed only on metrics-logging-cadence steps.
+        n_kept = int(keep.sum().item())
+        if n_kept > 0:
+            active_frac = float((((m + gamma_strict) > 0) & keep).sum().item()) / n_kept
+            lg_sel = torch.linalg.norm(lg_h, dim=1)[keep].detach()
+            lg_mean = float(lg_sel.mean().item())
+            lg_p50 = float(lg_sel.median().item())
+        else:
+            active_frac, lg_mean, lg_p50 = 0.0, 0.0, 0.0
+        diagnostics = {
+            "gate_n_constructed": float(B),
+            "gate_n_kept": float(n_kept),                                      # AFTER doomed AND h-band
+            "gate_doomed_frac": (float(doomed.sum().item()) / B) if B > 0 else 0.0,  # true doomed frac
+            "gate_active_frac": float(active_frac),
+            "lg_norm_gate_mean": lg_mean,
+            "lg_norm_gate_p50": lg_p50,
+        }
+    else:
+        diagnostics = {}
+    return CBFDerivLossResult(loss_raw=loss_raw, diagnostics=diagnostics)
 
 
 def policy_bptt_loss(
@@ -208,14 +331,26 @@ def frozen_params(module: nn.Module) -> Iterator[None]:
             param.requires_grad_(state)
 
 
-def grad_norm(parameters: Any) -> float:
-    total = 0.0
+def grad_sq_norm(parameters: Any) -> Tensor | None:
+    """Sum of squared grads as an on-device scalar tensor (NO host sync). None if no params have grads.
+
+    Lets callers compare the gradient-leak against a threshold on-device every step and materialize the
+    Python float only when logging or when the halt condition triggers.
+    """
+    total: Tensor | None = None
     for parameter in parameters:
         if parameter.grad is None:
             continue
         grad = parameter.grad.detach()
-        total += float(torch.sum(grad * grad).cpu().item())
-    return float(total**0.5)
+        s = torch.sum(grad * grad)
+        total = s if total is None else total + s
+    return total
+
+
+def grad_norm(parameters: Any) -> float:
+    # Single host transfer (one .item() on the device-summed norm) instead of one per parameter.
+    sq = grad_sq_norm(parameters)
+    return 0.0 if sq is None else float(sq.sqrt().item())
 
 
 def _zero_grads(parameters: Any) -> None:

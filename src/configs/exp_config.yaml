@@ -2,19 +2,19 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.2.0"
+  version: "v2.2.1"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
   system: double_integrator         # double_integrator | unicycle
 
 training:
   jt:
-    n_steps: 10000
+    n_steps: 42000                  # match v2.0.1 SOTA budget (secured config)
     vs_warmup_steps: 2000
     K_V: 3
     K_pi: 1
     bptt_T: 30
-    schedule_n_steps: 10000
+    schedule_n_steps: 42000         # match v2.0.1 SOTA schedule budget
   oc_pncbf:
     epochs: 1000
     grad_steps_per_epoch: 500
@@ -45,7 +45,9 @@ schedules:
     sigma_max: 2.0
     init: 0.5
     rho_target: 0.10
+    beta_proj: 0.05                  # SOTA-config parity; unused (only beta_sigma/rho_target consumed)
     beta_sigma: 0.05
+    alpha_dom: 1.0                   # SOTA-config parity; unused
   sigma_pi:
     init: 0.0
     decay_steps: 5000
@@ -65,6 +67,18 @@ loss:
     lambda_R: 1.0
     lambda_A: 0.0
     lambda_C: 0.0
+    cbf_deriv:                  # v2.2.1 box-feasibility CBF-derivative aux term (value-side)
+      weight: 0.1               # lambda_feas, FIXED this run (reverted 0.3->0.1; weight is not the lever)
+      gamma_strict: 0.3         # gamma: strict-descent slack (0.05->0.3; fire on the safe-side boundary)
+      d_lo: 0.02                # gate clearance lower bound (m)
+      d_gate: 0.25              # gate clearance upper bound (m)
+      s_lo: 0.6                 # gate inward-speed lower bound
+      s_hi: 2.5                 # gate inward-speed upper bound (= v_max)
+      lateral_frac: 0.5         # lateral velocity spread as fraction of inward speed
+      states_per_step: null     # null -> use the value-step minibatch size (batch_size_jt_value)
+      exclude_doomed: true      # drop unavoidable-collision (doomed) gate states
+      h_band_lo: -0.3           # recoverable-boundary h-band lower bound (additional filter)
+      h_band_hi: 0.1            # recoverable-boundary h-band upper bound
   policy:
     gamma_T: 0.99
     lambda_v: 0.01                  # task-cost velocity weight
@@ -103,4 +117,4 @@ filter:
     delta: 0.1
 
 eval:
-  cadence: 2000                     # in-loop eval every this many value steps
+  cadence: 1000                     # in-loop eval every this many value steps (v2.2.1: finer cps logging for live monitor)

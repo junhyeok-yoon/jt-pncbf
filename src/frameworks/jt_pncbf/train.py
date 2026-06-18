@@ -39,7 +39,13 @@ from src.frameworks.jt_pncbf.collection import (
     collect_jt,
     make_replay_buffers,
 )
-from src.frameworks.jt_pncbf.losses import grad_norm, policy_bptt_loss, value_loss
+from src.frameworks.jt_pncbf.losses import (
+    cbf_deriv_feasibility_loss,
+    grad_norm,
+    grad_sq_norm,
+    policy_bptt_loss,
+    value_loss,
+)
 from src.frameworks.oc_pncbf.value_target import (
     gamma_from_lambda,
     lambda_schedule_value,
@@ -70,6 +76,14 @@ METRIC_COLUMNS = [
     "collect_infeasible",
     "L_R",
     "L_V_total",
+    "L_feas_raw",
+    "L_feas_weighted",
+    "gate_active_frac",
+    "gate_n_constructed",
+    "gate_n_kept",
+    "gate_doomed_frac",
+    "lg_norm_gate_mean",
+    "lg_norm_gate_p50",
     "L_in_task",
     "L_anorm",
     "L_smooth",
@@ -316,6 +330,12 @@ def run_training(
             effective_steps,
         )
 
+        # Host-side scalar extraction (the probe forward + .item() syncs) is done ONLY on steps whose
+        # metrics row is actually emitted; the optimizer math runs every step regardless. Safety halts
+        # (NaN/Inf, grad-leak) are decided every step via single device->host bools (see _value_updates
+        # / _policy_updates), so they fire on the same step as before.
+        do_log = (step % metrics_log_every == 0) or (step == n_steps)
+
         value_scalars = _value_updates(
             system=system,
             value_net=value_net,
@@ -328,10 +348,9 @@ def run_training(
             lambda_disc=lambda_disc,
             target_rhs=target_rhs,
             config=config,
+            log=do_log,
         )
-        last_value_loss = value_scalars["L_V_total"]
-        last_vs_grad = value_scalars["grad_norm_VS"]
-        if not np.isfinite(last_value_loss):
+        if not value_scalars.pop("value_finite"):
             halt_reason = "nan_or_inf_L_V"
             break
 
@@ -347,39 +366,46 @@ def run_training(
                 batch_size=policy_batch_size,
                 n_updates=k_pi,
                 config=config,
+                log=do_log,
             )
-            last_policy_loss = policy_scalars["L_pi_total"]
-            last_pi_grad = policy_scalars["grad_norm_pi"]
-            max_policy_leak = max(max_policy_leak, policy_scalars["grad_leak_VS_from_Lpi"])
-            if not np.isfinite(last_policy_loss):
+            pi_finite = bool(policy_scalars.pop("pi_finite"))
+            leak_exceeds = bool(policy_scalars.pop("leak_exceeds"))
+            leak_sq_max = policy_scalars.pop("leak_sq_max")
+            if not pi_finite:
                 halt_reason = "nan_or_inf_L_pi"
                 break
-            if policy_scalars["grad_leak_VS_from_Lpi"] > float(
-                config["halt"]["vs_grad_leak_threshold"]
-            ):
+            if leak_exceeds:
+                max_policy_leak = float(leak_sq_max.sqrt().item())
                 halt_reason = "policy_gradient_leak"
                 break
+            if do_log:
+                last_policy_loss = policy_scalars["L_pi_total"]
+                last_pi_grad = policy_scalars["grad_norm_pi"]
+                max_policy_leak = max(max_policy_leak, policy_scalars["grad_leak_VS_from_Lpi"])
 
-        row = _metrics_row(
-            step=step,
-            wallclock_s=time.time() - start_time,
-            schedule_step=schedule_step_clamped,
-            lambda_disc=lambda_disc,
-            gamma_disc=gamma_disc,
-            target_rhs=target_rhs,
-            sigma=sigma,
-            sigma_pi=_sigma_pi_at(config, sigma_pi_base, step),
-            value_scalars=value_scalars,
-            policy_scalars=policy_scalars,
-            value_stats=last_v_stats,
-            policy_stats=last_pi_stats,
-            probe_spread=_probe_h_spread(system, value_net, probe_scene),
-        )
-        last_row = row
-        if step % metrics_log_every == 0:
-            _append_csv(run_dir / "metrics.csv", METRIC_COLUMNS, [row])
-            _write_tb_scalars(writer, "train", row, step)
-            last_logged_step = step
+        if do_log:
+            last_value_loss = value_scalars["L_V_total"]
+            last_vs_grad = value_scalars["grad_norm_VS"]
+            row = _metrics_row(
+                step=step,
+                wallclock_s=time.time() - start_time,
+                schedule_step=schedule_step_clamped,
+                lambda_disc=lambda_disc,
+                gamma_disc=gamma_disc,
+                target_rhs=target_rhs,
+                sigma=sigma,
+                sigma_pi=_sigma_pi_at(config, sigma_pi_base, step),
+                value_scalars=value_scalars,
+                policy_scalars=policy_scalars,
+                value_stats=last_v_stats,
+                policy_stats=last_pi_stats,
+                probe_spread=_probe_h_spread(system, value_net, probe_scene),
+            )
+            last_row = row
+            if step % metrics_log_every == 0:
+                _append_csv(run_dir / "metrics.csv", METRIC_COLUMNS, [row])
+                _write_tb_scalars(writer, "train", row, step)
+                last_logged_step = step
 
         if step == n_steps or step % max(1, eval_cadence) == 0:
             eval_result = evaluate(
@@ -709,7 +735,9 @@ def run_value_refinement(
             lambda_disc=lambda_disc,
             target_rhs=target_rhs,
             config=config,
+            log=True,
         )
+        value_scalars.pop("value_finite", None)
         last_value_loss = value_scalars["L_V_total"]
         last_vs_grad = value_scalars["grad_norm_VS"]
         if not np.isfinite(last_value_loss):
@@ -867,10 +895,24 @@ def _value_updates(
     lambda_disc: float,
     target_rhs: float,
     config: Mapping[str, Any],
-) -> dict[str, float]:
+    log: bool = True,
+) -> dict[str, Any]:
+    # v2.2.1: box-feasibility CBF-derivative auxiliary term (value-side). weight=0 => skip the gate
+    # entirely (no RNG draws, no _cbf_terms) so behavior is bit-identical to the baseline value loss.
+    # The optimizer math (sample/loss/backward/clip/step/polyak) runs EVERY step; host-side scalar
+    # extraction (.item()/.cpu()) and the L_feas diagnostics are computed ONLY when log=True, so a
+    # non-logging step incurs a single device->host bool (the NaN/Inf halt check) instead of ~20 syncs.
+    feas_weight = float(config["loss"]["value"].get("cbf_deriv", {}).get("weight", 0.0))
+    feas_enabled = feas_weight > 0.0
+
     totals = []
     reaches = []
     grad_norms = []
+    feas_logs: dict[str, list[float]] = {
+        "L_feas_raw": [], "L_feas_weighted": [], "gate_active_frac": [],
+        "gate_n_constructed": [], "gate_n_kept": [], "gate_doomed_frac": [],
+        "lg_norm_gate_mean": [], "lg_norm_gate_p50": [],
+    }
     for _ in range(n_updates):
         batch = buffers.value.sample_tensor_batch(batch_size, generator=torch_generator)
         result = value_loss(
@@ -882,8 +924,26 @@ def _value_updates(
             target_rhs=target_rhs,
             config=config,
         )
+        total_loss = result.total
+        if feas_enabled:
+            feas = cbf_deriv_feasibility_loss(
+                system=system,
+                value_net=value_net,
+                scene=batch.scene,
+                config=config,
+                generator=torch_generator,
+                collect_diagnostics=log,
+            )
+            total_loss = total_loss + feas_weight * feas.loss_raw
+            if log:
+                loss_raw = float(feas.loss_raw.detach().item())
+                feas_logs["L_feas_raw"].append(loss_raw)
+                feas_logs["L_feas_weighted"].append(feas_weight * loss_raw)
+                for key in ("gate_active_frac", "gate_n_constructed", "gate_n_kept",
+                            "gate_doomed_frac", "lg_norm_gate_mean", "lg_norm_gate_p50"):
+                    feas_logs[key].append(feas.diagnostics[key])
         optimizer.zero_grad(set_to_none=True)
-        result.total.backward()
+        total_loss.backward()
         grad = nn.utils.clip_grad_norm_(
             value_net.parameters(),
             max_norm=float(config["optim"]["grad_clip"]),
@@ -894,16 +954,23 @@ def _value_updates(
             value_net,
             tau=float(config["optim"]["tau_polyak"]),
         )
-        totals.append(result.total.detach())
-        reaches.append(result.reach.detach())
+        totals.append(total_loss.detach())          # full optimized objective (MSE + weighted L_feas)
+        reaches.append(result.reach.detach())        # MSE reach term only (unchanged at weight=0)
         grad_norms.append(torch.as_tensor(grad, device=result.total.device, dtype=result.total.dtype))
-    return _host_scalars(
-        {
+
+    mean_total = torch.stack(totals).mean()
+    out: dict[str, Any] = {"value_finite": bool(torch.isfinite(mean_total))}  # per-step halt signal (1 sync)
+    if log:
+        out.update(_host_scalars({
             "L_R": torch.stack(reaches).mean(),
-            "L_V_total": torch.stack(totals).mean(),
+            "L_V_total": mean_total,
             "grad_norm_VS": torch.stack(grad_norms).mean(),
-        }
-    )
+        }))
+        if feas_enabled:
+            out.update({key: float(np.mean(vals)) for key, vals in feas_logs.items()})
+        else:
+            out.update({key: 0.0 for key in feas_logs})
+    return out
 
 
 def _policy_updates(
@@ -917,7 +984,12 @@ def _policy_updates(
     batch_size: int,
     n_updates: int,
     config: Mapping[str, Any],
-) -> dict[str, float]:
+    log: bool = True,
+) -> dict[str, Any]:
+    # Optimizer math runs EVERY step. The grad-leak SAFETY check is decided on-device every step
+    # (grad_sq_norm -> single 'leak_exceeds' bool); host-side row scalars + the leak magnitude are
+    # materialized only when log=True. Returns control signals (pi_finite/leak_exceeds/leak_sq_max)
+    # always; row scalars only on logging steps.
     accum: dict[str, list[Tensor]] = {
         "L_in_task": [],
         "L_anorm": [],
@@ -931,7 +1003,8 @@ def _policy_updates(
         "abs_action_max": [],
         "satfrac_a_phi": [],
     }
-    leaks = []
+    pi_totals: list[Tensor] = []
+    leak_sqs: list[Tensor] = []
     for _ in range(n_updates):
         batch = buffers.policy.sample_tensor_batch(batch_size, generator=torch_generator)
         optimizer.zero_grad(set_to_none=True)
@@ -944,27 +1017,38 @@ def _policy_updates(
             config=config,
         )
         result.total.backward()
-        leak = grad_norm(value_net.parameters())
+        leak_sq = grad_sq_norm(value_net.parameters())          # on-device sum of squared value grads
+        leak_sqs.append(leak_sq if leak_sq is not None else result.total.detach().new_zeros(()))
         grad = nn.utils.clip_grad_norm_(
             policy_net.parameters(),
             max_norm=float(config["optim"]["grad_clip"]),
         )
         optimizer.step()
-        leaks.append(leak)
-        accum["L_in_task"].append(result.task)
-        accum["L_anorm"].append(result.action_norm)
-        accum["L_smooth"].append(result.smoothness)
-        accum["L_satex"].append(result.saturation_excess)
-        accum["L_pretanh"].append(result.pretanh)
-        accum["L_out"].append(result.outside)
-        accum["L_pi_total"].append(result.total.detach())
-        accum["grad_norm_pi"].append(torch.as_tensor(grad, device=result.total.device, dtype=result.total.dtype))
-        accum["abs_action_mean"].append(result.action_abs_mean)
-        accum["abs_action_max"].append(result.action_abs_max)
-        accum["satfrac_a_phi"].append(result.satfrac_a_phi)
-    scalars = _host_scalars({key: torch.stack(values).mean() for key, values in accum.items()})
-    scalars["grad_leak_VS_from_Lpi"] = max(leaks) if leaks else 0.0
-    return scalars
+        pi_totals.append(result.total.detach())
+        if log:
+            accum["L_in_task"].append(result.task)
+            accum["L_anorm"].append(result.action_norm)
+            accum["L_smooth"].append(result.smoothness)
+            accum["L_satex"].append(result.saturation_excess)
+            accum["L_pretanh"].append(result.pretanh)
+            accum["L_out"].append(result.outside)
+            accum["L_pi_total"].append(result.total.detach())
+            accum["grad_norm_pi"].append(torch.as_tensor(grad, device=result.total.device, dtype=result.total.dtype))
+            accum["abs_action_mean"].append(result.action_abs_mean)
+            accum["abs_action_max"].append(result.action_abs_max)
+            accum["satfrac_a_phi"].append(result.satfrac_a_phi)
+
+    leak_sq_max = torch.stack(leak_sqs).max()
+    threshold = float(config["halt"]["vs_grad_leak_threshold"])
+    out: dict[str, Any] = {
+        "pi_finite": bool(torch.isfinite(torch.stack(pi_totals).mean())),
+        "leak_exceeds": bool(leak_sq_max > threshold * threshold),  # equiv to ||leak|| > threshold
+        "leak_sq_max": leak_sq_max,
+    }
+    if log:
+        out.update(_host_scalars({key: torch.stack(values).mean() for key, values in accum.items()}))
+        out["grad_leak_VS_from_Lpi"] = float(leak_sq_max.sqrt().item())
+    return out
 
 
 def _zero_policy_scalars() -> dict[str, float]:
@@ -1360,10 +1444,12 @@ def _polyak_update(
 
 
 def _host_scalars(values: Mapping[str, Tensor]) -> dict[str, float]:
-    return {
-        key: float(value.detach().cpu().item())
-        for key, value in values.items()
-    }
+    # One device->host transfer for all scalars (stack + single .cpu()) instead of one .item() each.
+    keys = list(values)
+    if not keys:
+        return {}
+    stacked = torch.stack([values[key].detach().reshape(()) for key in keys]).cpu()
+    return {key: float(stacked[idx]) for idx, key in enumerate(keys)}
 
 
 def _init_csv(path: Path, columns: list[str]) -> None:
