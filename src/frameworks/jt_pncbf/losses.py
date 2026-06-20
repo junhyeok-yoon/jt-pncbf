@@ -10,6 +10,8 @@ from torch import nn
 from src.common.filter_hardnet import HardNetFilter, _base_alpha, _cbf_terms, _hardnet_params
 from src.common.observation import top_k_obstacles
 from src.common.rk4 import rk4_step
+from src.common.signed_h import signed_h
+from src.common.spline_max import cubic_spline_max
 from src.common.system import System
 from src.common.value_net import ValueNetEnsemble, make_h_fn
 from src.envs.scene_batch import BatchedScene
@@ -40,6 +42,11 @@ class PolicyLossResult:
     action_abs_mean: Tensor
     action_abs_max: Tensor
     satfrac_a_phi: Tensor
+    l_rate_raw: Tensor
+    l_rate_weighted: Tensor
+    mean_abs_du: Tensor
+    l_u_raw: Tensor
+    l_u_weighted: Tensor
 
 
 def value_loss(
@@ -211,6 +218,136 @@ def cbf_deriv_feasibility_loss(
     return CBFDerivLossResult(loss_raw=loss_raw, diagnostics=diagnostics)
 
 
+@dataclass(frozen=True)
+class SobolevLossResult:
+    loss_raw: Tensor               # unweighted mean ||grad_x V_S - grad_x V_spline||^2 over the batch
+    diagnostics: dict[str, float]  # sob_* scalars for logging
+
+
+def _overspeed_gate(
+    system: System, x: Tensor, scene: BatchedScene, gate_cfg: Mapping[str, Any], eps: float = 1.0e-9,
+) -> tuple[Tensor, Tensor, Tensor]:
+    """Smooth over-speed gate g(x) in [0,1], higher the more over-speed (DI). Computed by the caller
+    under no_grad (a weighting, not part of the differentiated objective).
+
+      g(x) = sigmoid((inward_speed - s0)/tau_s) * sigmoid((c0 - clearance)/tau_c)
+
+    inward_speed = max(0, v . n_hat), n_hat the unit vector from the agent to the NEAREST active obstacle
+    center; clearance = nearest-obstacle surface distance. Nearest-obstacle geometry mirrors signed_h
+    (rel = center - p, distance = ||rel||, clearance = distance - radius, inactive -> +inf). Fires only
+    when BOTH fast-approaching AND near an obstacle; receding/slow/far -> g ~ 0 (term inactive there)."""
+    s0 = float(gate_cfg.get("s0", 1.0)); tau_s = float(gate_cfg.get("tau_s", 0.5))
+    c0 = float(gate_cfg.get("c0", 0.3)); tau_c = float(gate_cfg.get("tau_c", 0.15))
+    p = system.position(x)                                              # [B,2]
+    v = x[:, 2:4]                                                       # velocity [B,2] (double integrator)
+    centers = torch.as_tensor(scene.obstacle_centers, dtype=x.dtype, device=x.device)
+    radii = torch.as_tensor(scene.obstacle_radii, dtype=x.dtype, device=x.device)
+    active = torch.as_tensor(scene.obstacle_active, dtype=torch.bool, device=x.device)
+    rel = centers - p.unsqueeze(-2)                                    # agent -> center [B,K,2]
+    distance = torch.linalg.norm(rel, dim=-1)                          # [B,K]
+    clearance_all = torch.where(active, distance - radii, torch.full_like(distance, float("inf")))
+    nearest = torch.argmin(clearance_all, dim=-1)                      # [B]
+    bidx = torch.arange(x.shape[0], device=x.device)
+    clearance = clearance_all[bidx, nearest]                          # [B]
+    rel_n = rel[bidx, nearest]                                         # [B,2] toward nearest center
+    n_hat = rel_n / torch.linalg.norm(rel_n, dim=-1, keepdim=True).clamp_min(eps)
+    inward = torch.clamp(torch.sum(v * n_hat, dim=-1), min=0.0)        # [B] inward approach speed
+    g = torch.sigmoid((inward - s0) / tau_s) * torch.sigmoid((c0 - clearance) / tau_c)
+    return g, inward, clearance
+
+
+def spline_sobolev_loss(
+    *,
+    system: System,
+    value_net: ValueNetEnsemble,
+    policy_net: nn.Module | None,
+    states: Tensor,
+    scene: BatchedScene,
+    config: Mapping[str, Any],
+    collect_diagnostics: bool = True,
+) -> SobolevLossResult:
+    """Route D: RPCBF cubic-spline-max Sobolev gradient-matching on V_S (value-side, oracle-free).
+
+    Label: roll the (unfiltered) LQR / detached policy H steps from x0, take the cubic-spline
+    max-over-time of the ground-truth signed_h sequence (recovers the continuous-time dV/dv that a
+    discrete max staircases away), and read its STATE Jacobian grad_x V_spline by autograd (1st-order,
+    detached -- a fixed regression target). Prediction: grad_x of the DEPLOYED (mean-ensemble) h via the
+    same make_h_fn path the HardNet filter consumes, with create_graph so the term backprops into V_S
+    params (clones the L_feas second-order pattern). L_sobolev = mean ||grad_pred - grad_label||^2 over
+    the full state vector (the velocity pair feeds L_g h, the position pair feeds L_f h).
+    """
+    sob_cfg = config["loss"]["value"]["sobolev"]
+    horizon = int(sob_cfg["H"])
+    rollout_policy = str(sob_cfg.get("rollout_policy", "lqr"))
+    dt = float(config["env"]["dt"])
+    h_scale = float(config["env"]["h_scale"])
+
+    x0 = system.wrap_state(states.detach()).detach().requires_grad_(True)
+    with torch.enable_grad():
+        x = x0
+        h_seq = [signed_h(system.position(x), scene, h_scale)]
+        for _ in range(horizon):
+            if rollout_policy == "lqr":
+                u = system.lqr_action(x, _scene_goal(scene, x))
+            elif rollout_policy == "policy_detached":
+                if policy_net is None:
+                    raise ValueError("sobolev rollout_policy='policy_detached' requires a policy_net.")
+                u = policy_net(system.observation(x, scene)).detach()
+            else:
+                raise ValueError(f"Unknown sobolev rollout_policy {rollout_policy!r}.")
+            x = rk4_step(system, x, u, dt)
+            h_seq.append(signed_h(system.position(x), scene, h_scale))
+        h_stack = torch.stack(h_seq, dim=1)                                  # [B, H+1]
+        t_grid = torch.linspace(0.0, 1.0, horizon + 1, device=x0.device, dtype=x0.dtype)
+        v_spline, _ = cubic_spline_max(t_grid, h_stack)                      # [B]
+        grad_label = torch.autograd.grad(v_spline.sum(), x0)[0].detach()     # [B, state_dim], fixed target
+
+        h_fn = make_h_fn(value_net, system)
+        x_pred = x0.detach().requires_grad_(True)
+        h_pred = h_fn(x_pred, scene).reshape(-1)
+        grad_pred = torch.autograd.grad(h_pred.sum(), x_pred, create_graph=True)[0]
+
+    # gated, velocity-only variant (gate.enabled=false -> original global full-vector Sobolev, bit-identical)
+    gate_cfg = sob_cfg.get("gate", {}) or {}
+    gate_enabled = bool(gate_cfg.get("enabled", False))
+    velocity_only = bool(gate_cfg.get("velocity_only", False))
+    if gate_enabled and velocity_only:
+        diff = grad_pred[:, 2:] - grad_label[:, 2:]                       # velocity channels only (DI: vx,vy)
+    else:
+        diff = grad_pred - grad_label                                    # full state vector (plain Sobolev)
+    per_state = torch.sum(diff * diff, dim=1)                             # [B]
+    if gate_enabled:
+        with torch.no_grad():
+            g, gate_inward, gate_clear = _overspeed_gate(system, x0.detach(), scene, gate_cfg)
+        loss_raw = torch.mean(g * per_state)                             # localized: only over-speed states
+    else:
+        g = None
+        loss_raw = torch.mean(per_state)
+
+    if collect_diagnostics:
+        gl_v = torch.linalg.norm(grad_label[:, 2:], dim=1)
+        gp_v = torch.linalg.norm(grad_pred[:, 2:].detach(), dim=1)
+        if gate_enabled:
+            gate_mean = float(g.mean().item())
+            gate_frac_active = float((g > 0.5).to(g.dtype).mean().item())
+            denom = float(g.sum().clamp_min(1.0e-9).item())
+            gate_dhdv = float((g * gp_v).sum().item() / denom)           # dh/dv_pred weighted by the gate
+        else:
+            gate_mean = 0.0; gate_frac_active = 0.0; gate_dhdv = float(gp_v.mean().item())
+        diagnostics = {
+            "sob_grad_label_v_frac": float((gl_v > 1.0e-6).to(gl_v.dtype).mean().item()),
+            "sob_grad_label_v_mean": float(gl_v.mean().item()),
+            "sob_dhdv_pred_mean": float(gp_v.mean().item()),
+            "sob_v_spline_mean": float(v_spline.detach().mean().item()),
+            "sob_gate_mean": gate_mean,
+            "sob_gate_frac_active": gate_frac_active,
+            "sob_gate_dhdv_pred": gate_dhdv,
+        }
+    else:
+        diagnostics = {}
+    return SobolevLossResult(loss_raw=loss_raw, diagnostics=diagnostics)
+
+
 def policy_bptt_loss(
     *,
     system: System,
@@ -218,6 +355,7 @@ def policy_bptt_loss(
     value_net: ValueNetEnsemble,
     batch: TensorTransitionBatch,
     config: Mapping[str, Any],
+    step: int = 0,
 ) -> PolicyLossResult:
     policy_cfg = config["loss"]["policy"]
     dt = float(config["env"]["dt"])
@@ -276,6 +414,36 @@ def policy_bptt_loss(
 
         action_stack = torch.stack(nominal_actions, dim=0)
         safe_stack = torch.stack(safe_actions, dim=0)
+        # input-rate regulation (v2.2.2 add-on): DEAD-ZONE penalty on step-to-step change of the
+        # APPLIED (post-HardNet) control u_safe. L_rate = mean_t max(0, ||u_t - u_{t-1}|| - delta)^2
+        # (delta dead-zone leaves normal control free, only chattering above delta is penalized).
+        # Effective weight follows a linear curriculum: w_eff = weight * min(1, step / ramp_steps).
+        # mean_abs_du = mean ||du||_2 stays the RAW chattering diagnostic (NOT dead-zoned), comparable
+        # across runs/weights.
+        rate_cfg = policy_cfg.get("input_rate", {})
+        rate_enabled = bool(rate_cfg.get("enabled", False))
+        rate_weight = float(rate_cfg.get("weight", 0.0))
+        rate_delta = float(rate_cfg.get("delta", 0.0))
+        rate_ramp_steps = float(rate_cfg.get("ramp_steps", 0.0))
+        rate_w_eff = rate_weight
+        if rate_ramp_steps > 0.0:
+            rate_w_eff = rate_weight * min(1.0, float(step) / rate_ramp_steps)
+        if safe_stack.shape[0] > 1:
+            du = safe_stack[1:] - safe_stack[:-1]                       # [T-1, B, A]
+            du_norm = torch.linalg.norm(du, dim=2)                      # [T-1, B] = ||du||_2 per step
+            excess = (du_norm - rate_delta).clamp_min(0.0)              # dead-zone: free below delta
+            l_rate = torch.mean(excess * excess)
+            mean_abs_du = du_norm.mean()
+        else:
+            l_rate = safe_stack.new_zeros(())
+            mean_abs_du = safe_stack.new_zeros(())
+        # input control-magnitude regularization (v2.2.2 add-on): LQR-style R term on the APPLIED
+        # control, L_u = mean_t ||u_safe_t||^2 (ungated, undiscounted). u is the control whose integral
+        # is speed, so penalizing |u| curbs accumulated approach speed (the over-speed-entry cause).
+        ureg_cfg = policy_cfg.get("u_reg", {})
+        ureg_enabled = bool(ureg_cfg.get("enabled", False))
+        ureg_weight = float(ureg_cfg.get("weight", 0.0))
+        l_u = torch.mean(torch.sum(safe_stack * safe_stack, dim=2))
         action_norm = torch.mean(torch.sum(action_stack * action_stack, dim=2))
         if action_stack.shape[0] > 1:
             smoothness = torch.mean(
@@ -303,6 +471,18 @@ def policy_bptt_loss(
             + float(policy_cfg["lambda_pretanh"]) * pretanh
             + float(policy_cfg["w_outside"]) * outside
         )
+        # flag-off (or w_eff==0, e.g. step 0 of the ramp) leaves `total` byte-identical to baseline.
+        if rate_enabled and rate_w_eff > 0.0:
+            total = total + rate_w_eff * l_rate
+            l_rate_weighted = (rate_w_eff * l_rate).detach()
+        else:
+            l_rate_weighted = l_rate.new_zeros(())
+        # u-reg add (flag-off / weight 0 leaves `total` byte-identical to baseline).
+        if ureg_enabled and ureg_weight > 0.0:
+            total = total + ureg_weight * l_u
+            l_u_weighted = (ureg_weight * l_u).detach()
+        else:
+            l_u_weighted = l_u.new_zeros(())
 
     return PolicyLossResult(
         total=total,
@@ -316,6 +496,11 @@ def policy_bptt_loss(
         action_abs_mean=safe_stack.abs().mean().detach(),
         action_abs_max=safe_stack.abs().max().detach(),
         satfrac_a_phi=_satfrac(action_stack, system).detach(),
+        l_rate_raw=l_rate.detach(),
+        l_rate_weighted=l_rate_weighted,
+        mean_abs_du=mean_abs_du.detach(),
+        l_u_raw=l_u.detach(),
+        l_u_weighted=l_u_weighted,
     )
 
 

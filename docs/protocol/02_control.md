@@ -273,7 +273,14 @@ candidate set is finite and enumerated explicitly: the clamped nominal action, t
 base projection, the four box corners, and the intersections of the half-space boundary
 with each box edge. The closest feasible candidate is selected (`torch.argmin` on squared
 distance, ties resolved by lowest candidate index); if none is feasible, the
-least-violating candidate is returned and the step is flagged infeasible (§4). Candidate
+least-violating candidate is returned and the step is flagged infeasible (§4). Because the
+selected candidate is the exact closest point of the half-space–box intersection — well-defined
+whenever that intersection is non-empty, for any $\|A\|$ — the box-aware output is independent of
+the base-projection denominator $\|A\|^2 + \varepsilon^2$. The base projection enters only as one
+candidate that is not selected once it degrades, so box-aware is robust at $\|A\| \to 0$ and the
+$\varepsilon$ term (and any added denominator regularization) has no effect in box-aware mode; the
+only box-aware degenerate case is the empty half-space–box intersection (§4), not the $\|A\| \to 0$
+singularity of the base projection. Candidate
 selection is non-differentiable, but gradients flow through the selected candidate.
 Numerical tolerances ($10^{-9}$ for feasibility, $10^{-12}$ for degenerate edges) are
 local constants. **Scope:** this enumerator is defined only for 2-D action spaces; before

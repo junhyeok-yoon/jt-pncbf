@@ -31,16 +31,26 @@ class CollectionStats:
     infeasible_fraction: float
 
 
+@dataclass(frozen=True)
+class PrecursorStats:
+    n: int
+    rollout_len: int
+    target_unsafe_frac: float
+    target_mean: float
+
+
 @dataclass
 class JTReplayBuffers:
     value: OCReplayBuffer
     policy: OCReplayBuffer
+    precursor: OCReplayBuffer  # v2.2.2: collision-precursor states, populated once per collection
 
 
 def make_replay_buffers(capacity: int) -> JTReplayBuffers:
     return JTReplayBuffers(
         value=OCReplayBuffer(capacity=capacity),
         policy=OCReplayBuffer(capacity=capacity),
+        precursor=OCReplayBuffer(capacity=capacity),
     )
 
 
@@ -161,6 +171,23 @@ def collect_jt(
         storage_dtype=storage_dtype,
         collection_filter=collection_filter,
     )
+    inj_cfg = config.get("loss", {}).get("value", {}).get("precursor_injection", {})  # type: ignore[union-attr]
+    if bool(inj_cfg.get("enabled", False)):
+        collect_precursors(
+            system=system,
+            policy_net=policy_net,
+            value_net=value_net,
+            scene_sampler=scene_sampler,
+            rng=rng,
+            torch_generator=torch_generator,
+            buffer=buffers.precursor,
+            n_precursors=n_episodes,
+            max_steps=max_steps,
+            dt=dt,
+            config=config,
+            storage_device=storage_device,
+            storage_dtype=storage_dtype,
+        )
     return value_stats, policy_stats
 
 
@@ -235,6 +262,101 @@ def _rollout_for_collection(
         torch.stack(infeasible_steps, dim=0)
         if infeasible_steps
         else torch.empty((0, x.shape[0]), dtype=torch.bool, device=x.device),
+    )
+
+
+def _construct_precursors(
+    system: System,
+    scene: BatchedScene,
+    config: Mapping[str, object],
+    generator: torch.Generator | None,
+) -> Tensor:
+    """v2.2.2: synthetic collision-precursor initial states, vectorized on-device, placed around a
+    random ACTIVE obstacle of each scene (clearance d in [d_lo,d_hi], inward speed s in [s_lo,s_hi])."""
+    cfg = config["loss"]["value"]["precursor_injection"]  # type: ignore[index]
+    d_lo, d_hi = float(cfg.get("d_lo", 0.0)), float(cfg.get("d_hi", 0.2))  # type: ignore[union-attr]
+    s_lo, s_hi = float(cfg.get("s_lo", 0.3)), float(cfg.get("s_hi", 1.0))  # type: ignore[union-attr]
+    lateral_frac = float(cfg.get("lateral_frac", 0.5))  # type: ignore[union-attr]
+    v_max = float(config["env"]["bounds"]["double_integrator"]["v_max"])  # type: ignore[index]
+    centers = scene.obstacle_centers
+    radii = scene.obstacle_radii
+    active = scene.obstacle_active
+    B = centers.shape[0]
+    device, dtype = centers.device, centers.dtype
+    eps = 1.0e-9
+    weights = active.to(dtype)
+    weights = torch.where(weights.sum(dim=1, keepdim=True) > 0, weights, torch.ones_like(weights))
+    sel = torch.multinomial(weights, 1, generator=generator).squeeze(1)
+    bidx = torch.arange(B, device=device)
+    c0 = centers[bidx, sel]
+    r0 = radii[bidx, sel]
+    g = torch.randn(B, 2, generator=generator, device=device, dtype=dtype)
+    u_rad = g / torch.linalg.norm(g, dim=1, keepdim=True).clamp_min(eps)
+    d = d_lo + (d_hi - d_lo) * torch.rand(B, generator=generator, device=device, dtype=dtype)
+    p = c0 + (r0 + d).unsqueeze(1) * u_rad
+    s = s_lo + (s_hi - s_lo) * torch.rand(B, generator=generator, device=device, dtype=dtype)
+    v_in = -s.unsqueeze(1) * u_rad
+    perp = torch.stack([-u_rad[:, 1], u_rad[:, 0]], dim=1)
+    lat = (lateral_frac * s) * (2.0 * torch.rand(B, generator=generator, device=device, dtype=dtype) - 1.0)
+    v = v_in + lat.unsqueeze(1) * perp
+    if system.name == "unicycle":
+        # Unicycle analog of the DI inward-velocity precursor: same inward(+lateral) 2D velocity,
+        # expressed as (heading, signed speed). theta points toward the obstacle (+ lateral spread);
+        # speed = |v| capped at the unicycle v_max. wrap_state re-wraps theta / re-clamps speed.
+        u_v_max = float(config["env"]["bounds"]["unicycle"]["v_max"])  # type: ignore[index]
+        speed = torch.linalg.norm(v, dim=1).clamp(max=u_v_max)
+        theta = torch.atan2(v[:, 1], v[:, 0])
+        return system.wrap_state(torch.stack([p[:, 0], p[:, 1], theta, speed], dim=1))
+    vnorm = torch.linalg.norm(v, dim=1, keepdim=True)
+    v = torch.where(vnorm > v_max, v * (v_max / vnorm.clamp_min(eps)), v)
+    return system.wrap_state(torch.cat([p, v], dim=1))
+
+
+def collect_precursors(
+    *,
+    system: System,
+    policy_net: torch.nn.Module,
+    value_net: ValueNetEnsemble,
+    scene_sampler: Callable[[np.random.Generator], Scene],
+    rng: np.random.Generator,
+    torch_generator: torch.Generator | None,
+    buffer: OCReplayBuffer,
+    n_precursors: int,
+    max_steps: int,
+    dt: float,
+    config: Mapping[str, object],
+    storage_device: torch.device,
+    storage_dtype: torch.dtype,
+) -> PrecursorStats:
+    """v2.2.2 collection-time precursor injection: construct precursors around freshly-sampled scenes,
+    roll out the CURRENT policy ONCE via the existing batched-GPU HardNet-filtered rollout (sigma=0,
+    full fixed horizon -- see NOTE), and append the precursor trajectories to the precursor buffer as
+    ordinary (state, target) transitions. Targets are the standard max-over-time signed_h, labeled at
+    collection time exactly like every other buffer state.
+
+    NOTE: collision early-stop is NOT applied -- the OCReplayBuffer incremental tensor append
+    (_append_tensor_batch) requires a FIXED trajectory length across collection batches, which a
+    variable-length early-stopped rollout violates. The full-horizon rollout gives the identical
+    (exact) max-over-time target, and the dominant cost reduction is already achieved by rolling out
+    ONCE per collection (not K_V times per value update)."""
+    h_scale = float(config["env"]["h_scale"])  # type: ignore[index]
+    scenes = [scene_sampler(rng) for _ in range(n_precursors)]
+    batched_scene = batch_scenes(scenes, device=storage_device, dtype=storage_dtype)
+    x0 = _construct_precursors(system, batched_scene, config, torch_generator)
+    filter_layer = _make_collection_filter("hardnet", system, value_net, config)
+    states_t, _, _ = _rollout_for_collection(
+        system=system, policy_net=policy_net, filter_layer=filter_layer, scene=batched_scene, x0=x0,
+        max_steps=max_steps, dt=dt, sigma=0.0, torch_generator=torch_generator,
+    )
+    with torch.no_grad():
+        h_values = signed_h(system.position(states_t), batched_scene, h_scale)
+    buffer.append_batch(scenes, batched_scene, states_t.detach(), h_values.detach())
+    max_h = h_values.max(dim=0).values  # max-over-time per precursor (target proxy, pre-bootstrap)
+    return PrecursorStats(
+        n=n_precursors,
+        rollout_len=int(states_t.shape[0] - 1),
+        target_unsafe_frac=float((max_h >= 0.0).to(max_h.dtype).mean().item()),
+        target_mean=float(max_h.mean().item()),
     )
 
 

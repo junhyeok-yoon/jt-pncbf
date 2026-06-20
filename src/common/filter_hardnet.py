@@ -20,6 +20,7 @@ _DENOM_TOL = 1.0e-12
 @dataclass(frozen=True)
 class _HardNetParams:
     epsilon: float
+    lg_reg_eps: float
     box_aware: bool
     alpha_safe: float
     alpha_unsafe: float
@@ -144,8 +145,8 @@ def _base_projection(
 ) -> Tensor:
     lhs = torch.sum(halfspace_normal * u_nom, dim=1)
     violation = torch.relu(lhs - row_upper)
-    denom = torch.sum(halfspace_normal * halfspace_normal, dim=1)
-    denom = denom + params.epsilon**2
+    denom = torch.sum(halfspace_normal * halfspace_normal, dim=1)   # ||L_g h||^2
+    denom = denom + params.epsilon**2 + params.lg_reg_eps             # lg_reg_eps: low-speed singularity reg
     correction = halfspace_normal * (violation / denom).unsqueeze(1)
     return _clamp_to_bounds(u_nom - correction, bounds)
 
@@ -271,6 +272,7 @@ def _hardnet_params(config: Mapping[str, Any]) -> _HardNetParams:
     lookahead_cfg = config["filter"].get("lookahead", {})
     return _HardNetParams(
         epsilon=float(hardnet_cfg["epsilon"]),
+        lg_reg_eps=float(config["filter"].get("lg_reg_eps", 0.0)),
         box_aware=bool(hardnet_cfg["box_aware"]),
         alpha_safe=float(config["filter"]["alpha_safe"]),
         alpha_unsafe=float(config["filter"]["alpha_unsafe"]),

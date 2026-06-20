@@ -31,6 +31,7 @@ class Unicycle:
             [[-a_max, a_max], [-omega_max, omega_max]],
             dtype=torch.float64,
         )
+        self.v_max = float(bounds_cfg["v_max"])
         self.v_min = float(config["lqr"]["unicycle"]["v_min"])
         self._lqr_gain = _double_integrator_lqr_gain(
             config["lqr"]["unicycle"]["Q"],
@@ -114,9 +115,11 @@ class Unicycle:
         return self._clamp_action(torch.stack([acceleration, omega], dim=1))
 
     def wrap_state(self, x: Tensor) -> Tensor:
-        wrapped = x.clone()
-        wrapped[:, 2] = _wrap_angle(wrapped[:, 2])
-        return wrapped
+        # Functional (no in-place index writes) so it is safe to differentiate through
+        # under BPTT: wrap heading to (-pi, pi] and clamp signed speed to [-v_max, v_max].
+        theta = _wrap_angle(x[:, 2])
+        speed = torch.clamp(x[:, 3], min=-self.v_max, max=self.v_max)
+        return torch.stack([x[:, 0], x[:, 1], theta, speed], dim=1)
 
     def _clamp_action(self, u: Tensor) -> Tensor:
         bounds = self.u_bounds.to(device=u.device, dtype=u.dtype)

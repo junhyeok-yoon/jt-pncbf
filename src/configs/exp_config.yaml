@@ -2,19 +2,27 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.2.1"
+  version: "v2.2.2"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
-  system: double_integrator         # double_integrator | unicycle
+  system: unicycle                  # double_integrator | unicycle  (v2.2.2-uni-inj multi-seed: injection ON, sobolev OFF)
+
+env:
+  goal_speed_radius: 0.50           # relaxed 0.30 (12% of v_max) -> 0.50 (20%): nonholonomic + low-speed-
+                                    # singular unicycle; 0.30 fails episodes that physically reached the goal
+  bounds:
+    unicycle:
+      v_max: 2.5                    # Step 1: unicycle speed bound matching the DI kinematic scale
+                                    # (same a_max=2.0, arena, dt); clamped (signed) in unicycle.wrap_state
 
 training:
   jt:
-    n_steps: 42000                  # match v2.0.1 SOTA budget (secured config)
+    n_steps: 42000                  # match v2.0.1 SOTA budget (same as the Sobolev run)
     vs_warmup_steps: 2000
     K_V: 3
     K_pi: 1
     bptt_T: 30
-    schedule_n_steps: 42000         # match v2.0.1 SOTA schedule budget
+    schedule_n_steps: 42000         # match v2.0.1 SOTA schedule budget (UNCHANGED for the 80k extension)
   oc_pncbf:
     epochs: 1000
     grad_steps_per_epoch: 500
@@ -68,7 +76,7 @@ loss:
     lambda_A: 0.0
     lambda_C: 0.0
     cbf_deriv:                  # v2.2.1 box-feasibility CBF-derivative aux term (value-side)
-      weight: 0.1               # lambda_feas, FIXED this run (reverted 0.3->0.1; weight is not the lever)
+      weight: 0.0               # v2.2.2: L_feas OFF (gate path fully skipped; weight=0 parity proven exact)
       gamma_strict: 0.3         # gamma: strict-descent slack (0.05->0.3; fire on the safe-side boundary)
       d_lo: 0.02                # gate clearance lower bound (m)
       d_gate: 0.25              # gate clearance upper bound (m)
@@ -79,6 +87,31 @@ loss:
       exclude_doomed: true      # drop unavoidable-collision (doomed) gate states
       h_band_lo: -0.3           # recoverable-boundary h-band lower bound (additional filter)
       h_band_hi: 0.1            # recoverable-boundary h-band upper bound
+    sobolev:                    # v2.2.2 gated-Sobolev axis: localized velocity-gradient matching on V_S
+      enabled: false            # axis DONE (gate preserved reach but velocity-only matching raised collision
+                                # 0.0045->0.0200 -> cps 0.8239 < base 0.8607); OFF = injection base. See build-log.
+      weight: 2.2               # set by smoke gradient-contribution: ||grad L_grad||/||grad L_R|| = 0.0456 at
+                                # weight 1 -> 0.10/0.0456 = 2.2 for ~10% (gate zeroes most states + velocity-only
+                                # -> ~100x smaller raw than plain Sobolev's 4.76, hence weight 2.2 vs 0.07)
+      H: 25                     # rollout horizon (>= ~10*v_max kinematic stopping need)
+      rollout_policy: lqr       # {lqr, policy_detached}; LQR = cheap 1st-order label
+      gate:                     # smooth over-speed gate: match dh/dv ONLY where over-speed occurs (reach-preserving)
+        enabled: true           # false -> reduces to plain global full-vector Sobolev (clean ablation)
+        velocity_only: true     # restrict the matched gradient to velocity channels (the dh/dv weakness)
+        s0: 1.0                 # inward-speed center; gate ramps across inward 0.5->2.0 (collisions at ~1.5-2.5)
+        tau_s: 0.5              # inward-speed sigmoid width
+        c0: 0.3                 # clearance center; gate ramps up as clearance falls below ~0.3 (collisions <0.06)
+        tau_c: 0.15             # clearance sigmoid width
+    precursor_injection:        # v2.2.2: inject collision-precursor states into the value MSE batch
+      enabled: true             # Step 2 (unicycle injection): ON. _construct_precursors ported to unicycle
+                                # (emits [x,y,theta,v]; theta inward, speed=|inward+lateral| capped at v_max).
+                                # DI hyperparameters reused unchanged. Flag off reproduces the Step-1 baseline exactly.
+      fraction: 0.10            # 10% of each value minibatch are injected precursors, 90% normal buffer draw
+      d_lo: 0.1                 # clearance lower bound (m); widened 0.0->0.1 toward the recoverable boundary
+      d_hi: 0.3                 # clearance upper bound (m); widened 0.2->0.3 (was ~99.6% doomed at [0,0.2])
+      s_lo: 0.3                 # inward-speed lower bound (covers the sub-0.6 regime, unlike the L_feas gate)
+      s_hi: 1.0                 # inward-speed upper bound
+      lateral_frac: 0.5         # lateral velocity spread as fraction of inward speed
   policy:
     gamma_T: 0.99
     lambda_v: 0.01                  # task-cost velocity weight
@@ -93,6 +126,17 @@ loss:
     z_target: 0.867                 # atanh(0.70)
     vs_gated_pretanh: true
     vs_gate_tau: 0.05
+    input_rate:                     # v2.2.2 input-rate (du) axis: FAILED across all forms -> OFF for the u_reg run
+      enabled: false                # disabled; du-penalty attacked the symptom (chattering), not the over-speed cause
+      delta: 0.3
+      weight: 4
+      ramp_steps: 10000
+    u_reg:                          # v2.2.2 add-on: LQR-style R term on APPLIED control, L_u = mean_t ||u_safe||^2
+      enabled: false                # AXIS REJECTED -> OFF (flag-off is bit-identical to the injection-only baseline).
+      weight: 0.5                   # sweep result: 0.1 == baseline (R-term ~0.1%); 1.0 over-conservative
+                                    # (reach/cps regress, stuck pinned 0.085); 0.5 best-of-three but n2000
+                                    # true-best 0.8404 < injection-only 0.8607 / SOTA 0.8568, and over-speed
+                                    # uncurbed (danger-entry inward 0.347 vs LQR 0.19). See u_reg_build.md.
 
 labeling:
   k_A: 5
@@ -108,6 +152,9 @@ halt:
   early_stop_min_delta: 0.002
 
 filter:
+  lg_reg_eps: 0.0                   # INERT with box_aware=true (box-aware enumerates the exact feasible region,
+                                    # bypassing the base-projection blow-up -> smoke confirmed identical corrections
+                                    # eps=0 vs 0.005 at ||L_g h||=0 states). Kept at 0; only goal_speed_radius changed.
   alpha_safe: 2.0
   alpha_unsafe: 100.0
   lookahead:
@@ -118,3 +165,6 @@ filter:
 
 eval:
   cadence: 1000                     # in-loop eval every this many value steps (v2.2.1: finer cps logging for live monitor)
+  # NOTE: eval.full.n stays 500 here (base default) so the trainer's automated final eval finds the
+  # secured_data n500 pool. N=2000 is the reporting standard but is run via the manual in-RAM eval path
+  # (data/eval_pools/eval_full_di_n2000_seed23456.pkl), since run_full reads the read-only secured_data/pools.

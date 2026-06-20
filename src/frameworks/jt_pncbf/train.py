@@ -44,6 +44,7 @@ from src.frameworks.jt_pncbf.losses import (
     grad_norm,
     grad_sq_norm,
     policy_bptt_loss,
+    spline_sobolev_loss,
     value_loss,
 )
 from src.frameworks.oc_pncbf.value_target import (
@@ -84,6 +85,18 @@ METRIC_COLUMNS = [
     "gate_doomed_frac",
     "lg_norm_gate_mean",
     "lg_norm_gate_p50",
+    "injected_fraction_actual",
+    "injected_target_mean",
+    "injected_target_unsafe_frac",
+    "L_sobolev_raw",
+    "L_sobolev_weighted",
+    "sob_grad_label_v_frac",
+    "sob_grad_label_v_mean",
+    "sob_dhdv_pred_mean",
+    "sob_v_spline_mean",
+    "sob_gate_mean",
+    "sob_gate_frac_active",
+    "sob_gate_dhdv_pred",
     "L_in_task",
     "L_anorm",
     "L_smooth",
@@ -97,6 +110,11 @@ METRIC_COLUMNS = [
     "abs_action_mean",
     "abs_action_max",
     "satfrac_a_phi",
+    "L_rate_raw",
+    "L_rate_weighted",
+    "mean_abs_du",
+    "L_u_raw",
+    "L_u_weighted",
     "probe_h_min",
     "probe_h_max",
     "probe_h_mean",
@@ -158,6 +176,7 @@ def run_training(
     n_steps_override: int | None = None,
     value_batch_size_override: int | None = None,
     schedule_n_steps_override: int | None = None,
+    resume_ckpt: Path | None = None,
 ) -> JTTrainingResult:
     config = load_effective_config()
     config["run"]["version"] = __version__
@@ -214,6 +233,21 @@ def run_training(
         lr=float(config["optim"]["lr_pi"]),
         weight_decay=float(config["optim"]["weight_decay"]),
     )
+
+    # Joint resume: continue training from a saved checkpoint's nets + optimizer state, starting at its
+    # step (the loop and schedule then continue from there; schedule_step is clamped so it stays at the
+    # final saturated value when start_step >= schedule_n_steps). start_step=0 == fresh run (unchanged).
+    start_step = 0
+    if resume_ckpt is not None:
+        ckpt = torch.load(resume_ckpt, map_location=train_device, weights_only=False)
+        value_net.load_state_dict(ckpt["v_s_state"])
+        target_value_net.load_state_dict(ckpt["v_s_target_state"])
+        policy_net.load_state_dict(ckpt["pi_state"])
+        opt_vs.load_state_dict(ckpt["opt_vs_state"])
+        opt_pi.load_state_dict(ckpt["opt_pi_state"])
+        start_step = int(ckpt["step"])
+        config["run"]["resume_ckpt"] = str(resume_ckpt)
+        config["run"]["resume_from_step"] = start_step
 
     jt_cfg = dict(config["training"]["jt"])
     collection_cfg = dict(config["collection"]["jt"])
@@ -291,8 +325,8 @@ def run_training(
         halt_reason=None,
     )
 
-    for step in range(1, n_steps + 1):
-        if step == 1 or step % max(1, collect_every) == 0:
+    for step in range(start_step + 1, n_steps + 1):
+        if step == start_step + 1 or step % max(1, collect_every) == 0:
             sigma_pi = _sigma_pi_at(config, sigma_pi_base, step)
             last_v_stats, last_pi_stats = collect_jt(
                 system=system,
@@ -349,6 +383,7 @@ def run_training(
             target_rhs=target_rhs,
             config=config,
             log=do_log,
+            policy_net=policy_net,
         )
         if not value_scalars.pop("value_finite"):
             halt_reason = "nan_or_inf_L_V"
@@ -366,6 +401,7 @@ def run_training(
                 batch_size=policy_batch_size,
                 n_updates=k_pi,
                 config=config,
+                step=step,
                 log=do_log,
             )
             pi_finite = bool(policy_scalars.pop("pi_finite"))
@@ -736,6 +772,7 @@ def run_value_refinement(
             target_rhs=target_rhs,
             config=config,
             log=True,
+            policy_net=None,
         )
         value_scalars.pop("value_finite", None)
         last_value_loss = value_scalars["L_V_total"]
@@ -896,6 +933,7 @@ def _value_updates(
     target_rhs: float,
     config: Mapping[str, Any],
     log: bool = True,
+    policy_net: ControlNet | None = None,
 ) -> dict[str, Any]:
     # v2.2.1: box-feasibility CBF-derivative auxiliary term (value-side). weight=0 => skip the gate
     # entirely (no RNG draws, no _cbf_terms) so behavior is bit-identical to the baseline value loss.
@@ -904,6 +942,20 @@ def _value_updates(
     # non-logging step incurs a single device->host bool (the NaN/Inf halt check) instead of ~20 syncs.
     feas_weight = float(config["loss"]["value"].get("cbf_deriv", {}).get("weight", 0.0))
     feas_enabled = feas_weight > 0.0
+    # v2.2.2 precursor injection (collection-time design): a ~inj_fraction share of each value minibatch
+    # is sampled from the PRECURSOR buffer (populated once per collection in collect_jt), the rest from
+    # the normal value buffer. NO rollout in the update loop. Flag off / empty precursor buffer (e.g.
+    # value-refinement) => baseline path, value-side bit-identical to baseline.
+    inj_cfg = config["loss"]["value"].get("precursor_injection", {})
+    inj_fraction = float(inj_cfg.get("fraction", 0.0))
+    n_inj = int(round(inj_fraction * batch_size))
+    inj_enabled = bool(inj_cfg.get("enabled", False)) and len(buffers.precursor) > 0 and n_inj > 0
+    n_normal = (batch_size - n_inj) if inj_enabled else batch_size
+    # v2.2.2 Route D: RPCBF cubic-spline-max Sobolev gradient-matching on V_S (value-side). weight=0 /
+    # disabled => skip all rollout/spline/grad work so the value step is bit-identical to the baseline.
+    sob_cfg = config["loss"]["value"].get("sobolev", {})
+    sob_weight = float(sob_cfg.get("weight", 0.0))
+    sob_enabled = bool(sob_cfg.get("enabled", False)) and sob_weight > 0.0
 
     totals = []
     reaches = []
@@ -913,23 +965,45 @@ def _value_updates(
         "gate_n_constructed": [], "gate_n_kept": [], "gate_doomed_frac": [],
         "lg_norm_gate_mean": [], "lg_norm_gate_p50": [],
     }
+    inj_logs: dict[str, list[float]] = {
+        "injected_fraction_actual": [], "injected_target_mean": [], "injected_target_unsafe_frac": [],
+    }
+    sob_logs: dict[str, list[float]] = {
+        "L_sobolev_raw": [], "L_sobolev_weighted": [], "sob_grad_label_v_frac": [],
+        "sob_grad_label_v_mean": [], "sob_dhdv_pred_mean": [], "sob_v_spline_mean": [],
+        "sob_gate_mean": [], "sob_gate_frac_active": [], "sob_gate_dhdv_pred": [],
+    }
     for _ in range(n_updates):
-        batch = buffers.value.sample_tensor_batch(batch_size, generator=torch_generator)
-        result = value_loss(
-            system=system,
-            value_net=value_net,
-            target_value_net=target_value_net,
-            batch=batch,
-            lambda_disc=lambda_disc,
-            target_rhs=target_rhs,
-            config=config,
-        )
-        total_loss = result.total
+        if inj_enabled:
+            normal_batch = buffers.value.sample_tensor_batch(n_normal, generator=torch_generator)
+            res_n = value_loss(system=system, value_net=value_net, target_value_net=target_value_net,
+                               batch=normal_batch, lambda_disc=lambda_disc, target_rhs=target_rhs, config=config)
+            inj_batch = buffers.precursor.sample_tensor_batch(n_inj, generator=torch_generator)
+            res_i = value_loss(system=system, value_net=value_net, target_value_net=target_value_net,
+                               batch=inj_batch, lambda_disc=lambda_disc, target_rhs=target_rhs, config=config)
+            # single MSE over the mixed batch_size states: (sum_sq_normal + sum_sq_inj)/batch_size
+            total_loss = (n_normal * res_n.total + n_inj * res_i.total) / batch_size
+            reach_log = (n_normal * res_n.reach + n_inj * res_i.reach) / batch_size
+            scene_for_feas = normal_batch.scene
+            states_for_aux = normal_batch.states
+            if log:
+                tgt = res_i.targets.detach()
+                inj_logs["injected_fraction_actual"].append(n_inj / batch_size)
+                inj_logs["injected_target_mean"].append(float(tgt.mean().item()))
+                inj_logs["injected_target_unsafe_frac"].append(float((tgt >= 0.0).to(tgt.dtype).mean().item()))
+        else:
+            batch = buffers.value.sample_tensor_batch(batch_size, generator=torch_generator)
+            result = value_loss(system=system, value_net=value_net, target_value_net=target_value_net,
+                                batch=batch, lambda_disc=lambda_disc, target_rhs=target_rhs, config=config)
+            total_loss = result.total
+            reach_log = result.reach
+            scene_for_feas = batch.scene
+            states_for_aux = batch.states
         if feas_enabled:
             feas = cbf_deriv_feasibility_loss(
                 system=system,
                 value_net=value_net,
-                scene=batch.scene,
+                scene=scene_for_feas,
                 config=config,
                 generator=torch_generator,
                 collect_diagnostics=log,
@@ -942,6 +1016,25 @@ def _value_updates(
                 for key in ("gate_active_frac", "gate_n_constructed", "gate_n_kept",
                             "gate_doomed_frac", "lg_norm_gate_mean", "lg_norm_gate_p50"):
                     feas_logs[key].append(feas.diagnostics[key])
+        if sob_enabled:
+            sob = spline_sobolev_loss(
+                system=system,
+                value_net=value_net,
+                policy_net=policy_net,
+                states=states_for_aux,
+                scene=scene_for_feas,
+                config=config,
+                collect_diagnostics=log,
+            )
+            total_loss = total_loss + sob_weight * sob.loss_raw
+            if log:
+                sob_raw = float(sob.loss_raw.detach().item())
+                sob_logs["L_sobolev_raw"].append(sob_raw)
+                sob_logs["L_sobolev_weighted"].append(sob_weight * sob_raw)
+                for key in ("sob_grad_label_v_frac", "sob_grad_label_v_mean",
+                            "sob_dhdv_pred_mean", "sob_v_spline_mean",
+                            "sob_gate_mean", "sob_gate_frac_active", "sob_gate_dhdv_pred"):
+                    sob_logs[key].append(sob.diagnostics[key])
         optimizer.zero_grad(set_to_none=True)
         total_loss.backward()
         grad = nn.utils.clip_grad_norm_(
@@ -954,9 +1047,9 @@ def _value_updates(
             value_net,
             tau=float(config["optim"]["tau_polyak"]),
         )
-        totals.append(total_loss.detach())          # full optimized objective (MSE + weighted L_feas)
-        reaches.append(result.reach.detach())        # MSE reach term only (unchanged at weight=0)
-        grad_norms.append(torch.as_tensor(grad, device=result.total.device, dtype=result.total.dtype))
+        totals.append(total_loss.detach())          # full optimized objective (mixed MSE [+ weighted L_feas])
+        reaches.append(reach_log.detach())           # MSE reach term (mixed when injecting)
+        grad_norms.append(torch.as_tensor(grad, device=total_loss.device, dtype=total_loss.dtype))
 
     mean_total = torch.stack(totals).mean()
     out: dict[str, Any] = {"value_finite": bool(torch.isfinite(mean_total))}  # per-step halt signal (1 sync)
@@ -970,6 +1063,14 @@ def _value_updates(
             out.update({key: float(np.mean(vals)) for key, vals in feas_logs.items()})
         else:
             out.update({key: 0.0 for key in feas_logs})
+        if inj_enabled:
+            out.update({key: float(np.mean(vals)) for key, vals in inj_logs.items()})
+        else:
+            out.update({key: 0.0 for key in inj_logs})
+        if sob_enabled:
+            out.update({key: float(np.mean(vals)) for key, vals in sob_logs.items()})
+        else:
+            out.update({key: 0.0 for key in sob_logs})
     return out
 
 
@@ -984,6 +1085,7 @@ def _policy_updates(
     batch_size: int,
     n_updates: int,
     config: Mapping[str, Any],
+    step: int = 0,
     log: bool = True,
 ) -> dict[str, Any]:
     # Optimizer math runs EVERY step. The grad-leak SAFETY check is decided on-device every step
@@ -1002,6 +1104,11 @@ def _policy_updates(
         "abs_action_mean": [],
         "abs_action_max": [],
         "satfrac_a_phi": [],
+        "L_rate_raw": [],
+        "L_rate_weighted": [],
+        "mean_abs_du": [],
+        "L_u_raw": [],
+        "L_u_weighted": [],
     }
     pi_totals: list[Tensor] = []
     leak_sqs: list[Tensor] = []
@@ -1015,6 +1122,7 @@ def _policy_updates(
             value_net=value_net,
             batch=batch,
             config=config,
+            step=step,
         )
         result.total.backward()
         leak_sq = grad_sq_norm(value_net.parameters())          # on-device sum of squared value grads
@@ -1037,6 +1145,11 @@ def _policy_updates(
             accum["abs_action_mean"].append(result.action_abs_mean)
             accum["abs_action_max"].append(result.action_abs_max)
             accum["satfrac_a_phi"].append(result.satfrac_a_phi)
+            accum["L_rate_raw"].append(result.l_rate_raw)
+            accum["L_rate_weighted"].append(result.l_rate_weighted)
+            accum["mean_abs_du"].append(result.mean_abs_du)
+            accum["L_u_raw"].append(result.l_u_raw)
+            accum["L_u_weighted"].append(result.l_u_weighted)
 
     leak_sq_max = torch.stack(leak_sqs).max()
     threshold = float(config["halt"]["vs_grad_leak_threshold"])
@@ -1065,6 +1178,11 @@ def _zero_policy_scalars() -> dict[str, float]:
         "abs_action_mean": 0.0,
         "abs_action_max": 0.0,
         "satfrac_a_phi": 0.0,
+        "L_rate_raw": 0.0,
+        "L_rate_weighted": 0.0,
+        "mean_abs_du": 0.0,
+        "L_u_raw": 0.0,
+        "L_u_weighted": 0.0,
     }
 
 
@@ -1569,6 +1687,8 @@ def main() -> int:
     parser.add_argument("--jt-n-steps", type=int, default=None)
     parser.add_argument("--value-batch-size", type=int, default=None)
     parser.add_argument("--schedule-n-steps", type=int, default=None)
+    parser.add_argument("--resume-ckpt", type=Path, default=None,
+                        help="Resume joint training from a checkpoint's nets+optimizer state at its step.")
     parser.add_argument(
         "--value-refine-collection-filter",
         choices=["hardnet", "cbf_qp"],
@@ -1618,6 +1738,7 @@ def main() -> int:
             n_steps_override=args.jt_n_steps,
             value_batch_size_override=args.value_batch_size,
             schedule_n_steps_override=args.schedule_n_steps,
+            resume_ckpt=args.resume_ckpt,
         )
     print(result.run_dir)
     return 0 if result.halt_reason is None else 1
