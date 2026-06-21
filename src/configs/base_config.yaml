@@ -77,10 +77,10 @@ eval:
     min_start_goal_dist: 1.5        # looser than train
     start_goal_clearance: 0.15      # looser than train
   in_loop:
-    n: 200
+    n: 500
     seed: 12345
   full:
-    n: 500
+    n: 2000
     seed: 23456
   bootstrap:
     n_resample: 1000

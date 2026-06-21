@@ -2,14 +2,14 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.2.2"
+  version: "v2.3.0"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
-  system: unicycle                  # double_integrator | unicycle  (v2.2.2-uni-inj multi-seed: injection ON, sobolev OFF)
+  system: double_integrator         # double_integrator | unicycle  (v2.3.0 DI plain: injection OFF, D_pi sliding-window experiment)
 
 env:
-  goal_speed_radius: 0.50           # relaxed 0.30 (12% of v_max) -> 0.50 (20%): nonholonomic + low-speed-
-                                    # singular unicycle; 0.30 fails episodes that physically reached the goal
+  goal_speed_radius: 0.30           # v2.3.0 DI run: canonical DI criterion 0.30 (was 0.50 carried from the
+                                    # unicycle work); base_config is 0.30 and untouched
   bounds:
     unicycle:
       v_max: 2.5                    # Step 1: unicycle speed bound matching the DI kinematic scale
@@ -65,7 +65,9 @@ collection:
     collect_every: 100
     episodes_per_collect: 100
     v_label_episodes: 32
-    buffer_cap: 1000000
+    buffer_cap: 1000000              # restored to 1M (D_V=1M) for the multi-seed 2k/1M confirmation (D_V-shrink axis done)
+    policy_buffer_cap: 2000           # v2.3.0 axis: D_pi-only FIFO sliding window (5000->2000; D_V + precursor keep
+                                      # buffer_cap). Unset or == buffer_cap => prior behavior (flag-off bit-identical).
   oc_pncbf:
     collect_size: 4096
     buffer_capacity: 32768
@@ -103,7 +105,7 @@ loss:
         c0: 0.3                 # clearance center; gate ramps up as clearance falls below ~0.3 (collisions <0.06)
         tau_c: 0.15             # clearance sigmoid width
     precursor_injection:        # v2.2.2: inject collision-precursor states into the value MSE batch
-      enabled: true             # Step 2 (unicycle injection): ON. _construct_precursors ported to unicycle
+      enabled: false            # v2.3.0 DI plain run: injection OFF (single axis = policy_buffer_cap; baseline DI SOTA 0.8568)
                                 # (emits [x,y,theta,v]; theta inward, speed=|inward+lateral| capped at v_max).
                                 # DI hyperparameters reused unchanged. Flag off reproduces the Step-1 baseline exactly.
       fraction: 0.10            # 10% of each value minibatch are injected precursors, 90% normal buffer draw
@@ -164,7 +166,7 @@ filter:
     delta: 0.1
 
 eval:
-  cadence: 1000                     # in-loop eval every this many value steps (v2.2.1: finer cps logging for live monitor)
+  cadence: 1500                     # v2.3.0 DI run: in-loop eval + step_NNNNNN.pt cadence checkpoints every 1500 macro steps (n2000 re-selection)
   # NOTE: eval.full.n stays 500 here (base default) so the trainer's automated final eval finds the
   # secured_data n500 pool. N=2000 is the reporting standard but is run via the manual in-RAM eval path
   # (data/eval_pools/eval_full_di_n2000_seed23456.pkl), since run_full reads the read-only secured_data/pools.

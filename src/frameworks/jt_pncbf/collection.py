@@ -46,10 +46,16 @@ class JTReplayBuffers:
     precursor: OCReplayBuffer  # v2.2.2: collision-precursor states, populated once per collection
 
 
-def make_replay_buffers(capacity: int) -> JTReplayBuffers:
+def make_replay_buffers(
+    capacity: int, policy_capacity: int | None = None
+) -> JTReplayBuffers:
+    # v2.3.0: D_pi (policy buffer) may be capped independently of D_V / precursor.
+    # policy_capacity=None -> D_pi shares `capacity`, bit-identical to prior behavior.
+    # When set, only D_pi's FIFO cap differs; D_V and precursor keep `capacity`.
+    policy_cap = capacity if policy_capacity is None else int(policy_capacity)
     return JTReplayBuffers(
         value=OCReplayBuffer(capacity=capacity),
-        policy=OCReplayBuffer(capacity=capacity),
+        policy=OCReplayBuffer(capacity=policy_cap),
         precursor=OCReplayBuffer(capacity=capacity),
     )
 

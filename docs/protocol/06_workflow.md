@@ -131,9 +131,16 @@ places; CIs use the same precision when included. Run-ids are recorded verbatim 
 `<run_id>` directory. The `parent` column may be `-` if the run is not a child of another
 registered run.
 
+**Verdict is one line.** The `verdict` cell is a single short line (target <= ~25 words):
+the core finding only — the result, SOTA status, and any honest qualifier that changes its
+meaning (e.g. "CI overlaps prior -> point-estimate, not a confirmed beat", "tie",
+"no collapse"). Mechanism explanations, per-checkpoint detail, and extended context belong
+in the build-log and `results.md`, not the ledger; a short "see <build-log>" pointer is
+allowed. Long multi-sentence verdicts are not kept in the ledger.
+
 ### 2.5 Close
 
-The Researcher authors `docs/versions/vX.Y.Z/results.md` (the Strategist may draft) — the document that renders the version verdict. Unlike the Executor's build-logs (`docs/versions/vX.Y.Z/<task>.md`), the results document interprets. Both live under the gitignored `docs/versions/` as the local SSOT. It covers at least:
+The Researcher authors the results document `docs/versions/v<X>_results.md` (at the `docs/versions/` main level, alongside `v2.0.1_results.md` etc.; the Strategist may draft) — the document that renders the version verdict. Unlike the Executor's build-logs (`docs/versions/vX.Y.Z/<task>.md`), the results document interprets. Both live under the gitignored `docs/versions/` as the local SSOT. It covers at least:
 
 1. **Result.** `cps` and the component breakdown with 95% CIs — pooled across seeds for a multi-seed version, or single-run scene-bootstrap CIs for a single-seed version (stated as such).
 2. **Versus motivation.** Did the change do what §2.1 hypothesized? Cite the numbers.
@@ -142,9 +149,28 @@ The Researcher authors `docs/versions/vX.Y.Z/results.md` (the Strategist may dra
 
 The Executor copies the chosen final run(s) from `data/<run_id>/` into the secured layout (`04_eval` §7.5), excluding the bulky per-step `metrics.csv`, and writes the `ADOPTED.md` identity record with pinned SHA-256 hashes.
 
+**Close checklist (run at every version close).**
+
+1. `v<X>_results.md` authored/finalized at the `docs/versions/` main level.
+2. `docs/ledger.md` row updated. On SOTA change: bold the new row and add the standing
+   line; mark the prior SOTA row superseded (keep history).
+3. Run data moved: all of the version's run dirs from `data/` to `data/previous_runs/`
+   (whole run_dir, as-is). The SOTA run is additionally saved to
+   `data/secured_data/<version>/seed<N>/` as the standard file set (`checkpoints/`,
+   `figures/`, `config.yaml`, `eval_metrics.csv`, `eval_episodes.csv`, `pool_manifest.json`,
+   `git_commit.txt`, `report.md`, `status.json`, `ADOPTED.md`).
+4. Confirmed changes reflected in `docs/protocol/`; all `PROTOCOL FOLLOW-UP` items from
+   build-logs resolved.
+5. Close preparation complete (items 1-4 done and reported). The Researcher then performs
+   `git add` / `commit` / `push` directly (§2.6); the Executor does NOT run git.
+
+Version string bumps are done AFTER push, not during close.
+
 ### 2.6 Push
 
-The Executor recommends — and, after Researcher confirmation, performs — the git operation.
+The Executor prepares the close (checklist items 1-4) and recommends the git command, but does
+NOT run git. The Researcher performs `git add` / `commit` / `push` / `tag` directly via bash once
+close preparation is complete and reported.
 Since `docs/versions/` is local-only (§6.2), the version's `changes.md`, build-logs, and
 results are not staged; what is committed is the code/config change, the updated dashboard
 and ledger, and the secured snapshot:

@@ -293,7 +293,11 @@ def run_training(
         eval_cadence = n_steps
         eval_max_scenes = smoke_eval_scenes
 
-    buffers = make_replay_buffers(capacity=int(collection_cfg["buffer_cap"]))
+    policy_buffer_cap = collection_cfg.get("policy_buffer_cap")
+    buffers = make_replay_buffers(
+        capacity=int(collection_cfg["buffer_cap"]),
+        policy_capacity=int(policy_buffer_cap) if policy_buffer_cap is not None else None,
+    )
     run_dir = _create_run_dir(output_root, config, run_seed)
     _initialize_run_dir(run_dir, config)
     writer = _make_summary_writer(run_dir / "tensorboard")
@@ -678,7 +682,11 @@ def run_value_refinement(
     vs_warmup_steps = int(config["training"]["jt"]["vs_warmup_steps"])
     effective_steps = max(1, original_n_steps - vs_warmup_steps)
 
-    buffers = make_replay_buffers(capacity=int(collection_cfg["buffer_cap"]))
+    policy_buffer_cap = collection_cfg.get("policy_buffer_cap")
+    buffers = make_replay_buffers(
+        capacity=int(collection_cfg["buffer_cap"]),
+        policy_capacity=int(policy_buffer_cap) if policy_buffer_cap is not None else None,
+    )
     run_dir = _create_run_dir(output_root, config, run_seed)
     _initialize_run_dir(run_dir, config)
     writer = _make_summary_writer(run_dir / "tensorboard")

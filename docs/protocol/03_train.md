@@ -354,9 +354,17 @@ Two buffers serve the two updates:
   applied as in $\mathcal{D}_V$.
 
 Both rollouts are detached (collection does not back-prop). Per collection cycle,
-`collection.jt.episodes_per_collect` episodes feed each buffer; buffer capacity is
-`collection.jt.buffer_cap`. Each buffer stores both a trajectory view (for labeling) and a
-transition view (for V and policy minibatching).
+`collection.jt.episodes_per_collect` episodes feed each buffer. Each buffer stores both a
+trajectory view (for labeling) and a transition view (for V and policy minibatching), and
+samples its minibatches uniformly at random (with replacement) over the transition view.
+Buffer capacities are FIFO trajectory counts: once a buffer exceeds its cap, the oldest
+trajectory is evicted, so a cap is the sliding-window length (in trajectories) of retained
+collection history. $\mathcal{D}_V$ and the structural **precursor** buffer (inert unless the
+precursor-injection addition (§7) is active) use `collection.jt.buffer_cap`. The on-policy
+$\mathcal{D}_\pi$ uses `collection.jt.policy_buffer_cap`, an independent cap; when it is unset
+or equal to `buffer_cap`, all buffers share one capacity. Standard configuration:
+`buffer_cap` = 1,000,000 ($\mathcal{D}_V$ + precursor); `policy_buffer_cap` = 2,000
+($\mathcal{D}_\pi$).
 
 ### 4.3 Weak value supervision and minibatch composition (optional, inactive by default)
 
@@ -774,9 +782,22 @@ hypothesis and a clean ablation against the baseline:
   early-stop halts into the trainer's halt path.
 - **Saturation and catastrophic-failure halt detectors** with thresholds set once baseline
   statistics are available.
-- **Per-step action rate limiting.**
-
-Each introduction follows the one-axis recommendation of the constitution.
+- **Collision-precursor injection** — a third (precursor) buffer of synthetic near-obstacle
+  initial states, mixed into each value minibatch at a fixed fraction to sharpen $V_S$'s
+  danger boundary in collision-critical states that on-policy collection under-visits. Each
+  precursor is built around a random active obstacle: a clearance $d \sim U[d_{\text{lo}},
+  d_{\text{hi}}]$ sets the radial offset $r_i + d$ from the obstacle center, an inward speed
+  $s \sim U[s_{\text{lo}}, s_{\text{hi}}]$ sets the velocity toward the obstacle, and a
+  lateral spread (`lateral_frac`) perturbs it perpendicular; the velocity is capped at the
+  system's `v_max` (and, for the Unicycle, re-expressed as heading + speed). The precursor
+  buffer is populated each collection by rolling the current policy through the HardNet
+  filter at $\sigma = 0$ over the fixed horizon (no early stop), labeled by the same
+  max-over-time signed-$h$ target as every other buffer state. At each value update,
+  $\text{round}(\texttt{fraction}\cdot\texttt{batch\_size})$ states are drawn from the
+  precursor buffer and the remainder from $\mathcal{D}_V$, a single MSE over the mixed
+  minibatch; the injected fraction is per-batch and independent of buffer sizes, and flag-off
+  (or an empty precursor buffer) reduces bit-identically to the two-buffer baseline. Config:
+  `loss.value.precursor_injection.{enabled, fraction, d_lo, d_hi, s_lo, s_hi, lateral_frac}`.
 
 ---
 
@@ -805,7 +826,7 @@ which are written into every run's `data/<run_id>/config.yaml` (per `05_code` §
 ### In-loop evaluation (during training)
 
 Every `eval.cadence` macro steps (`exp_config.yaml`) the trainer runs an evaluation pass
-on the **pinned in-loop pool** (`base_config.eval.in_loop`, $N = 200$, seed 12345) and
+on the **pinned in-loop pool** (`base_config.eval.in_loop`, $N = 500$, seed 12345) and
 appends one row to `eval_metrics.csv`, the per-episode breakdown to `eval_episodes.csv`,
 and the scalar values to TensorBoard. The **best-by-`cps`** checkpoint is saved to
 `data/<run_id>/checkpoints/best.pt`. Mode details, output schema, and trajectory plots
@@ -815,7 +836,7 @@ live in `04_eval` §2.1, §3, §7.
 
 When training terminates (by completion or halt), the trainer triggers a single **full
 evaluation** on `data/<run_id>/checkpoints/best.pt` (override to `--last` for the last
-checkpoint), using the disjoint full pool (`base_config.eval.full`, $N = 500$,
+checkpoint), using the disjoint full pool (`base_config.eval.full`, $N = 2000$,
 seed 23456), with all three trajectory variants (LQR-only / learned no-CBF / filtered),
 trajectory PNGs, online insertion, and bootstrap statistics. Mode details, output layout,
 and reporting conventions live entirely in `04_eval` §2.2, §3, §4, §5, §7.

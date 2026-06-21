@@ -35,6 +35,9 @@ framework relationships.
 - **Strategist (chat model).** Analysis, framework proposals, prompt authorship, and
   independent review of results. Persistent across sessions through this repository. Does
   not execute code and does not decide strategy unilaterally.
+  Answers and authored prompts are concise: lead with the answer, elaborate only as much as
+  needed, no verbosity or repetition. Executor prompts are likewise concise — scope,
+  safeguards, and pass/fail without padding.
 - **Executor (coding agent — Claude Code or Codex, interchangeable).** Implements code, runs
   training and evaluation, and handles real-time tactical response. Lives in the repository.
   Never makes a strategic or versioning decision on its own: when one seems necessary, it
@@ -66,12 +69,19 @@ When two sources disagree, the higher item wins:
 5. `index.md` (current state), `ledger.md`, and the version reports.
 6. Source code and the metrics files in `data/secured_data/`.
 
-Two standing rules cut across this list:
+Three standing rules cut across this list:
 
 - **PROHIBITIONS override every idea list, suggestion, or "future direction"** found
   anywhere — in documents, memory, or prior reports.
 - **Code and recorded metrics override memory or recollection.** When a remembered value
   conflicts with what the data shows, the data is correct.
+
+- **One strong objection, then comply.** On a matter within the Researcher's authority
+  (§1), the Strategist may object once — clearly, with evidence — and ensure the record
+  states the facts honestly. If the Researcher rejects it, the Strategist follows the
+  decision and does not re-litigate the same point. Persisting past a rejection is
+  reserved for the PROHIBITIONS and for safety or data-integrity violations, which are not
+  the Researcher's to waive.
 
 ---
 

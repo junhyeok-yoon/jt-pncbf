@@ -1,0 +1,88 @@
+{
+  "version": "v2.3.0",
+  "system": "double_integrator",
+  "config": "D_pi=2k + D_V=1M @50k (policy_buffer_cap=2000, buffer_cap=1000000; injection OFF; goal_speed_radius 0.30)",
+  "eval": "full n2000 pool seed 23456 @ goal_speed_radius 0.30; n2000 re-selection over top-8 in-loop checkpoints",
+  "adopted_checkpoints": {
+    "42": 40500,
+    "12345": 49500,
+    "99": 45000
+  },
+  "per_seed": {
+    "42": {
+      "run_id": "v2.3.0__20260620-065914__seed42",
+      "best_step": 40500,
+      "cps": 0.87,
+      "ci": [
+        0.8488,
+        0.8888
+      ],
+      "reach": 0.947,
+      "collision": 0.0075,
+      "stuck": 0.026,
+      "timeout": 0.0195,
+      "infeasibility": 0.0875
+    },
+    "12345": {
+      "run_id": "v2.3.0__20260620-135807__seed12345",
+      "best_step": 49500,
+      "cps": 0.8766,
+      "ci": [
+        0.8571,
+        0.8956
+      ],
+      "reach": 0.9555,
+      "collision": 0.007,
+      "stuck": 0.023,
+      "timeout": 0.014,
+      "infeasibility": 0.1154
+    },
+    "99": {
+      "run_id": "v2.3.0__20260620-164338__seed99",
+      "best_step": 45000,
+      "cps": 0.8628,
+      "ci": [
+        0.8417,
+        0.8828
+      ],
+      "reach": 0.953,
+      "collision": 0.0085,
+      "stuck": 0.025,
+      "timeout": 0.0135,
+      "infeasibility": 0.1383
+    }
+  },
+  "aggregate": {
+    "n_seeds": 3,
+    "per_seed_mean": {
+      "cps": 0.8698,
+      "reach": 0.9518,
+      "collision": 0.0077,
+      "stuck": 0.0247,
+      "timeout": 0.0157,
+      "infeasibility": 0.1137
+    },
+    "per_seed_sd": {
+      "cps": 0.0069,
+      "reach": 0.0044,
+      "collision": 0.0008,
+      "stuck": 0.0015,
+      "timeout": 0.0033,
+      "infeasibility": 0.0254
+    },
+    "cps_mean": 0.8698,
+    "cps_sd": 0.0069,
+    "cps_seed_level_95ci_t2dof": [
+      0.8527,
+      0.8869
+    ],
+    "cps_range": [
+      0.8628,
+      0.8766
+    ],
+    "prior_sota": 0.8568,
+    "delta_vs_prior": 0.013,
+    "ci_overlaps_prior_sota": true,
+    "verdict": "PROMOTED to DI SOTA of record by Researcher decision on the formal 3-seed comparison (mean 0.8698). Cross-seed 95% CI [0.8527,0.8869] overlaps the prior 0.8568 -> consistent point-estimate improvement, NOT a non-overlapping CI-confirmed beat."
+  }
+}

@@ -66,11 +66,11 @@ The harness exposes exactly two modes. There is no "quick" mode; if cheaper eval
 
 ### 2.1 In-loop evaluation (during training)
 
-Triggered by the trainer every `exp_config.eval.cadence` macro steps. Runs against the **in-loop pool** (`base_config.eval.in_loop`, $N = 200$). One row appended to `data/<run_id>/eval_metrics.csv`; per-episode rows to `data/<run_id>/eval_episodes.csv`; scalars also written to TensorBoard. The trainer updates `data/<run_id>/checkpoints/best.pt` by `cps`. In-loop **also renders the trajectory+control figures** (§3) and the **CBF contour figure** (§3b) to `data/<run_id>/figures/inloop/step_<NNNNNN>_grid_{A,B}.png` and `step_<NNNNNN>_cbf_contour.png` (batched framework-native filter evaluation — CBF-QP for OC-PNCBF, HardNet for JT — makes this cheap). No online insertion in-loop (that is final-only, §4).
+Triggered by the trainer every `exp_config.eval.cadence` macro steps. Runs against the **in-loop pool** (`base_config.eval.in_loop`, $N = 500$). One row appended to `data/<run_id>/eval_metrics.csv`; per-episode rows to `data/<run_id>/eval_episodes.csv`; scalars also written to TensorBoard. The trainer updates `data/<run_id>/checkpoints/best.pt` by `cps`. In-loop **also renders the trajectory+control figures** (§3) and the **CBF contour figure** (§3b) to `data/<run_id>/figures/inloop/step_<NNNNNN>_grid_{A,B}.png` and `step_<NNNNNN>_cbf_contour.png` (batched framework-native filter evaluation — CBF-QP for OC-PNCBF, HardNet for JT — makes this cheap). No online insertion in-loop (that is final-only, §4).
 
 ### 2.2 Final evaluation (after training)
 
-Triggered automatically when training terminates (completion or halt), and runnable on demand against any saved checkpoint. Runs against the **full pool** (`base_config.eval.full`, $N = 500$, disjoint from the in-loop pool). Produces:
+Triggered automatically when training terminates (completion or halt), and runnable on demand against any saved checkpoint. Runs against the **full pool** (`base_config.eval.full`, $N = 2000$, disjoint from the in-loop pool). Produces:
 
 - One row appended to `data/<run_id>/eval_metrics.csv` (with `mode = "final"`) and per-episode rows to `eval_episodes.csv`.
 - The framework's trajectory variants per episode (OC-PNCBF: LQR-only + filtered; Joint Training: LQR-only + learned no-CBF + filtered).
@@ -212,14 +212,16 @@ Eval scenes are **looser** than training (larger clearance, larger min start-goa
 
 ### 6.2 Pools (committed)
 
-Two pools are pre-generated, serialized, and committed to git under `data/secured_data/pools/`. Every run reads them; nothing is generated in memory at evaluation time.
+Two pools are pre-generated, serialized, and committed to git under `data/secured_data/pools/`, both built by the same `build_pools.py` machinery. Every run reads them; nothing is generated in memory at evaluation time.
 
-| pool | $N$ | seed | path |
-|---|---|---|---|
-| in-loop | 200 | 12345 | `data/secured_data/pools/eval_inloop_<system>_n200_seed12345.{pkl,manifest.json}` |
-| full | 500 | 23456 | `data/secured_data/pools/eval_full_<system>_n500_seed23456.{pkl,manifest.json}` |
+| pool | $N$ | seed | role | path |
+|---|---|---|---|---|
+| in-loop | 500 | 12345 | selection (best.pt by `cps`) | `data/secured_data/pools/eval_inloop_<system>_n500_seed12345.{pkl,manifest.json}` |
+| full | 2000 | 23456 | final eval / headline reporting | `data/secured_data/pools/eval_full_<system>_n2000_seed23456.{pkl,manifest.json}` |
 
-`<system>` is a short tag (`di` for Double Integrator, `uni` for Unicycle). The tag is part of the filename because the project has multiple systems and pools are not interchangeable across them; e.g. `eval_inloop_di_n200_seed12345.pkl`. The in-loop and full pools are **disjoint** (different seeds, different sizes). This separates selection (in-loop) from reporting (full), analogous to validation vs test in standard ML.
+`<system>` is a short tag (`di` for Double Integrator, `uni` for Unicycle). The tag is part of the filename because the project has multiple systems and pools are not interchangeable across them; e.g. `eval_inloop_di_n500_seed12345.pkl`. The in-loop and full pools are **disjoint** (different seeds, different sizes), separating selection (in-loop) from reporting (full), analogous to validation vs test in standard ML.
+
+The in-loop pool selects `best.pt` during training; the full pool is what the trainer's automated final eval runs and is the headline-reporting standard. Because pool scenes are drawn by a single seeded RNG in a fixed order (§6.3, `03_train` §1.1), any smaller-$N$ pool at a given seed is a byte-identical prefix of a larger one at the same seed — so checkpoint **re-selection** (re-evaluating a run's saved checkpoints on the full $N=2000$ pool to pick the true best, since the in-loop pool is smaller and noisier) is well-defined and reproducible.
 
 ### 6.3 Pool manifest
 
