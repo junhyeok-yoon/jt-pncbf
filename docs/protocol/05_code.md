@@ -160,6 +160,7 @@ data/
     │   └── eval_full_di_n500_seed23456.manifest.json
     └── <version>/
         ├── seed<N>/                        # final snapshot per seed (see 04_eval §7.5)
+        ├── experiments/<name>/             # optional secured diagnostic, Researcher-gated (06_workflow §6.3)
         └── aggregate/
             ├── multi_seed_metrics.json
             └── multi_seed_report.md

@@ -234,14 +234,8 @@ def _passes_unavoidable_collision_filter(
     params: _SceneModeParams,
 ) -> bool:
     velocity = _initial_velocity_vector(scene)
-    speed = float(np.linalg.norm(velocity))
     active_centers = scene.obstacle_centers[scene.obstacle_active]
     active_radii = scene.obstacle_radii[scene.obstacle_active]
-
-    if speed <= _ZERO_SPEED_EPS:
-        velocity_direction = None
-    else:
-        velocity_direction = velocity / speed
 
     acceleration_bound = _acceleration_bound(config, scene.system)
     feasibility_margin = float(config["scene_train"]["init_feasibility_margin"])
@@ -249,10 +243,15 @@ def _passes_unavoidable_collision_filter(
     for center, radius in zip(active_centers, active_radii):
         center_delta = center - scene.start
         distance = float(np.linalg.norm(center_delta))
-        if velocity_direction is None:
+        if distance <= _ZERO_SPEED_EPS:
             stopping_distance = 0.0
         else:
-            inward_speed = max(0.0, float(np.dot(velocity_direction, center_delta)))
+            # v2.3.1 fix: inward speed = projected SPEED (m/s) toward the obstacle,
+            # i.e. dot(velocity_m/s, unit(center - start)) -- NOT the prior projected
+            # distance dot(unit(velocity), center - start). Units now match the
+            # v^2/(2 a) max-braking stopping distance (03_train Sec 1.3 intent).
+            u_dir = center_delta / distance
+            inward_speed = max(0.0, float(np.dot(velocity, u_dir)))
             stopping_distance = inward_speed**2 / (2.0 * acceleration_bound)
 
         required_clearance = max(

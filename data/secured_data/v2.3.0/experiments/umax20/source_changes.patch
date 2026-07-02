@@ -1,0 +1,63 @@
+diff --git a/src/common/filter_hardnet.py b/src/common/filter_hardnet.py
+index 974824c..c349656 100644
+--- a/src/common/filter_hardnet.py
++++ b/src/common/filter_hardnet.py
+@@ -22,6 +22,7 @@ class _HardNetParams:
+     epsilon: float
+     lg_reg_eps: float
+     box_aware: bool
++    disable_box: bool
+     alpha_safe: float
+     alpha_unsafe: float
+     lookahead_enabled: bool
+@@ -89,7 +90,7 @@ class HardNetFilter:
+         lg_norm = torch.linalg.norm(lg_h, dim=1)
+         singular = lg_norm < _SINGULAR_LG_THRESHOLD
+ 
+-        if not self.params.box_aware:
++        if self.params.disable_box or not self.params.box_aware:
+             return projected, singular
+ 
+         box_projected, empty_intersection = _box_aware_projection(
+@@ -148,7 +149,10 @@ def _base_projection(
+     denom = torch.sum(halfspace_normal * halfspace_normal, dim=1)   # ||L_g h||^2
+     denom = denom + params.epsilon**2 + params.lg_reg_eps             # lg_reg_eps: low-speed singularity reg
+     correction = halfspace_normal * (violation / denom).unsqueeze(1)
+-    return _clamp_to_bounds(u_nom - correction, bounds)
++    projected = u_nom - correction
++    if params.disable_box:
++        return projected
++    return _clamp_to_bounds(projected, bounds)
+ 
+ 
+ def _box_aware_projection(
+@@ -274,6 +278,7 @@ def _hardnet_params(config: Mapping[str, Any]) -> _HardNetParams:
+         epsilon=float(hardnet_cfg["epsilon"]),
+         lg_reg_eps=float(config["filter"].get("lg_reg_eps", 0.0)),
+         box_aware=bool(hardnet_cfg["box_aware"]),
++        disable_box=bool(hardnet_cfg.get("disable_box", False)),
+         alpha_safe=float(config["filter"]["alpha_safe"]),
+         alpha_unsafe=float(config["filter"]["alpha_unsafe"]),
+         lookahead_enabled=bool(lookahead_cfg.get("enabled", False)),
+diff --git a/src/configs/exp_config.yaml b/src/configs/exp_config.yaml
+index cb11006..113a3e2 100644
+--- a/src/configs/exp_config.yaml
++++ b/src/configs/exp_config.yaml
+@@ -11,6 +11,8 @@ env:
+   goal_speed_radius: 0.30           # v2.3.0 DI run: canonical DI criterion 0.30 (was 0.50 carried from the
+                                     # unicycle work); base_config is 0.30 and untouched
+   bounds:
++    double_integrator:
++      u_max: 20.0                   # EXPERIMENT: widen actuator/control box [-2,2]^2 -> [-20,20]^2 (box stays ACTIVE)
+     unicycle:
+       v_max: 2.5                    # Step 1: unicycle speed bound matching the DI kinematic scale
+                                     # (same a_max=2.0, arena, dt); clamped (signed) in unicycle.wrap_state
+@@ -154,6 +156,8 @@ halt:
+   early_stop_min_delta: 0.002
+ 
+ filter:
++  hardnet:
++    disable_box: false              # box constraint ACTIVE (widened to [-20,20] via env.bounds.double_integrator.u_max)
+   lg_reg_eps: 0.0                   # INERT with box_aware=true (box-aware enumerates the exact feasible region,
+                                     # bypassing the base-projection blow-up -> smoke confirmed identical corrections
+                                     # eps=0 vs 0.005 at ||L_g h||=0 states). Kept at 0; only goal_speed_radius changed.

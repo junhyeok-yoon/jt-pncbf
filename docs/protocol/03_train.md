@@ -80,11 +80,14 @@ with $d_{\min}^{\text{train}}$ and $\delta^{\text{train}}$ from
 `base_config.scene_train`, over active obstacles only.
 
 **Unavoidable-collision rejection.** A start $(s, v_0)$ that cannot avoid contact even
-with maximum braking in the velocity direction is rejected. For every active obstacle $i$,
-let $\hat v_0 = v_0 / \|v_0\|$ (when $\|v_0\| > 0$); compute the inward velocity component
+with maximum braking is rejected. For every active obstacle $i$, let
+$\hat u_i = (c_i - s) / \|c_i - s\|$ be the unit direction from the start toward the
+obstacle center (well-defined since the clearance predicate above forces
+$\|c_i - s\| \ge r_i + \delta^{\text{train}} > 0$); compute the inward speed — the
+initial velocity projected onto that direction —
 
 $$
-v^{\text{in}}_i = \max\!\big(0,\ \hat v_0 \cdot (c_i - s)\big),
+v^{\text{in}}_i = \max\!\big(0,\ v_0 \cdot \hat u_i\big),
 $$
 
 the corresponding stopping distance under maximum braking
@@ -101,8 +104,8 @@ $$
 
 where $\delta^{\text{feas}} = \texttt{scene\_train.init\_feasibility\_margin}$ (default
 0.05) and $u_{\max}$ is the system's acceleration bound (Double Integrator: $u_{\max}$;
-Unicycle: $a_{\max}$ along the heading direction). When $v_0 = 0$ this reduces to the
-clearance buffer $\delta^{\text{train}}$ already enforced above.
+Unicycle: $a_{\max}$ along the heading direction). When $v_0 = 0$, $v^{\text{in}}_i = 0$
+and the test reduces to the clearance buffer already enforced above.
 
 ### 1.4 Scene schema
 

@@ -292,6 +292,18 @@ When sources disagree, follow `00_constitution` §2. Specifically:
   `data/secured_data/<version>/aggregate/` carries the cross-seed bootstrap and the
   one-page summary. A single-seed version has no aggregate; its secured snapshot and
   `ADOPTED.md` are the canonical reference.
+- **Experiments (secured diagnostics).** A diagnostic run kept for the record but that is
+  **not** the version's SOTA snapshot — a Researcher-directed ablation or what-if on a
+  version's base (e.g. an alternate actuator or filter spec) — is stored under
+  `data/secured_data/<version>/experiments/<name>/`, `<name>` a short snake_case tag. It
+  holds the diagnostic's own eval artifacts (the `04_eval` §7.5 file set, or the subset the
+  run produced) plus a `README.md` stating the base version, the exact change from that
+  base, the verdict, and a pointer to the results-doc section that interprets it. It never
+  carries a SOTA claim: the version's SOTA remains its `seed<N>/` snapshot, and an
+  experiments entry is never eligible for ledger SOTA bolding (§2.4). **Promotion is
+  Researcher-gated.** Copying anything into `data/secured_data/<version>/experiments/` is,
+  like every other secured promotion (§2.5), an explicit Researcher decision; the Executor
+  proposes and waits and never moves a diagnostic into `secured_data/` on its own.
 
 ### 6.4 MkDocs and TensorBoard
 

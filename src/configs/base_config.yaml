@@ -12,7 +12,11 @@ env:
   goal_speed_radius: 0.30
   stuck_window_steps: 60
   stuck_radius: 0.10
-  v_init_max: 0.5
+  v_init_max: 0.5                  # v2.3.1 fast-approach axis (v_init_max 2.0 + magnitude/angle
+                                   # DI sampler) REGRESSED and was fully reverted: v_init_max back to
+                                   # 0.5 and the DI sampler restored to per-component-uniform in
+                                   # scene_init._make_scene, matching the v2.3.0 SOTA start distribution
+                                   # and protocol 03_train 1.2. Only the admission unit-fix (Axis B) is kept.
   bounds:
     double_integrator:
       u_max: 2.0

@@ -396,6 +396,8 @@ data/secured_data/<version>/aggregate/
 
 This directory **is committed to git** so cloning the repository gives anyone the exact numbers that anchor each version.
 
+A version may additionally carry an optional `data/secured_data/<version>/experiments/<name>/` sub-tree — a secured diagnostic kept for the record that is not the version's SOTA snapshot. Its layout, required `README.md`, and Researcher-gated promotion are defined in `06_workflow` §6.3; it is never SOTA-bolded in the ledger (§2.4).
+
 ---
 
 ## 8. Comparisons across frameworks
