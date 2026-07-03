@@ -50,6 +50,7 @@ class HardNetFilter:
         x: Tensor,
         scene: Any,
         u_nom: Tensor,
+        detach_coeffs: bool = False,
     ) -> tuple[Tensor, Tensor]:
         if x.ndim != 2 or u_nom.ndim != 2:
             raise ValueError("x and u_nom must be batched rank-2 tensors.")
@@ -64,6 +65,13 @@ class HardNetFilter:
             u_nom,
             create_graph=True,
         )
+        if detach_coeffs:
+            # v2.4.0 Step 5 (audit C1 fix): treat the CBF coefficients (h, L_f h, L_g h and every
+            # projection/box-argmin quantity derived from them) as CONSTANTS w.r.t. the state in
+            # backward. Forward numerics are byte-identical (detach changes no values); the policy
+            # BPTT gradient then flows to pi_theta only through the u_nom pathway, not through the
+            # coefficients' state dependence (the source of the T=60 gradient explosion, audit C1).
+            h, lf_h, lg_h = h.detach(), lf_h.detach(), lg_h.detach()
         alpha = _base_alpha(h, self.params)
         if (
             self.params.lookahead_enabled

@@ -7,6 +7,7 @@ from typing import Any, Iterator, Mapping
 import torch
 from torch import nn
 
+from src.common.brake_rollout import brake_h_rollout
 from src.common.filter_hardnet import HardNetFilter, _base_alpha, _cbf_terms, _hardnet_params
 from src.common.observation import top_k_obstacles
 from src.common.rk4 import rk4_step
@@ -58,6 +59,7 @@ def value_loss(
     lambda_disc: float,
     target_rhs: float,
     config: Mapping[str, Any],
+    recovery_policy: Any = None,
 ) -> ValueLossResult:
     obs = system.observation(batch.states, batch.scene)
     targets = value_targets(
@@ -67,6 +69,7 @@ def value_loss(
         lambda_disc=lambda_disc,
         target_rhs=target_rhs,
         config=config,
+        recovery_policy=recovery_policy,
     )
     prediction = value_net(obs)
     reach = torch.mean((prediction - targets.unsqueeze(1)) ** 2)
@@ -82,7 +85,69 @@ def value_targets(
     lambda_disc: float,
     target_rhs: float,
     config: Mapping[str, Any],
+    recovery_policy: Any = None,
 ) -> Tensor:
+    conditioning = config["value_target"].get("conditioning", "task_stored")
+    if conditioning == "learned_recovery":
+        # v2.4.0 Step 2: condition the value target on the LEARNED recovery policy (Polyak copy
+        # pi_b_target). Same target form as the brake branch; only the conditioning rollout policy
+        # differs. Rollout + result are grad-free (no_grad inside brake_h_rollout, then .detach()).
+        if recovery_policy is None:
+            raise ValueError("learned_recovery conditioning requires a recovery_policy (pi_b_target).")
+        brake_cfg = config["value_target"]["brake"]
+        rec_cfg = config["value_target"]["recovery"]
+        u_max = float(config["env"]["bounds"][system.name]["u_max"])
+        h_seq_bt, tail_obs = brake_h_rollout(
+            batch.states,
+            batch.scene,
+            system,
+            system.observation,
+            int(rec_cfg["T_b"]),
+            u_max,
+            float(brake_cfg["eps_v"]),
+            float(config["env"]["dt"]),
+            float(config["env"]["h_scale"]),
+            policy_fn=recovery_policy,
+        )
+        with torch.no_grad():
+            bootstrap_tail = target_value_net.target_h(tail_obs)
+        brake_h_sequence = h_seq_bt.transpose(0, 1).contiguous()
+        return pncbf_target(
+            brake_h_sequence,
+            lambda_disc,
+            float(config["env"]["dt"]),
+            target_rhs,
+            bootstrap_tail,
+        ).detach()[0]
+    if conditioning == "brake":
+        # v2.4.0: decouple the conditioning policy. Roll a fixed analytic brake from each
+        # minibatch state and run the SAME pncbf_target recurrence over that h-sequence.
+        # Behavior (where states come from) is unchanged; only the label provenance changes.
+        brake_cfg = config["value_target"]["brake"]
+        u_max = float(config["env"]["bounds"][system.name]["u_max"])
+        h_seq_bt, tail_obs = brake_h_rollout(
+            batch.states,
+            batch.scene,
+            system,
+            system.observation,
+            int(brake_cfg["T_b"]),
+            u_max,
+            float(brake_cfg["eps_v"]),
+            float(config["env"]["dt"]),
+            float(config["env"]["h_scale"]),
+        )
+        with torch.no_grad():
+            bootstrap_tail = target_value_net.target_h(tail_obs)
+        # time-major [T_b+1, B] for the shared recurrence; index 0 is the value AT the
+        # minibatch state (start of the braking rollout).
+        brake_h_sequence = h_seq_bt.transpose(0, 1).contiguous()
+        return pncbf_target(
+            brake_h_sequence,
+            lambda_disc,
+            float(config["env"]["dt"]),
+            target_rhs,
+            bootstrap_tail,
+        ).detach()[0]
     with torch.no_grad():
         tail_obs = system.observation(batch.tail_states, batch.tail_scene)
         bootstrap_tail = target_value_net.target_h(tail_obs)
@@ -364,6 +429,10 @@ def policy_bptt_loss(
     lambda_v = float(policy_cfg["lambda_v"])
     mu_u = float(policy_cfg["mu_u"])
     tau_gate = float(policy_cfg["tau_gate"])
+    # v2.4.0 Step 5 (audit C1 fix): when set, detach the CBF coefficients inside the differentiable
+    # policy BPTT rollout so the policy gradient does not flow through the projection's state-dependent
+    # coefficient Jacobian (the T=60 gradient-explosion source). Default off => byte-identical.
+    detach_coeffs = bool(policy_cfg.get("detach_filter_coeffs", False))
     hardnet = HardNetFilter(system, make_h_fn(value_net, system), config)
 
     _zero_grads(value_net.parameters())
@@ -401,7 +470,7 @@ def policy_bptt_loss(
             ).clamp_min(0.0)
             sat_excess_values.append((sat_excess * sat_excess).sum(dim=1).mean())
 
-            u_safe, _ = hardnet(x, scene, u_nom)
+            u_safe, _ = hardnet(x, scene, u_nom, detach_coeffs=detach_coeffs)
             safe_actions.append(u_safe)
             x = rk4_step(system, x, u_safe, dt)
             goal = _scene_goal(scene, x)

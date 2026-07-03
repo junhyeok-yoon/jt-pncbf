@@ -25,6 +25,7 @@ from src.envs.double_integrator import DoubleIntegrator
 from src.envs.scene_init import sample_train_scene
 from src.envs.scene_init_fixed import sample_train_fixed_scene
 from src.envs.unicycle import Unicycle
+from src.frameworks.jt_pncbf.recovery_policy import RecoveryPolicy, recovery_bptt_loss
 from src.eval.evaluate import (
     EVAL_EPISODE_COLUMNS,
     EVAL_METRIC_COLUMNS,
@@ -77,6 +78,9 @@ METRIC_COLUMNS = [
     "collect_infeasible",
     "L_R",
     "L_V_total",
+    "value_target_unsafe_frac",
+    "loss_pi_b",
+    "recovery_residual_norm",
     "L_feas_raw",
     "L_feas_weighted",
     "gate_active_frac",
@@ -234,6 +238,31 @@ def run_training(
         weight_decay=float(config["optim"]["weight_decay"]),
     )
 
+    # v2.4.0 Step 2: learned recovery conditioning policy pi_b (residual around the analytic brake),
+    # trained by an avoid-only BPTT loss and consumed (via a Polyak target copy) by the value target.
+    # Only built when value_target.conditioning == "learned_recovery"; otherwise all-None (the brake /
+    # task_stored paths are unaffected).
+    conditioning = str(config["value_target"].get("conditioning", "task_stored"))
+    recovery_enabled = conditioning == "learned_recovery"
+    recovery_policy: RecoveryPolicy | None = None
+    recovery_target: RecoveryPolicy | None = None
+    opt_b: optim.Optimizer | None = None
+    k_b = 0
+    if recovery_enabled:
+        rec_u_max = float(config["env"]["bounds"][system.name]["u_max"])
+        rec_eps_v = float(config["value_target"]["brake"]["eps_v"])
+        recovery_policy = RecoveryPolicy(system.obs_dim, system, config, rec_u_max, rec_eps_v).to(
+            device=train_device, dtype=train_dtype,
+        )
+        recovery_target = deepcopy(recovery_policy)
+        recovery_target.requires_grad_(False)
+        opt_b = optim.AdamW(
+            recovery_policy.parameters(),
+            lr=float(config["optim"]["lr_pi"]),
+            weight_decay=float(config["optim"]["weight_decay"]),
+        )
+        k_b = int(config["value_target"]["recovery"].get("K_b", 1))
+
     # Joint resume: continue training from a saved checkpoint's nets + optimizer state, starting at its
     # step (the loop and schedule then continue from there; schedule_step is clamped so it stays at the
     # final saturated value when start_step >= schedule_n_steps). start_step=0 == fresh run (unchanged).
@@ -388,10 +417,32 @@ def run_training(
             config=config,
             log=do_log,
             policy_net=policy_net,
+            recovery_policy=recovery_target,
         )
         if not value_scalars.pop("value_finite"):
             halt_reason = "nan_or_inf_L_V"
             break
+
+        # v2.4.0 Step 2: pi_b update AFTER the value updates and BEFORE the policy updates, active
+        # from step 1 (does not depend on V_S or the vs_warmup window).
+        if recovery_enabled:
+            recovery_scalars = _recovery_updates(
+                system=system,
+                recovery_policy=recovery_policy,
+                recovery_target=recovery_target,
+                optimizer=opt_b,
+                buffers=buffers,
+                torch_generator=torch_rng,
+                batch_size=policy_batch_size,
+                n_updates=k_b,
+                config=config,
+                log=do_log,
+            )
+            if not recovery_scalars.pop("recovery_finite"):
+                halt_reason = "nan_or_inf_L_pi_b"
+                break
+            if do_log:
+                value_scalars.update(recovery_scalars)
 
         policy_scalars = _zero_policy_scalars()
         if step > vs_warmup_steps and k_pi > 0:
@@ -942,6 +993,7 @@ def _value_updates(
     config: Mapping[str, Any],
     log: bool = True,
     policy_net: ControlNet | None = None,
+    recovery_policy: Any = None,
 ) -> dict[str, Any]:
     # v2.2.1: box-feasibility CBF-derivative auxiliary term (value-side). weight=0 => skip the gate
     # entirely (no RNG draws, no _cbf_terms) so behavior is bit-identical to the baseline value loss.
@@ -981,14 +1033,17 @@ def _value_updates(
         "sob_grad_label_v_mean": [], "sob_dhdv_pred_mean": [], "sob_v_spline_mean": [],
         "sob_gate_mean": [], "sob_gate_frac_active": [], "sob_gate_dhdv_pred": [],
     }
+    vt_unsafe: list[float] = []          # v2.4.0: fraction of value-minibatch targets y > 0
     for _ in range(n_updates):
         if inj_enabled:
             normal_batch = buffers.value.sample_tensor_batch(n_normal, generator=torch_generator)
             res_n = value_loss(system=system, value_net=value_net, target_value_net=target_value_net,
-                               batch=normal_batch, lambda_disc=lambda_disc, target_rhs=target_rhs, config=config)
+                               batch=normal_batch, lambda_disc=lambda_disc, target_rhs=target_rhs, config=config,
+                               recovery_policy=recovery_policy)
             inj_batch = buffers.precursor.sample_tensor_batch(n_inj, generator=torch_generator)
             res_i = value_loss(system=system, value_net=value_net, target_value_net=target_value_net,
-                               batch=inj_batch, lambda_disc=lambda_disc, target_rhs=target_rhs, config=config)
+                               batch=inj_batch, lambda_disc=lambda_disc, target_rhs=target_rhs, config=config,
+                               recovery_policy=recovery_policy)
             # single MSE over the mixed batch_size states: (sum_sq_normal + sum_sq_inj)/batch_size
             total_loss = (n_normal * res_n.total + n_inj * res_i.total) / batch_size
             reach_log = (n_normal * res_n.reach + n_inj * res_i.reach) / batch_size
@@ -999,14 +1054,19 @@ def _value_updates(
                 inj_logs["injected_fraction_actual"].append(n_inj / batch_size)
                 inj_logs["injected_target_mean"].append(float(tgt.mean().item()))
                 inj_logs["injected_target_unsafe_frac"].append(float((tgt >= 0.0).to(tgt.dtype).mean().item()))
+                vt_unsafe.append(float((res_n.targets.detach() > 0.0).to(res_n.targets.dtype).mean().item()))
         else:
             batch = buffers.value.sample_tensor_batch(batch_size, generator=torch_generator)
             result = value_loss(system=system, value_net=value_net, target_value_net=target_value_net,
-                                batch=batch, lambda_disc=lambda_disc, target_rhs=target_rhs, config=config)
+                                batch=batch, lambda_disc=lambda_disc, target_rhs=target_rhs, config=config,
+                                recovery_policy=recovery_policy)
             total_loss = result.total
             reach_log = result.reach
             scene_for_feas = batch.scene
             states_for_aux = batch.states
+            if log:
+                vt = result.targets.detach()
+                vt_unsafe.append(float((vt > 0.0).to(vt.dtype).mean().item()))
         if feas_enabled:
             feas = cbf_deriv_feasibility_loss(
                 system=system,
@@ -1079,6 +1139,49 @@ def _value_updates(
             out.update({key: float(np.mean(vals)) for key, vals in sob_logs.items()})
         else:
             out.update({key: 0.0 for key in sob_logs})
+        out["value_target_unsafe_frac"] = float(np.mean(vt_unsafe)) if vt_unsafe else 0.0
+    return out
+
+
+def _recovery_updates(
+    *,
+    system: System,
+    recovery_policy: RecoveryPolicy,
+    recovery_target: RecoveryPolicy,
+    optimizer: optim.Optimizer,
+    buffers: JTReplayBuffers,
+    torch_generator: torch.Generator | None,
+    batch_size: int,
+    n_updates: int,
+    config: Mapping[str, Any],
+    log: bool = True,
+) -> dict[str, Any]:
+    # v2.4.0 Step 2: avoid-only BPTT updates of the learned recovery policy pi_b, sampled from D_V.
+    # No V_S and no pi_theta are in the graph, so gradients reach only pi_b's params (routing is by
+    # construction). After each optimizer step, the Polyak target pi_b_target is nudged (tau_b), and
+    # the value target consumes ONLY that target copy. Finiteness is checked every step (halt signal).
+    tau_b = float(config["value_target"]["recovery"]["tau_b"])
+    grad_clip = float(config["optim"]["grad_clip"])
+    losses: list[Tensor] = []
+    residuals: list[Tensor] = []
+    finite = True
+    for _ in range(n_updates):
+        batch = buffers.value.sample_tensor_batch(batch_size, generator=torch_generator)
+        loss, residual_norm = recovery_bptt_loss(
+            system=system, recovery_policy=recovery_policy, batch=batch, config=config,
+        )
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        nn.utils.clip_grad_norm_(recovery_policy.parameters(), max_norm=grad_clip)
+        optimizer.step()
+        _polyak_update(recovery_target, recovery_policy, tau=tau_b)
+        finite = finite and bool(torch.isfinite(loss).item())
+        losses.append(loss.detach())
+        residuals.append(residual_norm.detach())
+    out: dict[str, Any] = {"recovery_finite": finite}
+    if log:
+        out["loss_pi_b"] = float(torch.stack(losses).mean().item())
+        out["recovery_residual_norm"] = float(torch.stack(residuals).mean().item())
     return out
 
 

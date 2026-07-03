@@ -2,7 +2,7 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.3.1"
+  version: "v2.4.0"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
   system: double_integrator         # double_integrator | unicycle  (v2.3.0 DI plain: injection OFF, D_pi sliding-window experiment)
@@ -21,7 +21,7 @@ training:
     vs_warmup_steps: 2000
     K_V: 3
     K_pi: 1
-    bptt_T: 30
+    bptt_T: 30                      # v2.3.0 SOTA baseline horizon (reset after v2.4.0 close; bptt_T=60 collapse root-caused)
     schedule_n_steps: 42000         # match v2.0.1 SOTA schedule budget (UNCHANGED for the 80k extension)
   oc_pncbf:
     epochs: 1000
@@ -44,6 +44,15 @@ value_target:
   type: pncbf                       # pncbf | rpcbf
   rpcbf_H: 7
   rpcbf_beta: 20.0
+  conditioning: task_stored         # task_stored | brake | learned_recovery  (v2.4.0 Step 4: baseline conditioning + bptt_T=60)
+  brake:                            # analytic per-axis brake base for pi_b (uses eps_v)
+    eps_v: 0.05                     # velocity deadband taper (m/s)
+    T_b: 30                         # brake rollout steps (>= max stop steps 25 at dt=0.05)
+  recovery:                         # v2.4.0 Step 2: learned avoid-optimal recovery conditioning policy
+    T_b: 30                         # conditioning + avoid-BPTT rollout steps
+    beta: 20.0                      # softmax-over-time temperature for the avoid-only loss
+    tau_b: 0.005                    # Polyak rate for pi_b_target
+    K_b: 1                          # pi_b updates per macro step
 
 schedules:
   gamma_disc: {horizon_init: 20.0, horizon_final: 100.0, lambda_floor: 0.05, f_warm: 0.10, f_phase1: 0.80, total_epochs: 1000}
@@ -116,6 +125,7 @@ loss:
       lateral_frac: 0.5         # lateral velocity spread as fraction of inward speed
   policy:
     gamma_T: 0.99
+    detach_filter_coeffs: false     # standing hygiene flag (default off); v2.4.0 Step 5 audit C1 fix, only needed for long-horizon BPTT
     lambda_v: 0.01                  # task-cost velocity weight
     mu_u: 0.001                     # task-cost action weight
     tau_gate: 0.05
