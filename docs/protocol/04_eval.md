@@ -56,6 +56,8 @@ To separate "genuinely stuck" from "moved barely above the threshold", each epis
 
 Episodes with $\min_t \mathrm{disp}_t > 0.30$ m are not bucketed (free-moving). Per-bin counts and fractions are recorded on every eval. This is a pure diagnostic — it is not part of `cps` and does not affect outcome resolution.
 
+Reference on a boundary case: an episode that comes to rest just outside the goal-reach tolerance is resolved as `stuck` even though it is near-success (a "parked" trajectory rather than an obstacle-blocked one). A v2.4.0 study observed a policy-collapse mode dominated by this near-goal parking. When stuck is elevated, reading the stuck-displacement histogram together with the terminal goal-distance separates genuine obstacle-blocked stalls from near-goal parking; the reach tolerance vs parking interaction is noted here so it is considered when interpreting stuck rather than left implicit.
+
 ---
 
 ## 2. Two evaluation modes

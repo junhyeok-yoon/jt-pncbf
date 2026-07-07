@@ -48,6 +48,11 @@ class PolicyLossResult:
     mean_abs_du: Tensor
     l_u_raw: Tensor
     l_u_weighted: Tensor
+    l_deficit: Tensor
+    mean_deficit_active: Tensor
+    deficit_active_frac: Tensor
+    deficit_clip_frac: Tensor
+    mean_abs_deficit_feature: Tensor
 
 
 def value_loss(
@@ -433,6 +438,20 @@ def policy_bptt_loss(
     # policy BPTT rollout so the policy gradient does not flow through the projection's state-dependent
     # coefficient Jacobian (the T=60 gradient-explosion source). Default off => byte-identical.
     detach_coeffs = bool(policy_cfg.get("detach_filter_coeffs", False))
+    # v2.4.1: control-deficit policy feedback. w_deficit>0 penalizes the box-induced shortfall of the
+    # safety correction (delta_u = box-free P_CBF - box-aware P_boxCBF), a per-step MEAN joining L_reg.
+    # w_deficit==0 skips the aux path entirely (byte-identical baseline). delta_u is the raw box-free
+    # CBF projection minus the deployed box-aware output; its norm is capped at deficit_cap (= 2*u_max)
+    # so the alpha_unsafe=100 term at empty intersection cannot recreate a gradient explosion.
+    w_deficit = float(policy_cfg.get("w_deficit", 0.0))
+    deficit_cap = float(policy_cfg.get("deficit_cap", 4.0))
+    # "sq_cap" (default): squared, norm-capped => ZERO gradient above the cap. "huber": smooth-L1 on
+    # ||delta_u|| => bounded (=deficit_cap) but NONZERO gradient above the cap (v2.4.1 Huber arm).
+    deficit_form = str(policy_cfg.get("deficit_form", "sq_cap"))
+    # v2.4.1 Exp 2: obs_deficit_feedback feeds delta_u_{t-1} (DETACHED) as a policy input (+action_dim);
+    # the deficit reaches the policy only through the ordinary task-return BPTT gradient, NOT through the
+    # filter coefficient Jacobian. Independent of w_deficit (the loss channel).
+    obs_deficit = bool(policy_cfg.get("obs_deficit_feedback", False))
     hardnet = HardNetFilter(system, make_h_fn(value_net, system), config)
 
     _zero_grads(value_net.parameters())
@@ -449,9 +468,18 @@ def policy_bptt_loss(
         pretanh_values: list[Tensor] = []
         sat_excess_values: list[Tensor] = []
         pretanh_penalties: list[Tensor] = []
+        deficit_terms: list[Tensor] = []        # v2.4.1: per-step masked ||delta_u_used||^2 (mean over batch)
+        deficit_active_sum: list[Tensor] = []   # per-step sum of raw ||delta_u|| over active steps
+        deficit_active_cnt: list[Tensor] = []   # per-step count of active steps
+        deficit_clip_cnt: list[Tensor] = []     # per-step count of active steps hitting the cap
+        deficit_feat_terms: list[Tensor] = []   # v2.4.1 Exp 2: per-step mean ||delta_u_{t-1}|| fed to policy
+        prev_deficit = x.new_zeros((x.shape[0], system.action_dim)) if obs_deficit else None
 
         for _ in range(bptt_t):
             obs = system.observation(x, scene)
+            if obs_deficit:
+                obs = torch.cat([obs, prev_deficit], dim=1)   # prev_deficit already detached
+                deficit_feat_terms.append(torch.linalg.norm(prev_deficit, dim=1).mean())
             u_nom = policy_net(obs)
             nominal_actions.append(u_nom)
             if getattr(policy_net, "last_pretanh", None) is not None:
@@ -470,7 +498,33 @@ def policy_bptt_loss(
             ).clamp_min(0.0)
             sat_excess_values.append((sat_excess * sat_excess).sum(dim=1).mean())
 
-            u_safe, _ = hardnet(x, scene, u_nom, detach_coeffs=detach_coeffs)
+            if w_deficit > 0.0 or obs_deficit:
+                u_safe, _, u_cbf_only, singular = hardnet(
+                    x, scene, u_nom, detach_coeffs=detach_coeffs, return_deficit_aux=True)
+                delta_u = u_cbf_only - u_safe                                  # raw CBF ask - box-aware output
+                if w_deficit > 0.0:
+                    mag = torch.linalg.norm(delta_u, dim=1, keepdim=True)          # [B,1]
+                    if deficit_form == "huber":
+                        # Huber (smooth-L1) on r=||delta_u||: bounded GRADIENT (=deficit_cap) but NONZERO
+                        # above the cap, unlike sq_cap whose ||delta_u_used||^2 is constant (zero grad) there.
+                        r = mag.squeeze(1)                                         # [B]
+                        deficit_val = torch.where(
+                            r <= deficit_cap, 0.5 * r * r, deficit_cap * (r - 0.5 * deficit_cap))
+                    else:                                                          # "sq_cap" (default, byte-identical)
+                        scale = (deficit_cap / (mag + 1.0e-9)).clamp(max=1.0)      # norm cap at deficit_cap
+                        delta_u_used = delta_u * scale
+                        deficit_val = torch.sum(delta_u_used * delta_u_used, dim=1)  # [B]
+                    nonsingular = (~singular).to(deficit_val.dtype)
+                    deficit_terms.append((nonsingular * deficit_val).mean())        # mean over batch (per step)
+                    mag_d = mag.detach().squeeze(1)
+                    active = (~singular) & (mag_d > 1.0e-6)
+                    deficit_active_sum.append(mag_d[active].sum())                 # raw ||delta_u|| diagnostic
+                    deficit_active_cnt.append(active.sum().to(deficit_val.dtype))
+                    deficit_clip_cnt.append((active & (mag_d > deficit_cap)).sum().to(deficit_val.dtype))
+                if obs_deficit:
+                    prev_deficit = delta_u.detach()                            # fed to policy next step
+            else:
+                u_safe, _ = hardnet(x, scene, u_nom, detach_coeffs=detach_coeffs)
             safe_actions.append(u_safe)
             x = rk4_step(system, x, u_safe, dt)
             goal = _scene_goal(scene, x)
@@ -527,6 +581,8 @@ def policy_bptt_loss(
             else action_stack.new_zeros(())
         )
         obs0 = system.observation(batch.states.detach(), batch.scene)
+        if obs_deficit:
+            obs0 = torch.cat([obs0, obs0.new_zeros((obs0.shape[0], system.action_dim))], dim=1)
         u0 = policy_net(obs0)
         x_next_unfiltered = rk4_step(system, batch.states.detach(), u0, dt)
         v_next = value_net.deployed_h(system.observation(x_next_unfiltered, batch.scene))
@@ -552,6 +608,28 @@ def policy_bptt_loss(
             l_u_weighted = (ureg_weight * l_u).detach()
         else:
             l_u_weighted = l_u.new_zeros(())
+        # v2.4.1 control-deficit term (flag-off / w_deficit==0 leaves `total` byte-identical to baseline).
+        if w_deficit > 0.0:
+            l_deficit_raw = torch.stack(deficit_terms).mean()                  # mean over batch, t
+            total = total + w_deficit * l_deficit_raw
+            l_deficit_weighted = (w_deficit * l_deficit_raw).detach()
+            active_cnt_total = torch.stack(deficit_active_cnt).sum()
+            mean_deficit_active = (torch.stack(deficit_active_sum).sum()
+                                   / active_cnt_total.clamp_min(1.0)).detach()
+            deficit_active_frac = (active_cnt_total
+                                   / float(bptt_t * batch.states.shape[0])).detach()
+            deficit_clip_frac = (torch.stack(deficit_clip_cnt).sum()
+                                 / active_cnt_total.clamp_min(1.0)).detach()
+        else:
+            l_deficit_weighted = total.new_zeros(())
+            mean_deficit_active = total.new_zeros(())
+            deficit_active_frac = total.new_zeros(())
+            deficit_clip_frac = total.new_zeros(())
+        # v2.4.1 Exp 2: mean ||delta_u_{t-1}|| fed to the policy over the window (obs channel diagnostic).
+        mean_abs_deficit_feature = (
+            torch.stack(deficit_feat_terms).mean().detach()
+            if deficit_feat_terms else total.new_zeros(())
+        )
 
     return PolicyLossResult(
         total=total,
@@ -570,6 +648,11 @@ def policy_bptt_loss(
         mean_abs_du=mean_abs_du.detach(),
         l_u_raw=l_u.detach(),
         l_u_weighted=l_u_weighted,
+        l_deficit=l_deficit_weighted,
+        mean_deficit_active=mean_deficit_active,
+        deficit_active_frac=deficit_active_frac,
+        deficit_clip_frac=deficit_clip_frac,
+        mean_abs_deficit_feature=mean_abs_deficit_feature,
     )
 
 

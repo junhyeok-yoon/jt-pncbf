@@ -119,6 +119,11 @@ METRIC_COLUMNS = [
     "mean_abs_du",
     "L_u_raw",
     "L_u_weighted",
+    "L_deficit",
+    "mean_deficit_active",
+    "deficit_active_frac",
+    "deficit_clip_frac",
+    "mean_abs_deficit_feature",
     "probe_h_min",
     "probe_h_max",
     "probe_h_mean",
@@ -139,6 +144,23 @@ class JTTrainingResult:
     last_sigma: float
 
 
+def _obs_deficit_on(config: Mapping[str, Any]) -> bool:
+    return bool(config["loss"]["policy"].get("obs_deficit_feedback", False))
+
+
+def _build_control_net(system: System, config: Mapping[str, Any]) -> ControlNet:
+    # v2.4.1 Exp 2: when obs_deficit_feedback is on, the POLICY (only) consumes an augmented
+    # observation [obs (dim obs_dim), delta_u_{t-1} (dim action_dim)]; the two new input columns are
+    # zero-initialized so the policy ignores the deficit feature at init (clean continuity). The value
+    # network observation is unchanged. Flag off => dim-obs_dim policy, byte-identical baseline.
+    extra = system.action_dim if _obs_deficit_on(config) else 0
+    net = ControlNet(system.obs_dim + extra, system, config)
+    if extra:
+        with torch.no_grad():
+            net.trunk[0].weight[:, system.obs_dim:].zero_()
+    return net
+
+
 class JTPNCBFFramework:
     def __init__(
         self,
@@ -151,6 +173,10 @@ class JTPNCBFFramework:
         self.value_net = value_net
         self.policy_net = policy_net
         self.config = config
+        # v2.4.1 Exp 2: deployed deficit-observation channel. delta_u_{t-1} is written by filter() and
+        # read by policy() on the next step; reset per rollout (a fresh framework is built per eval).
+        self._obs_deficit = _obs_deficit_on(config)
+        self._prev_deficit: Tensor | None = None
         self._filter = HardNetFilter(
             system,
             make_h_fn(value_net, system),
@@ -158,11 +184,30 @@ class JTPNCBFFramework:
             policy_fn=self.policy,
         )
 
+    def reset_deficit_state(self) -> None:
+        self._prev_deficit = None
+
+    def _policy_obs(self, x: Tensor, scene: Any) -> Tensor:
+        obs = self.system.observation(x, scene)
+        if not self._obs_deficit:
+            return obs
+        b = obs.shape[0]
+        if self._prev_deficit is None or self._prev_deficit.shape[0] != b:
+            feat = obs.new_zeros((b, self.system.action_dim))
+        else:
+            feat = self._prev_deficit
+        return torch.cat([obs, feat], dim=1)
+
     def policy(self, x: Tensor, scene: Any) -> Tensor:
-        return self.policy_net(self.system.observation(x, scene))
+        return self.policy_net(self._policy_obs(x, scene))
 
     def filter(self, x: Tensor, u_nom: Tensor, scene: Any) -> tuple[Tensor, Tensor]:
-        return self._filter(x, scene, u_nom)
+        if not self._obs_deficit:
+            return self._filter(x, scene, u_nom)
+        u_safe, infeasible, u_cbf_only, _ = self._filter(
+            x, scene, u_nom, return_deficit_aux=True)
+        self._prev_deficit = (u_cbf_only - u_safe).detach()
+        return u_safe, infeasible
 
     def value(self, x: Tensor, scene: Any) -> Tensor:
         return make_h_fn(self.value_net, self.system)(x, scene)
@@ -223,7 +268,7 @@ def run_training(
     )
     target_value_net = deepcopy(value_net)
     target_value_net.requires_grad_(False)
-    policy_net = ControlNet(system.obs_dim, system, config).to(
+    policy_net = _build_control_net(system, config).to(
         device=train_device,
         dtype=train_dtype,
     )
@@ -693,7 +738,7 @@ def run_value_refinement(
     target_state = checkpoint.get("v_s_target_state", checkpoint["v_s_state"])
     target_value_net.load_state_dict(_state_to_dtype(target_state, train_dtype))
     target_value_net.requires_grad_(False)
-    policy_net = ControlNet(system.obs_dim, system, config).to(
+    policy_net = _build_control_net(system, config).to(
         device=train_device,
         dtype=train_dtype,
     )
@@ -1220,6 +1265,11 @@ def _policy_updates(
         "mean_abs_du": [],
         "L_u_raw": [],
         "L_u_weighted": [],
+        "L_deficit": [],
+        "mean_deficit_active": [],
+        "deficit_active_frac": [],
+        "deficit_clip_frac": [],
+        "mean_abs_deficit_feature": [],
     }
     pi_totals: list[Tensor] = []
     leak_sqs: list[Tensor] = []
@@ -1261,6 +1311,11 @@ def _policy_updates(
             accum["mean_abs_du"].append(result.mean_abs_du)
             accum["L_u_raw"].append(result.l_u_raw)
             accum["L_u_weighted"].append(result.l_u_weighted)
+            accum["L_deficit"].append(result.l_deficit)
+            accum["mean_deficit_active"].append(result.mean_deficit_active)
+            accum["deficit_active_frac"].append(result.deficit_active_frac)
+            accum["deficit_clip_frac"].append(result.deficit_clip_frac)
+            accum["mean_abs_deficit_feature"].append(result.mean_abs_deficit_feature)
 
     leak_sq_max = torch.stack(leak_sqs).max()
     threshold = float(config["halt"]["vs_grad_leak_threshold"])
@@ -1294,6 +1349,11 @@ def _zero_policy_scalars() -> dict[str, float]:
         "mean_abs_du": 0.0,
         "L_u_raw": 0.0,
         "L_u_weighted": 0.0,
+        "L_deficit": 0.0,
+        "mean_deficit_active": 0.0,
+        "deficit_active_frac": 0.0,
+        "deficit_clip_frac": 0.0,
+        "mean_abs_deficit_feature": 0.0,
     }
 
 
@@ -1345,7 +1405,7 @@ def load_framework_from_checkpoint(
     value_net = ValueNetEnsemble(system.obs_dim, config).to(dtype=first_tensor.dtype)
     value_net.load_state_dict(checkpoint["v_s_state"])
     value_net.eval()
-    policy_net = ControlNet(system.obs_dim, system, config).to(dtype=first_tensor.dtype)
+    policy_net = _build_control_net(system, config).to(dtype=first_tensor.dtype)
     policy_net.load_state_dict(checkpoint["pi_state"])
     policy_net.eval()
     return JTPNCBFFramework(system, value_net, policy_net, config), config, checkpoint

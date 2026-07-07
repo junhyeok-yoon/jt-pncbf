@@ -51,7 +51,8 @@ class HardNetFilter:
         scene: Any,
         u_nom: Tensor,
         detach_coeffs: bool = False,
-    ) -> tuple[Tensor, Tensor]:
+        return_deficit_aux: bool = False,
+    ) -> tuple[Tensor, Tensor] | tuple[Tensor, Tensor, Tensor, Tensor]:
         if x.ndim != 2 or u_nom.ndim != 2:
             raise ValueError("x and u_nom must be batched rank-2 tensors.")
         if x.shape[0] != u_nom.shape[0]:
@@ -97,7 +98,18 @@ class HardNetFilter:
         lg_norm = torch.linalg.norm(lg_h, dim=1)
         singular = lg_norm < _SINGULAR_LG_THRESHOLD
 
+        if return_deficit_aux:
+            # v2.4.1: u_cbf_raw = the RAW box-free half-space projection ("the control the CBF asked
+            # for"), UNCLAMPED to the actuator box (may land far outside it — that is the point; it
+            # carries signal at empty intersection where the clamped output would coincide with the
+            # least-violating fallback). This is _base_projection's correction WITHOUT its box clamp.
+            violation = torch.relu(torch.sum(lg_h * u_nom, dim=1) - row_upper)
+            denom = torch.sum(lg_h * lg_h, dim=1) + self.params.epsilon ** 2 + self.params.lg_reg_eps
+            u_cbf_raw = u_nom - lg_h * (violation / denom).unsqueeze(1)
+
         if not self.params.box_aware:
+            if return_deficit_aux:
+                return projected, singular, u_cbf_raw, singular
             return projected, singular
 
         box_projected, empty_intersection = _box_aware_projection(
@@ -107,6 +119,8 @@ class HardNetFilter:
             row_upper,
             bounds,
         )
+        if return_deficit_aux:
+            return box_projected, singular | empty_intersection, u_cbf_raw, singular
         return box_projected, singular | empty_intersection
 
 

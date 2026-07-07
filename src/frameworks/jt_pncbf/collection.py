@@ -100,6 +100,7 @@ def collect_policy_rollouts(
         dt=dt,
         sigma=sigma,
         torch_generator=torch_generator,
+        obs_deficit=bool(config.get("loss", {}).get("policy", {}).get("obs_deficit_feedback", False)),  # type: ignore[union-attr]
     )
     with torch.no_grad():
         h_values = signed_h(
@@ -226,16 +227,24 @@ def _rollout_for_collection(
     dt: float,
     sigma: float,
     torch_generator: torch.Generator | None,
+    obs_deficit: bool = False,
 ) -> tuple[Tensor, Tensor, Tensor]:
     x = system.wrap_state(x0.detach())
     states = [x]
     projection_steps = []
     infeasible_steps = []
     bounds = system.u_bounds.to(device=x.device, dtype=x.dtype)
+    # v2.4.1 Exp 2: deployed deficit-observation channel. delta_u_{t-1} (init 0) is appended to the
+    # policy observation; it is a detached feature (collection is no_grad), never a gradient path.
+    prev_deficit = (
+        x.new_zeros((x.shape[0], system.action_dim)) if obs_deficit else None
+    )
 
     for _ in range(max_steps):
         with torch.no_grad():
             obs = system.observation(x, scene)
+            if obs_deficit:
+                obs = torch.cat([obs, prev_deficit], dim=1)
             u_base = policy_net(obs)
             if sigma > 0.0:
                 noise = torch.randn(
@@ -249,9 +258,15 @@ def _rollout_for_collection(
             u_tilde = torch.clamp(u_base + noise, min=bounds[:, 0], max=bounds[:, 1])
 
         with torch.enable_grad():
-            filtered = filter_layer(x.detach(), scene, u_tilde.detach())
-            u_safe = filtered[0]
-            infeasible = filtered[1]
+            if obs_deficit:
+                filtered = filter_layer(x.detach(), scene, u_tilde.detach(), return_deficit_aux=True)
+                u_safe = filtered[0]
+                infeasible = filtered[1]
+                prev_deficit = (filtered[2] - filtered[0]).detach()
+            else:
+                filtered = filter_layer(x.detach(), scene, u_tilde.detach())
+                u_safe = filtered[0]
+                infeasible = filtered[1]
 
         u_safe = u_safe.detach()
         infeasible_steps.append(infeasible.detach())
@@ -353,6 +368,7 @@ def collect_precursors(
     states_t, _, _ = _rollout_for_collection(
         system=system, policy_net=policy_net, filter_layer=filter_layer, scene=batched_scene, x0=x0,
         max_steps=max_steps, dt=dt, sigma=0.0, torch_generator=torch_generator,
+        obs_deficit=bool(config.get("loss", {}).get("policy", {}).get("obs_deficit_feedback", False)),  # type: ignore[union-attr]
     )
     with torch.no_grad():
         h_values = signed_h(system.position(states_t), batched_scene, h_scale)

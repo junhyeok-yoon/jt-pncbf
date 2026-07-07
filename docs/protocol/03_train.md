@@ -142,7 +142,11 @@ data distribution and the policy involvement differ between the frameworks.
 
 The regression target form is selected per experiment by
 `exp_config.value_target.type`, one of `pncbf` (one-step discounted avoid) or `rpcbf`
-(multi-step softmax).
+(multi-step softmax). Reference on current wiring: in the JT trainer the active target is
+`pncbf`; the `rpcbf` form and the dispatch helper are defined but not wired into the JT
+value loss, so selecting `rpcbf` does not currently change the JT target. Wiring the
+dispatch (or narrowing this section to the active `pncbf` form) is a pending
+documentation/plumbing decision; treat any change to the JT target form as its own axis.
 
 #### 2.1.1 PNCBF — one-step discounted avoid
 
@@ -447,6 +451,16 @@ $$
 R(\theta; x_0) = -\sum_{t=0}^{T-1} \gamma_T^t\, c^{\text{task}}_t,
 \qquad \gamma_T = \texttt{loss.policy.gamma\_T}.
 $$
+
+The rollout integrates the cost over the full fixed horizon $T$: it does not terminate,
+mask, or apply a terminal value when a trajectory reaches the goal, penetrates an obstacle,
+or leaves the arena mid-window, and $\text{wrap\_state}$ bounds velocity but not position.
+Reference (known limitation, not currently handled): a v2.4.0 measurement found a
+substantial fraction of the discounted return accruing after the first such
+physically-terminal event; horizon-lengthening experiments in that version were also found
+to interact poorly with this, which motivates the reserved cps-floor / early-stop halts
+(§4.7-3..5) and is noted here so any future in-window termination or terminal-value change
+is treated as its own axis.
 
 The objective is **region-wise**, gated by the current $V_S$ via soft indicators (with
 $V_S$ detached for the gates):
@@ -781,6 +795,18 @@ hypothesis and a clean ablation against the baseline:
 - **Policy action smoothness curriculum** (smoothness weight ramped over training).
 - **Alternative output heads** for the value network.
 - **Policy architecture variants** — residual head, attention encoder.
+- **Filter-coefficient gradient detachment** — an optional policy-BPTT hygiene flag
+  `loss.policy.detach_filter_coeffs`. When enabled, the HardNet projection's
+  state-dependent CBF coefficients ($L_f h$, $L_g h$, $\alpha h$) are computed in the
+  forward pass exactly as normal but treated as constants w.r.t. the state in the backward
+  pass, so the policy gradient reaches $\pi_\theta$ only through the $u^{\text{nom}}$
+  pathway and the state chain, not through the coefficients' state dependence. Forward
+  numerics are unchanged (detach alters no values); flag-off is bit-identical to the
+  standard path. Reference: this was introduced because differentiating through those
+  coefficients (the $h$-Hessian, the $\alpha$ jump at $h=0$, and the box-argmin geometry)
+  at filter-active steps can compound multiplicatively over a long BPTT window; a v2.4.0
+  study measured per-sample policy-gradient tails growing sharply with horizon and this
+  flag removing that tail while leaving the median/p90 gradient unchanged. Default off.
 - **Reserved halts (§4.7-3..5) activation** — wire the sigma-pin, cps-floor, and
   early-stop halts into the trainer's halt path.
 - **Saturation and catastrophic-failure halt detectors** with thresholds set once baseline
