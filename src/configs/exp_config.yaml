@@ -2,7 +2,7 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.4.1"
+  version: "v2.4.2"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
   system: double_integrator         # double_integrator | unicycle  (v2.3.0 DI plain: injection OFF, D_pi sliding-window experiment)
@@ -44,7 +44,10 @@ value_target:
   type: pncbf                       # pncbf | rpcbf
   rpcbf_H: 7
   rpcbf_beta: 20.0
-  conditioning: task_stored         # task_stored | brake | learned_recovery  (v2.4.0 Step 4: baseline conditioning + bptt_T=60)
+  conditioning: task_stored         # task_stored | brake | learned_recovery | task_raw_lagged (v2.4.2 close: reverted to baseline carry; raw_lagged block present-inert)
+  raw_lagged:                       # v2.4.2: conditioning = unfiltered, noise-free re-rolls of a Polyak-lagged task-policy copy pi_b
+    T_b: 30                         # re-roll horizon (>= max stop steps; matches brake/recovery T_b)
+    tau_b: 0.005                    # Polyak lag of pi_b toward the task policy after each policy step
   brake:                            # analytic per-axis brake base for pi_b (uses eps_v)
     eps_v: 0.05                     # velocity deadband taper (m/s)
     T_b: 30                         # brake rollout steps (>= max stop steps 25 at dt=0.05)

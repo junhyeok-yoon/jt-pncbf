@@ -79,6 +79,10 @@ METRIC_COLUMNS = [
     "L_R",
     "L_V_total",
     "value_target_unsafe_frac",
+    "rho_unsafe_label",
+    "label_mean",
+    "tail_push_mean",
+    "tail_exceed_frac",
     "loss_pi_b",
     "recovery_residual_norm",
     "L_feas_raw",
@@ -323,6 +327,19 @@ def run_training(
         config["run"]["resume_ckpt"] = str(resume_ckpt)
         config["run"]["resume_from_step"] = start_step
 
+    # v2.4.2: task_raw_lagged conditioning. pi_b is a Polyak-lagged, grad-free copy of the task policy
+    # (in no optimizer), initialized from the starting policy_net. The value target conditions its label
+    # on UNFILTERED, noise-free deterministic re-rolls of pi_b (losses.py value_targets branch); after
+    # every policy optimizer step theta_b <- (1-tau_b) theta_b + tau_b theta_pi. During vs_warmup there
+    # are no policy steps so pi_b stays at init (expected). Only built for this conditioning; else None.
+    raw_lagged_enabled = conditioning == "task_raw_lagged"
+    lagged_policy: ControlNet | None = None
+    raw_lagged_tau_b = 0.0
+    if raw_lagged_enabled:
+        lagged_policy = deepcopy(policy_net)
+        lagged_policy.requires_grad_(False)
+        raw_lagged_tau_b = float(config["value_target"]["raw_lagged"]["tau_b"])
+
     jt_cfg = dict(config["training"]["jt"])
     collection_cfg = dict(config["collection"]["jt"])
     base_n_steps = int(jt_cfg["n_steps"])
@@ -463,6 +480,7 @@ def run_training(
             log=do_log,
             policy_net=policy_net,
             recovery_policy=recovery_target,
+            lagged_policy=lagged_policy,
         )
         if not value_scalars.pop("value_finite"):
             halt_reason = "nan_or_inf_L_V"
@@ -514,6 +532,10 @@ def run_training(
                 max_policy_leak = float(leak_sq_max.sqrt().item())
                 halt_reason = "policy_gradient_leak"
                 break
+            # v2.4.2: Polyak-lag pi_b toward the just-updated task policy (after every policy step;
+            # k_pi=1 => once per macro step). Only active for task_raw_lagged (lagged_policy is None else).
+            if lagged_policy is not None:
+                _polyak_update(lagged_policy, policy_net, tau=raw_lagged_tau_b)
             if do_log:
                 last_policy_loss = policy_scalars["L_pi_total"]
                 last_pi_grad = policy_scalars["grad_norm_pi"]
@@ -1039,6 +1061,7 @@ def _value_updates(
     log: bool = True,
     policy_net: ControlNet | None = None,
     recovery_policy: Any = None,
+    lagged_policy: Any = None,
 ) -> dict[str, Any]:
     # v2.2.1: box-feasibility CBF-derivative auxiliary term (value-side). weight=0 => skip the gate
     # entirely (no RNG draws, no _cbf_terms) so behavior is bit-identical to the baseline value loss.
@@ -1079,16 +1102,19 @@ def _value_updates(
         "sob_gate_mean": [], "sob_gate_frac_active": [], "sob_gate_dhdv_pred": [],
     }
     vt_unsafe: list[float] = []          # v2.4.0: fraction of value-minibatch targets y > 0
+    vt_mean: list[float] = []            # v2.4.2: mean value-minibatch label y (label_mean)
+    tp_push: list[float] = []            # v2.4.2 Exp 2: tail_push_mean (raw_lagged only; 0 otherwise)
+    tp_exceed: list[float] = []          # v2.4.2 Exp 2: tail_exceed_frac
     for _ in range(n_updates):
         if inj_enabled:
             normal_batch = buffers.value.sample_tensor_batch(n_normal, generator=torch_generator)
             res_n = value_loss(system=system, value_net=value_net, target_value_net=target_value_net,
                                batch=normal_batch, lambda_disc=lambda_disc, target_rhs=target_rhs, config=config,
-                               recovery_policy=recovery_policy)
+                               recovery_policy=recovery_policy, lagged_policy=lagged_policy)
             inj_batch = buffers.precursor.sample_tensor_batch(n_inj, generator=torch_generator)
             res_i = value_loss(system=system, value_net=value_net, target_value_net=target_value_net,
                                batch=inj_batch, lambda_disc=lambda_disc, target_rhs=target_rhs, config=config,
-                               recovery_policy=recovery_policy)
+                               recovery_policy=recovery_policy, lagged_policy=lagged_policy)
             # single MSE over the mixed batch_size states: (sum_sq_normal + sum_sq_inj)/batch_size
             total_loss = (n_normal * res_n.total + n_inj * res_i.total) / batch_size
             reach_log = (n_normal * res_n.reach + n_inj * res_i.reach) / batch_size
@@ -1100,11 +1126,14 @@ def _value_updates(
                 inj_logs["injected_target_mean"].append(float(tgt.mean().item()))
                 inj_logs["injected_target_unsafe_frac"].append(float((tgt >= 0.0).to(tgt.dtype).mean().item()))
                 vt_unsafe.append(float((res_n.targets.detach() > 0.0).to(res_n.targets.dtype).mean().item()))
+                vt_mean.append(float(res_n.targets.detach().mean().item()))
+                tp_push.append(float(res_n.tail_push_mean))
+                tp_exceed.append(float(res_n.tail_exceed_frac))
         else:
             batch = buffers.value.sample_tensor_batch(batch_size, generator=torch_generator)
             result = value_loss(system=system, value_net=value_net, target_value_net=target_value_net,
                                 batch=batch, lambda_disc=lambda_disc, target_rhs=target_rhs, config=config,
-                                recovery_policy=recovery_policy)
+                                recovery_policy=recovery_policy, lagged_policy=lagged_policy)
             total_loss = result.total
             reach_log = result.reach
             scene_for_feas = batch.scene
@@ -1112,6 +1141,9 @@ def _value_updates(
             if log:
                 vt = result.targets.detach()
                 vt_unsafe.append(float((vt > 0.0).to(vt.dtype).mean().item()))
+                vt_mean.append(float(vt.mean().item()))
+                tp_push.append(float(result.tail_push_mean))
+                tp_exceed.append(float(result.tail_exceed_frac))
         if feas_enabled:
             feas = cbf_deriv_feasibility_loss(
                 system=system,
@@ -1185,6 +1217,10 @@ def _value_updates(
         else:
             out.update({key: 0.0 for key in sob_logs})
         out["value_target_unsafe_frac"] = float(np.mean(vt_unsafe)) if vt_unsafe else 0.0
+        out["rho_unsafe_label"] = float(np.mean(vt_unsafe)) if vt_unsafe else 0.0
+        out["label_mean"] = float(np.mean(vt_mean)) if vt_mean else 0.0
+        out["tail_push_mean"] = float(np.mean(tp_push)) if tp_push else 0.0
+        out["tail_exceed_frac"] = float(np.mean(tp_exceed)) if tp_exceed else 0.0
     return out
 
 

@@ -17,7 +17,7 @@ from src.common.system import System
 from src.common.value_net import ValueNetEnsemble, make_h_fn
 from src.envs.scene_batch import BatchedScene
 from src.frameworks.oc_pncbf.collection import TensorTransitionBatch
-from src.frameworks.oc_pncbf.value_target import pncbf_target
+from src.frameworks.oc_pncbf.value_target import compute_disc_avoid_terms, pncbf_target
 
 
 Tensor = torch.Tensor
@@ -28,6 +28,8 @@ class ValueLossResult:
     total: Tensor
     reach: Tensor
     targets: Tensor
+    tail_push_mean: float = 0.0        # v2.4.2 Exp 2: mean target_rhs*relu(rhs_full-lhs) (raw_lagged only)
+    tail_exceed_frac: float = 0.0      # v2.4.2 Exp 2: frac rhs_full>lhs (bootstrap tail exceeds avoid)
 
 
 @dataclass(frozen=True)
@@ -65,8 +67,10 @@ def value_loss(
     target_rhs: float,
     config: Mapping[str, Any],
     recovery_policy: Any = None,
+    lagged_policy: Any = None,
 ) -> ValueLossResult:
     obs = system.observation(batch.states, batch.scene)
+    aux: dict[str, float] = {}
     targets = value_targets(
         system=system,
         target_value_net=target_value_net,
@@ -75,11 +79,15 @@ def value_loss(
         target_rhs=target_rhs,
         config=config,
         recovery_policy=recovery_policy,
+        lagged_policy=lagged_policy,
+        aux=aux,
     )
     prediction = value_net(obs)
     reach = torch.mean((prediction - targets.unsqueeze(1)) ** 2)
     total = float(config["loss"]["value"]["lambda_R"]) * reach
-    return ValueLossResult(total=total, reach=reach, targets=targets)
+    return ValueLossResult(total=total, reach=reach, targets=targets,
+                           tail_push_mean=aux.get("tail_push_mean", 0.0),
+                           tail_exceed_frac=aux.get("tail_exceed_frac", 0.0))
 
 
 def value_targets(
@@ -91,8 +99,60 @@ def value_targets(
     target_rhs: float,
     config: Mapping[str, Any],
     recovery_policy: Any = None,
+    lagged_policy: Any = None,
+    aux: dict[str, float] | None = None,
 ) -> Tensor:
     conditioning = config["value_target"].get("conditioning", "task_stored")
+    if conditioning == "task_raw_lagged":
+        # v2.4.2: condition the value label on UNFILTERED, noise-free, deterministic re-rolls of a
+        # Polyak-lagged copy pi_b of the task policy. Restores the PNCBF Thm-1 object V^{h,pi_b} (a
+        # sound certificate for u = pi_b(x)), unlike task_stored which regresses the residual risk of
+        # its own V-filtered system. Same target FORM as brake/learned_recovery; only the conditioning
+        # rollout policy differs. NO HardNet filter and NO exploration noise (brake_h_rollout applies
+        # neither); pi_b output is bounded by the control-net map and additionally clamped to u_bounds.
+        if lagged_policy is None:
+            raise ValueError("task_raw_lagged conditioning requires a lagged_policy (pi_b).")
+        rl_cfg = config["value_target"]["raw_lagged"]
+        ub = system.u_bounds.to(device=batch.states.device, dtype=batch.states.dtype)
+        u_lo, u_hi = ub[:, 0], ub[:, 1]
+
+        def _pi_b_rollout(x_state: Tensor, obs_state: Tensor) -> Tensor:
+            return torch.clamp(lagged_policy(obs_state), min=u_lo, max=u_hi)
+
+        h_seq_bt, tail_obs = brake_h_rollout(
+            batch.states,
+            batch.scene,
+            system,
+            system.observation,
+            int(rl_cfg["T_b"]),
+            0.0,   # u_max unused when policy_fn is given
+            0.0,   # eps_v unused when policy_fn is given
+            float(config["env"]["dt"]),
+            float(config["env"]["h_scale"]),
+            policy_fn=_pi_b_rollout,
+        )
+        with torch.no_grad():
+            bootstrap_tail = target_value_net.target_h(tail_obs)
+        raw_h_sequence = h_seq_bt.transpose(0, 1).contiguous()   # [T_b+1, B]; index 0 = minibatch state
+        dt = float(config["env"]["dt"])
+        if aux is not None:
+            # v2.4.2 Exp 2 tail diagnostics at the label origin (index 0): the one-sided tail push
+            # target_rhs*relu(rhs_full - lhs) and the exceed fraction, from the same disc-avoid terms
+            # pncbf_target uses internally (recomputed here; cheap vs the re-roll). No effect on the label.
+            with torch.no_grad():
+                costs_d = torch.clamp(raw_h_sequence, -1.0, 1.0)
+                lhs_d, int_rhs_d, disc_d = compute_disc_avoid_terms(costs_d, lambda_disc, dt)
+                rhs_full0 = int_rhs_d[0] + disc_d[0] * bootstrap_tail
+                push0 = float(target_rhs) * torch.relu(rhs_full0 - lhs_d[0])
+                aux["tail_push_mean"] = float(push0.mean().item())
+                aux["tail_exceed_frac"] = float((rhs_full0 > lhs_d[0]).to(push0.dtype).mean().item())
+        return pncbf_target(
+            raw_h_sequence,
+            lambda_disc,
+            dt,
+            target_rhs,
+            bootstrap_tail,
+        ).detach()[0]
     if conditioning == "learned_recovery":
         # v2.4.0 Step 2: condition the value target on the LEARNED recovery policy (Polyak copy
         # pi_b_target). Same target form as the brake branch; only the conditioning rollout policy
