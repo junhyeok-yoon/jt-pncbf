@@ -1,0 +1,15 @@
+{
+  "n_stuck": 21,
+  "R_onset_finite_FULLgrammar": 0.19,
+  "R_start_of_stuck_scenes_finite": 0.952,
+  "R_onset_finite_by_onset_cluster": {
+    "narrow_gap": "2/12",
+    "local_min": "2/8",
+    "other": "0/1"
+  },
+  "R_onset_finite_by_start_cluster": {
+    "other": "2/15",
+    "narrow_gap": "1/5",
+    "local_min": "1/1"
+  }
+}

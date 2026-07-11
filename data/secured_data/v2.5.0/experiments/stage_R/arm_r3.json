@@ -1,0 +1,18 @@
+{
+  "exhaustive_wall_s": {
+    "i": 0.5,
+    "ii": 18.8,
+    "iii": 0.9,
+    "iv": 399.2
+  },
+  "beam_oracle_ms_B2000": 1568.5,
+  "beam_oracle_ms_B4096": 3475.9,
+  "viability_bar_300ms_pass": false,
+  "capture_steps_p10_50_90": [
+    60,
+    77,
+    93
+  ],
+  "capture_steps_max": 100,
+  "n_admitted_capture": 175155
+}

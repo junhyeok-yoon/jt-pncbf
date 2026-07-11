@@ -1,0 +1,65 @@
+{
+  "tag": "v23learned_Dslow",
+  "dt_plant": 0.05,
+  "dt_ctrl": 0.05,
+  "dt_vm": 0.05,
+  "nominal": "policy",
+  "n_ep": 2000,
+  "outcomes": {
+    "reach": 0.9505,
+    "collision": 0.011,
+    "oob": 0.0,
+    "stuck": 0.0205,
+    "timeout": 0.018
+  },
+  "infeas_ctrlstep": {
+    "inf_canonical": 0.15621492284059932,
+    "inf_empty": 0.028016214672370192,
+    "inf_band": 0.0280337651774207,
+    "inf_v2": 0.028016214672370192
+  },
+  "cps": {
+    "canonical": 0.8521355231478203,
+    "empty_only": 0.890595135598289,
+    "active_band": 0.8905898704467738,
+    "v2": 0.890595135598289
+  },
+  "cps_v2": 0.890595135598289,
+  "cert_start_split": {
+    "n_cert": 1813,
+    "n_uncert": 187,
+    "cert_coll": 0.009376723662437948,
+    "uncert_coll": 0.026737967914438502,
+    "uncert_reach": 0.8823529411764706,
+    "uncert_speed_mean": 0.37791636883017216
+  },
+  "region_cert": {
+    "singular_cert": 0.12344184240640838,
+    "empty_cert": 0.0018851152525747915,
+    "discrete_cbf_ok_cert": 0.9157828592447278
+  },
+  "infeas_per_s_mean": 3.1242984568119865,
+  "infeas_episode_any": 0.7615,
+  "inviol_per_s_mean": 0.16863537653142294,
+  "inviol_episode_any": 0.2905,
+  "authority": {
+    "lg_mean": 0.135374516248703,
+    "lg_p50": 0.02407008782029152,
+    "lg_p90": 0.44579073786735535
+  },
+  "proj_mag": {
+    "all_ctrl_mean": 0.3199707279963841,
+    "active_band_mean": 0.4730741213155253
+  },
+  "coll_ci": [
+    0.0065,
+    0.016
+  ],
+  "cert_coll_ci": [
+    0.005515719801434087,
+    0.013789299503585218
+  ],
+  "wallclock_s": 6.5,
+  "filter": "learned",
+  "ckpt_path": "data/secured_data/v2.3.0/seed42/checkpoints/best.pt"
+}

@@ -42,6 +42,11 @@ framework relationships.
   training and evaluation, and handles real-time tactical response. Lives in the repository.
   Never makes a strategic or versioning decision on its own: when one seems necessary, it
   proposes to the Researcher and waits.
+  **Git is entirely outside the Executor's scope**: no git commands of any kind, and no
+  drafting, recommending, or suggesting of commit messages, in any report or log. Commit
+  messages are drafted by the Strategist in chat; the Researcher stages, commits, tags, and
+  pushes personally. The Executor's contribution to a commit is a grouped list of the files
+  it created, modified, or moved, taken from its own action log.
 
 **Executor never edits `docs/protocol/`.** Protocol documents are edited only by the
 Strategist (under Researcher direction) or by the Researcher directly. If the Executor
@@ -104,7 +109,12 @@ described in Section 2.
    own merits (the mechanism it prevents), not as a story about when it was violated.
    History lives in the per-version documents (`docs/versions/`), the build-logs, and
    `ledger.md` — never in the protocol. (Defining the version scheme itself is project
-   management, not history narrative, and is permitted.)
+   management, not history narrative, and is permitted. One recorded exception exists by
+   explicit Researcher override: the `04_eval` §1 History note on the infeasibility
+   definition transition. It is not a precedent.)
+4. **Never** (Executor) run git commands or draft, recommend, or suggest commit messages.
+   Git — staging, committing, tagging, pushing, and message wording — belongs to the
+   Researcher, with message drafts authored by the Strategist in chat (§1).
 
 ---
 
@@ -112,6 +122,12 @@ described in Section 2.
 
 The engineering disciplines that keep results attributable and the codebase maintainable.
 
+- **Analysis serves the next run.** A theoretical result or analysis is admitted into the
+  workflow only when it changes the next run's configuration or architecture, or bounds
+  its outcome in advance (a falsifiable prediction, an error budget, a feasibility gate).
+  Analysis that does neither is backlog, not work product: it is not expanded into
+  documents, prompts, or experiments. The working loop is knob → prediction → run →
+  recovered performance or guarantee.
 - **Reproduce before innovating.** When a reference implementation exists, reproduce it
   faithfully first. Original design choices usually have reasons. Add novelty only on top of
   a reproduced baseline.

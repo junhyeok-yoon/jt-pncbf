@@ -596,6 +596,12 @@ scales with $dt$, but the step-horizon is invariant). The discount is never spec
 a raw $\gamma$ literal; it is always computed from $H_t$ (or $\lambda_t$ in phase 2) and
 $dt$.
 
+**Floor note (learned-value runs).** The theory note's schedule-blindness corollary places
+the slow-drift detectability floor at $H_0 \ge 37$ under the standard tripwire cadence; the
+$H_0 = 20$ anchor predates it. This is inactive under the maneuver channel ($K_V = 0$); any
+future learned-value run must either raise $H_0 \ge 37$ or justify the deviation in
+`changes.md`.
+
 **`target_rhs`** — mixing of the target toward the full bootstrap (§2.1): ramps from $0$
 (pure MC max-over-time) to a hold value, engaging the discounted TD-bootstrap correction
 only after $V_S$ has stabilized. Defaults: $v_0 = 0.0$, $v_\infty = 0.9$, $f_w = 0.10$,

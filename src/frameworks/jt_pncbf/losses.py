@@ -55,6 +55,8 @@ class PolicyLossResult:
     deficit_active_frac: Tensor
     deficit_clip_frac: Tensor
     mean_abs_deficit_feature: Tensor
+    friction_loss: Tensor          # v2.5.0 B-2: weighted filter-friction term w_friction*||u_safe-u_nom||^2
+    proj_mag_bptt: Tensor          # mean ||u_safe - u_nom|| over the BPTT window (all-active gauge diagnostic)
 
 
 def value_loss(
@@ -512,7 +514,10 @@ def policy_bptt_loss(
     # the deficit reaches the policy only through the ordinary task-return BPTT gradient, NOT through the
     # filter coefficient Jacobian. Independent of w_deficit (the loss channel).
     obs_deficit = bool(policy_cfg.get("obs_deficit_feedback", False))
-    hardnet = HardNetFilter(system, make_h_fn(value_net, system), config)
+    # v2.5.0 Stage B: safety channel = analytic V_M (maneuver) or learned make_h_fn (value, default) —
+    # the SAME builder as the collection filter (one builder, two call sites).
+    from src.common.maneuver_value import build_safety_h_fn
+    hardnet = HardNetFilter(system, build_safety_h_fn(system, config, value_net), config)
 
     _zero_grads(value_net.parameters())
     with frozen_params(value_net):
@@ -690,6 +695,21 @@ def policy_bptt_loss(
             torch.stack(deficit_feat_terms).mean().detach()
             if deficit_feat_terms else total.new_zeros(())
         )
+        # v2.5.0 Stage B-2: filter friction. L_friction = mean_t mean_B ||u_safe - u_nom||^2 (NO region
+        # gate — applies everywhere the filter acts). Removes the projection gauge: the row-normal
+        # component of u_nom has EXACTLY zero task gradient (Pi = I - AA^T/||A||^2 annihilates it), so any
+        # positive w_friction dominates the gauge mode without competing on the task-relevant tangential
+        # component. Gradient reaches theta through BOTH u_nom (policy) and u_safe (= u_nom - A*viol/denom,
+        # which still depends on u_nom under detach_filter_coeffs=true — coeffs A,b detached, not u_nom).
+        w_friction = float(policy_cfg.get("w_friction", 0.0))
+        diff = safe_stack - action_stack                                   # [T,B,A], both carry theta-grad
+        l_friction_raw = torch.mean(torch.sum(diff * diff, dim=2))
+        proj_mag_bptt = torch.linalg.norm(diff, dim=2).mean().detach()     # mean ||u_safe-u_nom|| (all-active)
+        if w_friction > 0.0:                                               # flag-off => total byte-identical
+            total = total + w_friction * l_friction_raw
+            friction_weighted = (w_friction * l_friction_raw).detach()
+        else:
+            friction_weighted = total.new_zeros(())
 
     return PolicyLossResult(
         total=total,
@@ -713,6 +733,8 @@ def policy_bptt_loss(
         deficit_active_frac=deficit_active_frac,
         deficit_clip_frac=deficit_clip_frac,
         mean_abs_deficit_feature=mean_abs_deficit_feature,
+        friction_loss=friction_weighted,
+        proj_mag_bptt=proj_mag_bptt,
     )
 
 

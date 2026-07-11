@@ -1,0 +1,17 @@
+{
+  "label": "v2.4.1_Exp1_wd10",
+  "ckpt": "data/previous_runs/v2.4.1__20260703-040134__seed42/checkpoints/best.pt",
+  "n": 2000,
+  "reach": 0.835,
+  "coll": 0.03,
+  "oob": 0.0,
+  "stuck": 0.1175,
+  "timeout": 0.0175,
+  "cps_legacy": 0.5843,
+  "cps_v2": 0.6387,
+  "cps_empty": 0.6387,
+  "inf_canon": 0.2148,
+  "inf_v2": 0.0333,
+  "inf_empty": 0.0333,
+  "sing_only": 0.1814
+}

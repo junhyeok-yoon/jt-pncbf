@@ -395,7 +395,11 @@ def _make_collection_filter(
     value_net: ValueNetEnsemble,
     config: Mapping[str, object],
 ) -> HardNetFilter | CBFQPFilter:
-    h_fn = make_h_fn(value_net, system)
+    # v2.5.0 Stage B (scope-extended): the safety channel may be the analytic maneuver barrier V_M
+    # instead of the learned make_h_fn(value_net) — one builder shared with the policy-BPTT filter, so
+    # collection and BPTT filter with the SAME h_fn. Value path (default) is bit-identical.
+    from src.common.maneuver_value import build_safety_h_fn
+    h_fn = build_safety_h_fn(system, config, value_net)
     if collection_filter == "hardnet":
         return HardNetFilter(system, h_fn, config)
     if collection_filter == "cbf_qp":

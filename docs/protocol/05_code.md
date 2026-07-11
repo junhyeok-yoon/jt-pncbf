@@ -28,9 +28,12 @@ jt-pncbf/
 │   ├── protocol/{00..06}.md
 │   └── versions/vX.Y.Z/{changes.md, <task>.md, results.md}    # local-only
 ├── scripts/                                # entry-point scripts (CLI launchers, pool builders)
+│   └── analysis/                           # sanctioned analysis-only drivers (deploy_rate_eval,
+│                                           # rescore_cps_v2, promoted diagnostics; never imported by src/)
 ├── src/
 │   ├── common/                             # frozen utilities: rk4, signed_h, top_k_obs, lqr,
-│   │                                       # buffers, polyak, logging, bootstrap
+│   │                                       # buffers, polyak, logging, bootstrap,
+│   │                                       # maneuver_value (analytic V_M: reference + compiled fast path)
 │   ├── configs/
 │   │   ├── base_config.yaml                # task + structure (rarely changed)
 │   │   └── exp_config.yaml                 # per-experiment hyperparameters
@@ -274,8 +277,9 @@ Concrete requirements:
 - **Filter is batched.** HardNet projection operates on `[B, action_dim]`. CBF-QP is batched at the call site by stacking $(h, L_f h, L_g h, u_{\text{nom}})$ rows into one solver call where the solver supports it; where it does not, the per-row solve is parallelized over at most `base_config.filter.cbf_qp.max_workers` CPU threads (default 32) and the host transfer happens once per macro step, not per row.
 - **No `.item()` inside the hot loop.** Scalars for logging are deferred to a single tensor-to-host transfer at the end of each macro step.
 - **One device transfer per macro step.** Collection and the V minibatch live on the GPU; the only host transfer per macro step is the logging payload.
-- **`torch.compile` is not used.** It is reserved as an optional one-axis future addition once the baseline is stable.
-- **GPU utilization target.** Sustained > 80% on the training device for the V/policy update windows (verified by a one-time `nvidia-smi`-based sampling during the first 100 macro steps). Below this number indicates a Python-loop regression and triggers an investigation, not a halt.
+- **`torch.compile` — channel-scoped.** The analytic maneuver barrier ships a compiled fast path as the production default (`VM_FAST=1`), adopted under the `02_control` §8 equivalence standard (function parity $|V| \le 10^{-6}$ / $|\nabla V| \le 10^{-5}$ plus safety equivalence; trajectory bit-parity is unattainable for the branch-discrete projection and is not a gate). The uncompiled reference path is retained for tests/audit (`VM_FAST=0`), and the function-parity suite (`tests/test_vm_fastpath.py`) must be re-run and reported at every PyTorch/compiler version change (current pin: `torch 2.12.0.dev20260404+cu128`). Outside this channel `torch.compile` remains an opt-in, one-axis future addition.
+- **Throughput is judged against the class baseline, not raw GPU %.** Kernel-launch-bound certificate rollouts leave the GPU partially idle by construction (compiled $V_{\mathcal M}$ runs ≈ 55% utilization at full speed), so the binding metric is steps/s against the class baseline: learned-filter JT ≈ 4.6 steps/s (v2.4.x class); maneuver-$V_{\mathcal M}$ JT reference ≈ 1.0 s/step; maneuver-$V_{\mathcal M}$ JT compiled ≈ 0.204 s/step (≈ 4.9×; one $V_{\mathcal M}$ update ≈ 5.1× a learned-filter update). A run regressing > 15% below its class baseline triggers the throughput-incident diagnosis (environment snapshot → code inspection → offline cost ratio), as exercised in v2.5.0 Stage B-2. The historical "> 80% sustained GPU" figure remains the aspiration for non-launch-bound workloads.
+- **Verdict-grade evaluations pin the eval batch size.** The branch-discrete projection makes aggregate scores sensitive to floating-point reduction order; a batch-size change alone has flipped a re-score by 0.010 (v2.5.0 ARM-C gate, batch 200 vs 250). Re-scores and comparators state and reuse the eval batch size as part of the eval conditions.
 
 The smoke stage (`03_train` §6) implicitly exercises the batched code paths at small batch size; it does not measure utilization.
 

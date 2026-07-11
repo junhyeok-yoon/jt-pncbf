@@ -1,0 +1,17 @@
+{
+  "label": "v2.4.0_S5_bptt60_detach",
+  "ckpt": "data/previous_runs/v2.4.0__20260702-192824__seed42/checkpoints/best.pt",
+  "n": 2000,
+  "reach": 0.9145,
+  "coll": 0.008,
+  "oob": 0.0,
+  "stuck": 0.067,
+  "timeout": 0.0105,
+  "cps_legacy": 0.7965,
+  "cps_v2": 0.8172,
+  "cps_empty": 0.8172,
+  "inf_canon": 0.0992,
+  "inf_v2": 0.0301,
+  "inf_empty": 0.0301,
+  "sing_only": 0.0691
+}

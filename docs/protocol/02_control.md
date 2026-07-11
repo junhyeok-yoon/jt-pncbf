@@ -161,9 +161,15 @@ A step is **infeasible** when the safety filter cannot return a strictly feasibl
 action within the control bounds. Concretely, per active filtered step:
 
 - **CBF-QP:** the slack variable is active, $r > 10^{-4}$.
-- **HardNet:** the constraint is singular ($\|L_g h\| < 5 \times 10^{-4}$) or, in
-  box-aware mode, the half-space and the control box have empty intersection so the
-  projection must fall back to the least-violating action.
+- **HardNet:** the half-space and the control box have **empty intersection** (box-aware
+  mode: the projection must fall back to the least-violating action), **or** the row is
+  **singular and violated** — $\|L_g h\| < 5 \times 10^{-4}$ **and**
+  $L_f h + \alpha\, h_{\text{eff}} > 0$ (a $u$-independent test evaluated at the step).
+  A singular row that is satisfied constrains nothing (every $u$ satisfies it), leaves the
+  filter inactive, and is **feasible**; for an exact policy-value barrier this benign
+  flat-singular case covers the safe interior wherever the value saturates at its clip
+  floor (`§8`). The definition transition from the legacy `singular OR empty` flag is
+  recorded once in the `04_eval` §1 History note.
 
 The episode-level **infeasibility rate** is the **mean over active steps** of the per-step
 infeasible flag; the reported `infeasibility` is the mean over episodes. This is the
@@ -207,6 +213,15 @@ Decision vector $[u, r]$ with slack $r$:
   $\gamma_{\text{margin}}$ is the **agent safety margin** (how conservative the agent is),
   in `base_config.filter.gamma_margin` (default 0.0); $V_{\text{SHIFT}} = 10^{-3}$ is a
   numerical offset.
+  $\gamma_{\text{margin}}$ applies to **every** filter identically, as a constant shift
+  of $h$ into $h_{\text{eff}}$: the HardNet row (§6.1) is built from the same
+  $h_{\text{eff}}$, and the shift leaves $\nabla h$ (hence $L_f h$, $L_g h$) unchanged —
+  only the class-K term and the $\alpha$-region test move. **Scope of the margin
+  (measured limitation):** the margin absorbs value-level error; it cannot repair
+  certificate mis-ranking. For rollout-based barriers the certified-start collision floor
+  is margin-invariant and scales with the certificate's internal integration grid
+  (empirically $\text{coll} \propto dt_{V_{\mathcal M}}^{1.37}$); the grid, not the
+  margin, is the collision-budget knob (§8).
 - Box constraints: $u_{\text{lo}} \leq u \leq u_{\text{hi}}$ (from `01_env` control
   bounds); $r \geq -\text{relax\_eps1}$.
 
@@ -254,7 +269,8 @@ also deploys through HardNet so deployment matches training.
 
 ### 6.1 Closed-form projection
 
-Half-space $A \cdot u \leq b$ with $A = L_g h$, $b = -L_f h - \alpha h$. Base projection:
+Half-space $A \cdot u \leq b$ with $A = L_g h$, $b = -L_f h - \alpha\, h_{\text{eff}}$
+(the same $h_{\text{eff}} = h + V_{\text{SHIFT}} + \gamma_{\text{margin}}$ as §5.1). Base projection:
 
 $$
 u^{\text{safe}} = u^{\text{nom}} \;-\; \frac{A}{\|A\|^2 + \varepsilon^2}\,
@@ -333,3 +349,80 @@ deployment. The CBF-QP path (§5) is for OC-PNCBF deployment.
 - **CBF-QP path (proxsuite)** is **not** differentiable end-to-end: it converts to NumPy,
   solves, and returns detached arrays. It is therefore a deployment/OC filter, not a
   co-training filter.
+
+---
+
+## 8. Safety channel B′ — maneuver-family analytic barrier ($V_{\mathcal M}$)
+
+An alternative `h_fn` in which the safety channel contains **no learned object**: the
+barrier is computed at runtime from analytic rollouts of a fixed maneuver library under
+the deployment dynamics. Selected per framework by `safety_channel.type` $\in$
+{`value`, `maneuver`} (`value` = the §3.5 adapter, the default; `maneuver` = this
+section). With `type = maneuver` the entire value-learning pipeline (targets, buffers,
+target networks, value schedules, adaptive collection noise) is inactive; the filter
+mathematics of §5–§7 is unchanged.
+
+**Definition.** A maneuver $m$ is a control law executed for at most $T_m$ steps. The
+library is $\mathcal M = \{m_0\} \cup \{m_{j,d} : j = 1..J,\ d = \pm e_\perp\}$:
+
+- $m_0$ — **deadband brake** (state feedback), componentwise
+  $u_i = -u_{\max}\,\mathrm{sgn}(v_i)$ if $|v_i| > u_{\max}\,dt_{V_{\mathcal M}}$,
+  else $u_i = -v_i/dt_{V_{\mathcal M}}$ (exact stop-and-hold on the grid);
+  $T_{\text{stop}} = \lceil v_{\max}/(u_{\max}\,dt_{V_{\mathcal M}}) \rceil$.
+- $m_{j,d}$ — $j$ steps of $u = u_{\max}\, d$, then $m_0$; $T_j = j + T_{\text{stop}}$.
+  The transverse direction $e_\perp \perp (\text{goal} - p)$ is fixed at plan time
+  (goal-aligned frame; fixed world-axis fallback when $\|\text{goal} - p\|$ is
+  degenerate).
+
+$$
+V_{\mathcal M}(x) \;=\; \min_{m \in \mathcal M}\ \max_{0 \le k \le T_m}
+h\big(x_k^{m}\big),
+$$
+
+rolled out with the **deployment integrator** (RK4 + ZOH + velocity clamp) on the grid
+$dt_{V_{\mathcal M}}$; gradients are taken by autograd through the differentiable
+rollout.
+
+**Shift-closure (required).** The one-step tail of every library member must itself be a
+member ($m_{j,d} \mapsto m_{j-1,d}$ with $m_{0,d} = m_0$; state-feedback maneuvers are
+their own tails). Dense $j = 1..J$ satisfies this; sparse lateral subsets do not, and
+lose the per-step non-increase of $V_{\mathcal M}$ along the replanning policy — the
+property from which validity follows (feasibility witness $=$ the argmin maneuver's first
+action). Library changes must preserve shift-closure; under it, **adding** admissible
+stopping maneuvers can only lower $V_{\mathcal M}$ pointwise and enlarge the certified
+set (monotone augmentation). State-feedback maneuvers require a finite stopping
+certificate before admission.
+
+**Margin.** $\gamma_{\text{margin}}$ applies exactly as in §5.1:
+$h_{\text{eff}} = V_{\mathcal M} + \gamma_{\text{margin}}$ (constant shift; gradients
+unchanged). **Adopted per-channel defaults:** learned-value filters (HardNet / CBF-QP) run
+$\gamma_{\text{margin}} = 0.0$ (historical default, §5.1); the maneuver channel runs
+$\gamma_{\text{margin}} = 0.02$ (v2.5.0 G7 default branch). **Grid-excursion cap:** margins
+interact with the certificate grid through
+$\delta_{\text{grid}} = v_{\max}\, dt_{V_{\mathcal M}} / (2\, h_{\text{scale}})$
+($= 0.0625$ at $dt_{V_{\mathcal M}} = 0.05$) — inter-sample excursions up to
+$\delta_{\text{grid}}$ are invisible to grid values, so margins below the cap cannot remove
+grid-admitted continuous-time excursions (measured: the collision floor is invariant across
+$\gamma_{\text{margin}} \in \{0.02, 0.05\}$, both below the cap; the
+$\gamma_{\text{margin}} \ge \delta_{\text{grid}}$ regime is untested).
+
+**Knobs and semantics.** $dt_{V_{\mathcal M}}$ — the certificate's internal grid — is a
+**safety knob**, independent of the control period $dt_{\text{ctrl}}$: a coarse grid
+under-samples the rollout between samples and admits a margin-invariant collision floor
+(measured $\propto dt_{V_{\mathcal M}}^{1.37}$); refining it trades revealed coverage
+gaps (`stuck`) for collision. $dt_{\text{ctrl}}$ is a liveness knob. Library size trades
+runtime for coverage; the residual conservatism of a given library is measured by
+`stuck`, and library augmentation — not margin or grid coarsening — is the sanctioned
+lever against it.
+
+**Scene access.** $V_{\mathcal M}$ consumes the full scene: it is a filter-side object,
+not a policy observation, so the `01_env` Top-K observation convention binds the policy
+only. This asymmetry is stated in any comparison against value-network barriers.
+
+**Implementations and equivalence.** A reference implementation and a compiled fast path
+coexist. Equivalence is enforced by **function parity** (values $\le 10^{-6}$, gradients
+$\le 10^{-5}$ on fixed batches) plus **safety equivalence** (paired-episode collision and
+region-flag deltas within stated tolerances) — not trajectory bit-parity: the box-aware
+candidate selector is branch-discrete, so floating-point-distinct implementations
+legitimately diverge on measure-zero ties. Verdict-grade $V_{\mathcal M}$ comparisons are
+made fast-vs-fast. The parity tests are re-run on any PyTorch / compiler version change.

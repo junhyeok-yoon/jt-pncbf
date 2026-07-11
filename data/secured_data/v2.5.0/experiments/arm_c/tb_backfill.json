@@ -1,0 +1,128 @@
+[
+  [
+    "L19_v2.0.1_evalonly_hardnetV_S",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.0.1__20260529-084210__hardnet_oc_seed42/checkpoints/best.pt",
+    "ABSENT",
+    ""
+  ],
+  [
+    "L20_v2.0.1_JTfirst",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.0.1__20260529-093220__seed42/checkpoints/best.pt",
+    "0.6610",
+    "legacy 0.6306 reach 0.8585 coll 0.056"
+  ],
+  [
+    "L21_v2.0.1_valrefine4k",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.0.1__20260529-114934__seed42/checkpoints/best.pt",
+    "0.6227",
+    "legacy 0.5955 reach 0.8405 coll 0.0605"
+  ],
+  [
+    "L22_v2.0.1_valrefine42k",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.0.1__20260529-120127__seed42/checkpoints/best.pt",
+    "0.7188",
+    "legacy 0.6878 reach 0.8775 coll 0.0375"
+  ],
+  [
+    "L23_v2.0.1_cbfqpcollect",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.0.1__20260529-121439__seed42/checkpoints/best.pt",
+    "0.7537",
+    "legacy 0.7317 reach 0.886 coll 0.0255"
+  ],
+  [
+    "L24_v2.0.1_OCscalebatch",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.0.1__20260529-124338__seed42/checkpoints/best.pt",
+    "0.6917",
+    "legacy 0.6658 reach 0.8755 coll 0.058"
+  ],
+  [
+    "L25_v2.0.1_slowsched",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.0.1__20260529-161300__seed42/checkpoints/best.pt",
+    "0.7461",
+    "legacy 0.7074 reach 0.8965 coll 0.0425"
+  ],
+  [
+    "L26_v2.0.1_sigma0",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.0.1__20260529-164924__seed42/checkpoints/best.pt",
+    "0.7162",
+    "legacy 0.6872 reach 0.875 coll 0.0355"
+  ],
+  [
+    "L27_v2.0.1_sigma01",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.0.1__20260529-165556__seed42/checkpoints/best.pt",
+    "0.7004",
+    "legacy 0.6620 reach 0.8735 coll 0.047"
+  ],
+  [
+    "L28_v2.0.1_SOTA_secured",
+    "/home/junhyeok/MIT/jt-pncbf/data/secured_data/v2.0.1/seed42/checkpoints/best.pt",
+    "0.8770",
+    "legacy 0.8522 reach 0.946 coll 0.01"
+  ],
+  [
+    "L29_v2.0.1_seed12345",
+    "/home/junhyeok/MIT/jt-pncbf/data/secured_data/v2.0.1/seed12345/checkpoints/best.pt",
+    "0.8713",
+    "legacy 0.8524 reach 0.944 coll 0.0125"
+  ],
+  [
+    "L30_v2.0.1_seed99",
+    "/home/junhyeok/MIT/jt-pncbf/data/secured_data/v2.0.1/seed99/checkpoints/best.pt",
+    "0.8530",
+    "legacy 0.8190 reach 0.937 coll 0.016"
+  ],
+  [
+    "L47L49_v2.3.0_043656",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.3.0__20260620-043656__seed42/checkpoints/best.pt",
+    "0.8983",
+    "legacy 0.8631 reach 0.9535 coll 0.0065"
+  ],
+  [
+    "L47L49_v2.3.0_065914",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.3.0__20260620-065914__seed42/checkpoints/best.pt",
+    "0.9010",
+    "legacy 0.8624 reach 0.955 coll 0.009"
+  ],
+  [
+    "L47L49_v2.3.0_094154",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.3.0__20260620-094154__seed42/checkpoints/best.pt",
+    "0.8596",
+    "legacy 0.8432 reach 0.939 coll 0.0155"
+  ],
+  [
+    "L53_v2.3.1_204429",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.3.1__20260620-204429__seed42/checkpoints/best.pt",
+    "-0.9315",
+    "legacy -0.9347 reach 0.0 coll 0.287"
+  ],
+  [
+    "L53_v2.3.1_204521",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.3.1__20260620-204521__seed42/checkpoints/best.pt",
+    "0.8696",
+    "legacy 0.8370 reach 0.9395 coll 0.0065"
+  ],
+  [
+    "L57_v2.4.0_S3_161523",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.4.0__20260702-161523__seed42/checkpoints/best.pt",
+    "0.0059",
+    "legacy -0.0612 reach 0.551 coll 0.093"
+  ],
+  [
+    "L58_v2.4.0_S4_171017",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.4.0__20260702-171017__seed42/checkpoints/best.pt",
+    "0.5446",
+    "legacy 0.5091 reach 0.8005 coll 0.0505"
+  ],
+  [
+    "L60_v2.4.1_Exp1wd1_015842",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.4.1__20260703-015842__seed42/checkpoints/best.pt",
+    "0.8676",
+    "legacy 0.8286 reach 0.9405 coll 0.01"
+  ],
+  [
+    "L64_v2.4.2_valuetarget_005653",
+    "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.4.2__20260708-005653__seed42/checkpoints/best.pt",
+    "0.7788",
+    "legacy 0.7499 reach 0.9085 coll 0.035"
+  ]
+]

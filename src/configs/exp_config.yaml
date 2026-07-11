@@ -2,7 +2,7 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.4.2"
+  version: "v2.5.0"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
   system: double_integrator         # double_integrator | unicycle  (v2.3.0 DI plain: injection OFF, D_pi sliding-window experiment)
@@ -39,6 +39,13 @@ optim:
   polyak_per_v_step: true
   tb_histogram_every: 200
   metrics_log_every: 200             # write training metrics.csv/TB scalars every N value steps
+
+safety_channel:                    # v2.5.0 Stage B: source of the deployed CBF h_fn
+  type: value                       # value (learned V-hat, default/parity) | maneuver (analytic V_M); maneuver run set via --safety-channel
+  maneuver:                         # analytic maneuver-family barrier V_M (src/common/maneuver_value.py)
+    J: 8                            # lateral horizons j=1..J both directions -> |M| = 1 + 2J = 17 (shift-closed)
+    both_dirs: true
+    gamma_m: 0.02                   # h_eff = V_M + gamma_m (G7-selected margin)
 
 value_target:
   type: pncbf                       # pncbf | rpcbf
@@ -129,6 +136,7 @@ loss:
   policy:
     gamma_T: 0.99
     detach_filter_coeffs: false     # standing hygiene flag (default off); v2.4.0 Step 5 audit C1 fix, only needed for long-horizon BPTT
+    w_friction: 0.0                 # v2.5.0 Stage B-2: filter-friction weight w_friction*||u_safe-u_nom||^2 (0.0 = parity default; B-2 run sets 0.05 via --w-friction)
     w_deficit: 0.0                  # v2.4.1 Exp 2 (deficit LOSS off; obs channel is the axis) — Exp 1: control-deficit policy-feedback weight (0.0 = off; adaptive-calibrated, see build_log)
     deficit_cap: 4.0                # v2.4.1: norm cap (= 2*u_max) on the raw box-free deficit delta_u (bounds the alpha_unsafe=100 ask)
     deficit_form: "sq_cap"          # v2.4.1: "sq_cap" (squared, zero-grad above cap) | "huber" (bounded nonzero grad above cap)

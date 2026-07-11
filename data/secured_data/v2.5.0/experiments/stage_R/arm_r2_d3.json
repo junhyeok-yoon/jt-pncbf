@@ -1,0 +1,18 @@
+{
+  "oracle": "D8+cruise+depth3+both(508158)",
+  "wall_s": 281.9,
+  "has_plan_at_onset": 0.238,
+  "rescue_full_budget": 0.238,
+  "rescue_remaining_budget": 0.238,
+  "open_area_start_full": "3/15",
+  "by_start_cluster_full": {
+    "other": "3/15",
+    "narrow_gap": "1/5",
+    "local_min": "1/1"
+  },
+  "by_start_cluster_rem": {
+    "other": "3/15",
+    "narrow_gap": "1/5",
+    "local_min": "1/1"
+  }
+}

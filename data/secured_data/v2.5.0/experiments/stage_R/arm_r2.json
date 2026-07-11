@@ -1,0 +1,50 @@
+{
+  "checkpoint": "b2fast_best.pt",
+  "n_scenes": 500,
+  "n_stuck": 21,
+  "rescue_overall": 0.143,
+  "rescue_by_start_cluster": {
+    "other": {
+      "rescued": 2,
+      "n": 15,
+      "rate": 0.133
+    },
+    "narrow_gap": {
+      "rescued": 0,
+      "n": 5,
+      "rate": 0.0
+    },
+    "local_min": {
+      "rescued": 1,
+      "n": 1,
+      "rate": 1.0
+    }
+  },
+  "rescue_by_onset_cluster": {
+    "narrow_gap": {
+      "rescued": 0,
+      "n": 12,
+      "rate": 0.0
+    },
+    "local_min": {
+      "rescued": 3,
+      "n": 8,
+      "rate": 0.375
+    },
+    "other": {
+      "rescued": 0,
+      "n": 1,
+      "rate": 0.0
+    }
+  },
+  "lqr_baseline_open_area_start": "10/15",
+  "open_area_start_rescue": {
+    "rescued": 2,
+    "n": 15,
+    "rate": 0.133
+  },
+  "R_onset_finite_frac": 0.952,
+  "nonrescued_R_onset_finite": 1.0,
+  "n_nonrescued": 18,
+  "onset_step_p50": 108
+}

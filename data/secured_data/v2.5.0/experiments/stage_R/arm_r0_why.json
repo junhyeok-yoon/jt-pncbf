@@ -1,0 +1,67 @@
+{
+  "dist_p10_50_90": [
+    2.44,
+    4.44,
+    6.69
+  ],
+  "straight_blocked_frac": 0.341,
+  "uncovered_far": 1173,
+  "uncovered_blocked": 220,
+  "uncovered_clear_short": 418,
+  "worked_examples": [
+    {
+      "idx": 0,
+      "tag": "clear_short_uncovered",
+      "dist": 1.91,
+      "straight_blocked": false,
+      "straight_clearance": 0.824,
+      "n_active_obs": 12,
+      "R2": "inf"
+    },
+    {
+      "idx": 4,
+      "tag": "clear_short_uncovered",
+      "dist": 3.55,
+      "straight_blocked": false,
+      "straight_clearance": 0.261,
+      "n_active_obs": 4,
+      "R2": "inf"
+    },
+    {
+      "idx": 10,
+      "tag": "straight_blocked",
+      "dist": 3.42,
+      "straight_blocked": true,
+      "straight_clearance": -0.202,
+      "n_active_obs": 4,
+      "R2": "inf"
+    },
+    {
+      "idx": 11,
+      "tag": "straight_blocked",
+      "dist": 3.44,
+      "straight_blocked": true,
+      "straight_clearance": -0.304,
+      "n_active_obs": 10,
+      "R2": "inf"
+    },
+    {
+      "idx": 1,
+      "tag": "far",
+      "dist": 5.83,
+      "straight_blocked": true,
+      "straight_clearance": -0.279,
+      "n_active_obs": 4,
+      "R2": "inf"
+    },
+    {
+      "idx": 2,
+      "tag": "far",
+      "dist": 5.92,
+      "straight_blocked": false,
+      "straight_clearance": 0.421,
+      "n_active_obs": 2,
+      "R2": "inf"
+    }
+  ]
+}

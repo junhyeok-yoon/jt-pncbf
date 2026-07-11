@@ -1,0 +1,17 @@
+{
+  "label": "v2.4.0_S2_learnedrec",
+  "ckpt": "data/previous_runs/v2.4.0__20260702-132217__seed42/checkpoints/best.pt",
+  "n": 2000,
+  "reach": 0.8775,
+  "coll": 0.006,
+  "oob": 0.0,
+  "stuck": 0.102,
+  "timeout": 0.0145,
+  "cps_legacy": 0.7193,
+  "cps_v2": 0.7472,
+  "cps_empty": 0.7472,
+  "inf_canon": 0.1231,
+  "inf_v2": 0.03,
+  "inf_empty": 0.03,
+  "sing_only": 0.0931
+}

@@ -1,0 +1,17 @@
+{
+  "label": "v2.4.0_S1_brake",
+  "ckpt": "data/previous_runs/v2.4.0__20260702-062924__seed42/checkpoints/best.pt",
+  "n": 2000,
+  "reach": 0.842,
+  "coll": 0.0045,
+  "oob": 0.0,
+  "stuck": 0.131,
+  "timeout": 0.0225,
+  "cps_legacy": 0.6529,
+  "cps_v2": 0.6815,
+  "cps_empty": 0.6815,
+  "inf_canon": 0.1262,
+  "inf_v2": 0.0308,
+  "inf_empty": 0.0308,
+  "sing_only": 0.0954
+}

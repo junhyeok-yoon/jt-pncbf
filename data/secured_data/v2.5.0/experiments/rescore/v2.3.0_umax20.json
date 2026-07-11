@@ -1,0 +1,17 @@
+{
+  "label": "v2.3.0_umax20",
+  "ckpt": "data/secured_data/v2.3.0/experiments/umax20/checkpoints/best.pt",
+  "n": 2000,
+  "reach": 0.984,
+  "coll": 0.006,
+  "oob": 0.0,
+  "stuck": 0.001,
+  "timeout": 0.009,
+  "cps_legacy": 0.9478,
+  "cps_v2": 0.9628,
+  "cps_empty": 0.9628,
+  "inf_canon": 0.0625,
+  "inf_v2": 0.0123,
+  "inf_empty": 0.0123,
+  "sing_only": 0.0501
+}

@@ -10,7 +10,7 @@ The harness enforces five invariants by construction, each closing a class of me
 
 - **One metric name, one formula.** A single name (`cps`) and a single formula (§1) carry $(reach - 2 \cdot collision - \text{stuck} - 0.5(\text{oob} + \text{timeout}) - 0.3 \cdot infeasibility)$. No alternate field name and no simpler $(reach - collision)$ variant exists anywhere.
 - **One outcome-priority rule.** Outcomes are resolved by the `01_env` §1.6 predicates verbatim (collision before goal; exact contact, no radius inflation). No evaluation path re-derives them.
-- **One infeasibility definition.** Infeasibility is the mean over active filtered steps of the per-step infeasible flag, then the mean over episodes (§1, `02_control` §4). No other aggregation is used.
+- **One infeasibility definition.** Infeasibility is the mean over active filtered steps of the per-step infeasible flag (`02_control` §4: empty half-space–box intersection, or singular-and-violated row), then the mean over episodes (§1). No other aggregation is used.
 - **Reproducible pools.** Evaluation pools are generated once, serialized, and committed to git (§6); nothing is sampled in memory at evaluation time, so any two reports are on bit-identical scenes.
 - **Variance always reported.** Multi-seed bootstrap CIs are required for any aggregated number (§5). A single-seed result may be reported as a version's headline only when explicitly marked single-seed and supplemented by a scene-bootstrap CI; multi-seed is strongly recommended and is the requirement once additional seeds are available.
 
@@ -35,7 +35,9 @@ Defined per scenario; the reported value is the mean across the scenarios in a p
 - **`stuck`** — fraction of episodes whose outcome is stuck (per `01_env` §1.6: $\mathrm{disp}_t \le r_{\text{stuck}}$ over a window of $W_{\text{stuck}}$ steps; defaults $0.10$ m / $60$ steps / $3$ s). Penalized at weight 1.
 - **`oob`** — fraction of episodes whose outcome is out-of-bounds. Penalized at weight 0.5 (jointly with timeout).
 - **`timeout`** — fraction of episodes whose outcome is timeout. Penalized at weight 0.5 (jointly with oob).
-- **`infeasibility`** — defined in `02_control` §4: mean over active filtered steps of the per-step infeasible flag, then mean over episodes. Episodes with no active filtered steps contribute zero.
+- **`infeasibility`** — defined in `02_control` §4: a filtered step is infeasible iff the half-space–box intersection is **empty**, or the row is **singular and violated** ($\|L_g h\| < 5 \times 10^{-4}$ and $L_f h + \alpha\, h_{\text{eff}} > 0$, a $u$-independent test). A singular row that is satisfied is feasible — every $u$ satisfies it and the filter is simply inactive. Aggregation: mean over active filtered steps of the per-step flag, then mean over episodes; episodes with no active filtered steps contribute zero.
+
+  **History note — recorded by explicit Researcher decision as a one-time exception to `00_constitution` §3 Prohibition 3, to prevent mis-scoring across the definition transition; not a precedent for narrative in protocol documents.** Through v2.4.x the per-step flag was `singular OR empty` (legacy). v2.5.0 introduced an exact analytic maneuver-family barrier (`02_control` §8) that by design saturates at the clip floor across the safe interior; its zero gradient raised the legacy flag on nearly every active step (raw infeasibility 0.87–0.91) even though those rows are automatically satisfied and the filter is inactive — a benign state, not a failure. The legacy flag therefore penalized exactness, while the genuinely pathological states — empty intersections, and singular-**and**-violated rows (the authority-loss failure of hazard-blind conditioning) — are exactly what the current definition counts. The current definition was introduced as the `cps_v2` field during the v2.5.0 Stage-B-2 closeout and adopted here. **Application is prospective**: ledger rows written before the adoption were scored with the legacy flag and are annotated as such when cited; verdict-grade comparisons across the boundary use re-scored comparators or dual reporting (`legacy cps | cps_v2`) until the standing comparators are re-scored, after which the v2 flag is the single canonical definition and the `_v2` suffix is retired.
 - **`saturation_rate`** — defined in `02_control` §4.1: mean over active filtered steps of the per-step saturation flag (any $u^{\text{safe}}$ component within $10^{-3}$ of its bound), then mean over episodes. A recorded diagnostic only — **not** a term in `cps`.
 - Outcomes are mutually exclusive via the `01_env` §1.6 priority (collision → goal → OOB → stuck → timeout). All five outcome fractions sum to 1; all five are reported alongside `cps`.
 
@@ -321,6 +323,8 @@ infeasibility_ci_lo, infeasibility_ci_hi
 ```
 
 `mode` $\in$ {`in_loop`, `final`, `final_insertion_lqr`, `final_insertion_frozen`, `final_insertion_live`, `final_alpha_sweep`}. `saturation_rate` is the episode-mean of the per-step saturation flag (`02_control` §4.1), a diagnostic outside `cps`. The six `stuck_bin_<lo>_<hi>` columns are fractions of episodes whose `min_window_displacement` falls in each $0.05$ m bin from $[0.00, 0.05)$ to $[0.25, 0.30)$ — diagnostic per §1.1, not part of `cps`. Episodes with `min_window_displacement > 0.30` m are not counted in any bin.
+
+During the infeasibility-definition transition (§1 History note), evaluation outputs additionally carry `cps_v2` / `infeasibility_v2` fields alongside the legacy columns; when the transition closes, the v2 semantics are carried by the canonical `cps` / `infeasibility` columns themselves and the `_v2` fields are retired.
 
 **`eval_episodes.csv`** — one row per (eval, episode). Columns:
 

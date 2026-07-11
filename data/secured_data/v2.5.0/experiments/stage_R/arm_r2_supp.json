@@ -1,0 +1,19 @@
+{
+  "n_stuck": 21,
+  "rescue_remaining_budget": 0.143,
+  "rescue_full_budget": 0.143,
+  "follower_has_plan_at_onset": 0.143,
+  "R_onset_finite": 0.952,
+  "R_onset_le_remaining_budget": 0.381,
+  "R_onset_p10_50_90": [
+    3.52,
+    4.9,
+    5.7
+  ],
+  "remaining_budget_s_p10_50_90": [
+    2.3,
+    4.6,
+    5.3
+  ],
+  "full_budget_ttg_s_reached_p50": 2.95
+}

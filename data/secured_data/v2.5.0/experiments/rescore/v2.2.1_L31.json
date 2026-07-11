@@ -1,0 +1,17 @@
+{
+  "label": "v2.2.1_L31",
+  "ckpt": "/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.2.1__20260617-193824__seed0/checkpoints/best.pt",
+  "n": 2000,
+  "reach": 0.7755,
+  "coll": 0.1585,
+  "oob": 0.0,
+  "stuck": 0.026,
+  "timeout": 0.04,
+  "cps_legacy": 0.3688,
+  "cps_v2": 0.3924,
+  "cps_empty": 0.3924,
+  "inf_canon": 0.1457,
+  "inf_v2": 0.0671,
+  "inf_empty": 0.0671,
+  "sing_only": 0.0785
+}

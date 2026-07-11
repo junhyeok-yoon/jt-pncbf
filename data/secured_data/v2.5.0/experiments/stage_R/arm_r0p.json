@@ -1,0 +1,94 @@
+{
+  "N": 2000,
+  "configs": {
+    "i": {
+      "nplans": 812,
+      "coverage": 0.0945,
+      "R_p10_50_90": [
+        1.75,
+        2.1,
+        2.71
+      ],
+      "wall_s": 0.5
+    },
+    "ii": {
+      "nplans": 44135,
+      "coverage": 0.4885,
+      "R_p10_50_90": [
+        1.9,
+        2.65,
+        3.3
+      ],
+      "wall_s": 18.8
+    },
+    "iii": {
+      "nplans": 1624,
+      "coverage": 0.944,
+      "R_p10_50_90": [
+        2.5,
+        3.9,
+        4.95
+      ],
+      "wall_s": 0.9
+    },
+    "iv": {
+      "nplans": 508158,
+      "coverage": 0.98,
+      "R_p10_50_90": [
+        2.05,
+        3.15,
+        4.8
+      ],
+      "wall_s": 399.2
+    }
+  },
+  "smoke2_mono_violations": 0,
+  "config_i_max_reproduce_diff": 0.0,
+  "config_i_coverage_mismatch": 0,
+  "bucket_sizes": {
+    "covered_R1": 189,
+    "far": 1173,
+    "straight_blocked": 220,
+    "clear_short": 418,
+    "far_clear": 714
+  },
+  "per_bucket_coverage": {
+    "i": {
+      "covered_R1": 1.0,
+      "far": 0.0,
+      "straight_blocked": 0.0,
+      "clear_short": 0.0,
+      "far_clear": 0.0
+    },
+    "ii": {
+      "covered_R1": 1.0,
+      "far": 0.32,
+      "straight_blocked": 0.177,
+      "clear_short": 0.895,
+      "far_clear": 0.482
+    },
+    "iii": {
+      "covered_R1": 1.0,
+      "far": 0.945,
+      "straight_blocked": 0.845,
+      "clear_short": 0.969,
+      "far_clear": 0.985
+    },
+    "iv": {
+      "covered_R1": 1.0,
+      "far": 0.981,
+      "straight_blocked": 0.964,
+      "clear_short": 0.976,
+      "far_clear": 0.989
+    }
+  },
+  "resid_uncovered_iv": {
+    "covered_R1": 0,
+    "far": 22,
+    "straight_blocked": 8,
+    "clear_short": 10,
+    "far_clear": 8
+  },
+  "gate_coverage_iv": 0.98,
+  "gate_pass": true
+}

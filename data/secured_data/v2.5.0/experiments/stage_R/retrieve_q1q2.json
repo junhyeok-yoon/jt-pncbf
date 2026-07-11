@@ -1,0 +1,41 @@
+{
+  "Q1": {
+    "finite_by_Tcapture": {
+      "100": 4,
+      "160": 4,
+      "240": 4
+    },
+    "flips_100to160": [],
+    "flips_160to240": [],
+    "rescue_count_Tc160": 3,
+    "rescue_count_Tc100_ref": 3,
+    "attribution": "geometric trap (T_capture-insensitive)"
+  },
+  "Q2": {
+    "n_stuck": 77,
+    "coverage_limited": 32,
+    "search_limited": 45,
+    "sample5_replan_at_stall": [
+      {
+        "idx": 11,
+        "replan_finite": true
+      },
+      {
+        "idx": 121,
+        "replan_finite": true
+      },
+      {
+        "idx": 203,
+        "replan_finite": true
+      },
+      {
+        "idx": 244,
+        "replan_finite": true
+      },
+      {
+        "idx": 266,
+        "replan_finite": true
+      }
+    ]
+  }
+}

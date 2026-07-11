@@ -1,0 +1,17 @@
+{
+  "label": "v2.3.0_seed99",
+  "ckpt": "data/secured_data/v2.3.0/seed99/checkpoints/best.pt",
+  "n": 2000,
+  "reach": 0.95,
+  "coll": 0.007,
+  "oob": 0.0,
+  "stuck": 0.024,
+  "timeout": 0.019,
+  "cps_legacy": 0.8604,
+  "cps_v2": 0.8937,
+  "cps_empty": 0.8937,
+  "inf_canon": 0.1402,
+  "inf_v2": 0.0294,
+  "inf_empty": 0.0294,
+  "sing_only": 0.1108
+}

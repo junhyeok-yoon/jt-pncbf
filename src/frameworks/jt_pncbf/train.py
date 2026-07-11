@@ -128,6 +128,8 @@ METRIC_COLUMNS = [
     "deficit_active_frac",
     "deficit_clip_frac",
     "mean_abs_deficit_feature",
+    "L_friction",
+    "proj_mag_bptt",
     "probe_h_min",
     "probe_h_max",
     "probe_h_mean",
@@ -181,9 +183,10 @@ class JTPNCBFFramework:
         # read by policy() on the next step; reset per rollout (a fresh framework is built per eval).
         self._obs_deficit = _obs_deficit_on(config)
         self._prev_deficit: Tensor | None = None
+        from src.common.maneuver_value import build_safety_h_fn
         self._filter = HardNetFilter(
             system,
-            make_h_fn(value_net, system),
+            build_safety_h_fn(system, config, value_net),   # v2.5.0 Stage B: V_M or learned h_fn
             config,
             policy_fn=self.policy,
         )
@@ -214,7 +217,49 @@ class JTPNCBFFramework:
         return u_safe, infeasible
 
     def value(self, x: Tensor, scene: Any) -> Tensor:
-        return make_h_fn(self.value_net, self.system)(x, scene)
+        from src.common.maneuver_value import build_safety_h_fn
+        return build_safety_h_fn(self.system, self.config, self.value_net)(x, scene)
+
+
+class _ManeuverEvalFramework:
+    """v2.5.0 Stage B eval-only framework: trained policy + analytic V_M HardNet filter computed with
+    create_graph=False (first-order L_g only). u_safe is IDENTICAL to the deployed create_graph=True
+    filter (create_graph affects only the unused 2nd-order graph), but no graph accumulates across the
+    ~200-step eval rollout -> no OOM. Mirrors the Stage-A projection path (mc_stage_a.StageAFramework)."""
+
+    def __init__(self, system: System, policy_net: ControlNet, config: Mapping[str, Any]) -> None:
+        from src.common.filter_hardnet import _hardnet_params
+        from src.common.maneuver_value import build_safety_h_fn
+        self.system = system
+        self.config = config
+        self.policy_net = policy_net
+        # evaluate._tensor_options reads framework.value_net's dtype/device (its ONLY use of value_net);
+        # alias the trained policy so the eval runs on the policy's device/dtype (float32, cuda).
+        self.value_net = policy_net
+        self.h_fn = build_safety_h_fn(system, config, None)   # maneuver V_M + gamma_m
+        self.params = _hardnet_params(config)
+
+    def policy(self, x: Tensor, scene: Any) -> Tensor:
+        return self.policy_net(self.system.observation(x, scene))
+
+    def filter(self, x: Tensor, u_nom: Tensor, scene: Any) -> tuple[Tensor, Tensor]:
+        from src.common.filter_hardnet import (
+            _SINGULAR_LG_THRESHOLD, _base_alpha, _base_projection, _box_aware_projection, _cbf_terms,
+        )
+        h, lf, lg = _cbf_terms(self.system, self.h_fn, x, scene, u_nom, create_graph=False)
+        h, lf, lg = h.detach(), lf.detach(), lg.detach()
+        with torch.no_grad():
+            alpha = _base_alpha(h, self.params)
+            row_upper = -lf - alpha * h
+            bounds = self.system.u_bounds.to(device=u_nom.device, dtype=u_nom.dtype)
+            projected = _base_projection(u_nom, lg, row_upper, bounds, self.params)
+            singular = torch.linalg.norm(lg, dim=1) < _SINGULAR_LG_THRESHOLD
+            if self.params.box_aware:
+                u_safe, empty = _box_aware_projection(u_nom, projected, lg, row_upper, bounds)
+                infeasible = singular | empty
+            else:
+                u_safe, infeasible = projected, singular
+        return u_safe.detach(), infeasible.detach()
 
 
 def run_training(
@@ -230,10 +275,16 @@ def run_training(
     value_batch_size_override: int | None = None,
     schedule_n_steps_override: int | None = None,
     resume_ckpt: Path | None = None,
+    safety_channel: str | None = None,
+    w_friction: float | None = None,
 ) -> JTTrainingResult:
     config = load_effective_config()
     config["run"]["version"] = __version__
     config["run"]["framework"] = "jt_pncbf"
+    if safety_channel is not None:   # v2.5.0 Stage B: --safety-channel maneuver activates the analytic V_M
+        config.setdefault("safety_channel", {})["type"] = safety_channel
+    if w_friction is not None:       # v2.5.0 Stage B-2: filter-friction weight override
+        config["loss"]["policy"]["w_friction"] = float(w_friction)
     if seed is not None:
         config["run"]["seed"] = int(seed)
     if obstacle_distribution is not None:
@@ -384,6 +435,15 @@ def run_training(
         eval_cadence = n_steps
         eval_max_scenes = smoke_eval_scenes
 
+    # v2.5.0 Stage B: analytic-maneuver safety channel. The value net is not learned (K_V=0), no warmup,
+    # and detach_filter_coeffs is forced on (first-order only through the 30-step V_M rollout). Applied
+    # AFTER the smoke reduction so it wins over smoke's K_V=1. Value mode (default) is untouched.
+    maneuver_mode = str(config.get("safety_channel", {}).get("type", "value")) == "maneuver"
+    if maneuver_mode:
+        k_v = 0
+        vs_warmup_steps = 0
+        config["loss"]["policy"]["detach_filter_coeffs"] = True
+
     policy_buffer_cap = collection_cfg.get("policy_buffer_cap")
     buffers = make_replay_buffers(
         capacity=int(collection_cfg["buffer_cap"]),
@@ -465,23 +525,29 @@ def run_training(
         # / _policy_updates), so they fire on the same step as before.
         do_log = (step % metrics_log_every == 0) or (step == n_steps)
 
-        value_scalars = _value_updates(
-            system=system,
-            value_net=value_net,
-            target_value_net=target_value_net,
-            optimizer=opt_vs,
-            buffers=buffers,
-            torch_generator=torch_rng,
-            batch_size=value_batch_size,
-            n_updates=k_v,
-            lambda_disc=lambda_disc,
-            target_rhs=target_rhs,
-            config=config,
-            log=do_log,
-            policy_net=policy_net,
-            recovery_policy=recovery_target,
-            lagged_policy=lagged_policy,
-        )
+        if maneuver_mode:
+            # Stage B: no value learning (K_V=0). Skip the value update entirely (K_V=0 would break the
+            # empty-loop mean); emit zeroed value scalars so the metrics schema is unchanged (value cols
+            # 0). target_value_net stays at init and is never queried (build_safety_h_fn ignores it).
+            value_scalars = {"value_finite": True, "L_V_total": 0.0, "grad_norm_VS": 0.0, "L_R": 0.0}
+        else:
+            value_scalars = _value_updates(
+                system=system,
+                value_net=value_net,
+                target_value_net=target_value_net,
+                optimizer=opt_vs,
+                buffers=buffers,
+                torch_generator=torch_rng,
+                batch_size=value_batch_size,
+                n_updates=k_v,
+                lambda_disc=lambda_disc,
+                target_rhs=target_rhs,
+                config=config,
+                log=do_log,
+                policy_net=policy_net,
+                recovery_policy=recovery_target,
+                lagged_policy=lagged_policy,
+            )
         if not value_scalars.pop("value_finite"):
             halt_reason = "nan_or_inf_L_V"
             break
@@ -566,8 +632,15 @@ def run_training(
                 last_logged_step = step
 
         if step == n_steps or step % max(1, eval_cadence) == 0:
+            # v2.5.0 Stage B: the deployed HardNetFilter uses create_graph=True (for training BPTT); over
+            # the ~200-step eval rollout each step's V_M graph chains into the next state and accumulates
+            # to OOM (|M|=17 rollout). Eval only needs u_safe VALUES, identical under create_graph=False,
+            # so maneuver-mode eval uses a first-order framework (no graph accumulation; the exact path
+            # validated in Stage A). Value mode unchanged.
+            eval_framework = (_ManeuverEvalFramework(system, policy_net, config) if maneuver_mode
+                              else JTPNCBFFramework(system, value_net, policy_net, config))
             eval_result = evaluate(
-                JTPNCBFFramework(system, value_net, policy_net, config),
+                eval_framework,
                 _pool_path("inloop", config, system.name),
                 config,
                 mode="in_loop",
@@ -1306,6 +1379,8 @@ def _policy_updates(
         "deficit_active_frac": [],
         "deficit_clip_frac": [],
         "mean_abs_deficit_feature": [],
+        "L_friction": [],
+        "proj_mag_bptt": [],
     }
     pi_totals: list[Tensor] = []
     leak_sqs: list[Tensor] = []
@@ -1352,6 +1427,8 @@ def _policy_updates(
             accum["deficit_active_frac"].append(result.deficit_active_frac)
             accum["deficit_clip_frac"].append(result.deficit_clip_frac)
             accum["mean_abs_deficit_feature"].append(result.mean_abs_deficit_feature)
+            accum["L_friction"].append(result.friction_loss)
+            accum["proj_mag_bptt"].append(result.proj_mag_bptt)
 
     leak_sq_max = torch.stack(leak_sqs).max()
     threshold = float(config["halt"]["vs_grad_leak_threshold"])
@@ -1390,6 +1467,8 @@ def _zero_policy_scalars() -> dict[str, float]:
         "deficit_active_frac": 0.0,
         "deficit_clip_frac": 0.0,
         "mean_abs_deficit_feature": 0.0,
+        "L_friction": 0.0,
+        "proj_mag_bptt": 0.0,
     }
 
 
@@ -1896,6 +1975,10 @@ def main() -> int:
     parser.add_argument("--schedule-n-steps", type=int, default=None)
     parser.add_argument("--resume-ckpt", type=Path, default=None,
                         help="Resume joint training from a checkpoint's nets+optimizer state at its step.")
+    parser.add_argument("--safety-channel", choices=["value", "maneuver"], default=None,
+                        help="v2.5.0 Stage B: 'maneuver' deploys the analytic V_M barrier (no value learning).")
+    parser.add_argument("--w-friction", type=float, default=None,
+                        help="v2.5.0 Stage B-2: filter-friction weight w_friction*||u_safe-u_nom||^2 (default config 0.0).")
     parser.add_argument(
         "--value-refine-collection-filter",
         choices=["hardnet", "cbf_qp"],
@@ -1946,6 +2029,8 @@ def main() -> int:
             value_batch_size_override=args.value_batch_size,
             schedule_n_steps_override=args.schedule_n_steps,
             resume_ckpt=args.resume_ckpt,
+            safety_channel=args.safety_channel,
+            w_friction=args.w_friction,
         )
     print(result.run_dir)
     return 0 if result.halt_reason is None else 1

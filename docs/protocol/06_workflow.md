@@ -108,19 +108,25 @@ evaluation — a full-pool final, an in-loop best, or an eval-only re-evaluation
 existing checkpoint under a changed deploy axis — the Executor appends one row to
 `docs/ledger.md` as part of completing the eval task, without waiting for a separate
 instruction. The row uses the current schema
-(`version | date | parent | seeds | eval_source | reach | collision | oob | stuck | timeout | infeas | sat_rate | cps | verdict`),
+(`version | date | parent | seeds | cps_v2 | eval_source | reach | collision | oob | stuck | timeout | infeas | sat_rate | cps | verdict`;
+`cps_v2` is scored per `04_eval` §1's current definition — `n/a` = filter semantics out of
+scope (e.g. CBF-QP slack rows), `-` = artifact unrecoverable),
 filled from the run's real eval artifacts (never approximated; blank any field the eval did
-not record). `eval_source` states provenance: `full_n500`, `inloop_n200@<step>`, or
+not record). `eval_source` states provenance: `full_n2000`, `inloop_n500@<step>`, or
 `eval_only(<note>)` for a re-evaluation that is not a new training run (e.g. a filter swap on
 an adopted checkpoint). `parent` records the source checkpoint for an eval-only or
 warm-started row. The ledger is a docs file the Executor may edit; protocol files are never
 edited by the Executor.
 
 **Per-version SOTA marking (bold).** For each version block in `docs/ledger.md`, the
-single row with the highest `cps` among rows with `eval_source = full_n500` of that version
+single row with the highest `cps` among rows with `eval_source = full_n2000` of that version
 is marked as the version's SOTA by bolding every cell in that row (markdown `**...**`).
-At most one row per version is bolded. Rows with `eval_source` of `inloop_n200@<step>` or
-`eval_only(<note>)` are not eligible for SOTA bolding. When a new full-pool result
+At most one row per version is bolded. Rows with `eval_source` of `inloop_n500@<step>` or
+`eval_only(<note>)` are not eligible for SOTA bolding. Rows from a **different deployment
+or training class** than the standing comparison basis — e.g. training-free
+analytic-barrier arms, or evaluations at non-default deploy rates ($dt_{\text{ctrl}}$,
+$dt_{V_{\mathcal M}}$) — are likewise never SOTA-bolded on `cps` alone; the Executor
+flags such rows for Researcher classification instead. When a new full-pool result
 supersedes the previous version SOTA, the previous bold is removed and the new row is
 bolded in the same edit that registers the new row.
 
@@ -130,6 +136,11 @@ evaluation row are not registered. Numeric outcome fields (`reach`, `collision`,
 places; CIs use the same precision when included. Run-ids are recorded verbatim from the
 `<run_id>` directory. The `parent` column may be `-` if the run is not a child of another
 registered run.
+
+During the infeasibility-definition transition (`04_eval` §1 History note), each new row's
+`verdict`/note field carries both scores (`legacy cps X / cps-v2 Y`); pre-transition rows
+are annotated `(legacy infeasibility flag)` when cited in verdict-grade comparisons. Once
+the standing comparators are re-scored under the v2 flag, single-value rows resume.
 
 **Verdict is one line.** The `verdict` cell is a single short line (target <= ~25 words):
 the core finding only — the result, SOTA status, and any honest qualifier that changes its
@@ -334,3 +345,34 @@ Confirm: §2.5 `results.md` drafted — multi-seed aggregate written (or single-
 ### 7.4 Ending a session
 
 Confirm: everything decided is in a tracked file (prompts, briefs, results), and any code in flight is either committed or explicitly noted as work-in-progress in `docs/index.md`. Anything not in a tracked file does not exist for the next session.
+
+---
+
+## 8. Reporting and recovery discipline
+
+**Disk-verified reporting (mandatory).** Every number the Executor reports about a run —
+monitoring updates, termination facts, peaks, current steps — is read from the run's
+on-disk artifacts at reporting time and cited as such: the run directory, the verbatim
+`eval_metrics.csv` / `metrics.csv` row, the process start time, and an arithmetic
+consistency check (elapsed $\times$ measured rate $\approx$ reported step). A number
+that does not appear on disk is not reported. Recovery and resume prompts re-verify the
+run state against disk before recording any termination fact; framing supplied from
+outside the disk (a step count, a peak, a "terminated at") is treated as unverified until
+the artifacts confirm it.
+
+**External-interruption handling (standing decision, "Option A").** When a training run
+is killed by an external event (session teardown, machine contention) rather than by an
+abort rule: the latest cadence checkpoint stands in for `final.pt`; the build-log and the
+ledger row's `eval_source` note record `terminated @<disk-verified step> (external
+interrupt)`; and the standard close-out (re-selection over all cadence checkpoints,
+full-pool eval of the selected best) proceeds on the surviving artifacts. Optimizer state
+is never spliced to resume a partially lost run; if the full budget is wanted, the run is
+relaunched fresh and the killed run is archived to `previous_runs` with its termination
+note. A `status.json` left stale by a hard kill is recorded as stale, never edited.
+
+**Parallel low-priority work.** Analysis or evaluation may run alongside a live training
+run only under all of: `nice -n 19` with CPU-core pinning away from the trainer's cores;
+GPU batch sizes capped to leave $\ge 2$ GB VRAM headroom (halve-and-retry on OOM — never
+touch the training process); read-only access to the live run directory, with all outputs
+written elsewhere; and a measured throughput guard — if the trainer's step rate degrades
+more than 10% from its pre-launch window, the parallel work stops and reports.
