@@ -488,6 +488,7 @@ def policy_bptt_loss(
     batch: TensorTransitionBatch,
     config: Mapping[str, Any],
     step: int = 0,
+    critic_net: nn.Module | None = None,
 ) -> PolicyLossResult:
     policy_cfg = config["loss"]["policy"]
     dt = float(config["env"]["dt"])
@@ -710,6 +711,19 @@ def policy_bptt_loss(
             friction_weighted = (w_friction * l_friction_raw).detach()
         else:
             friction_weighted = total.new_zeros(())
+
+        # v2.5.1 A2(b): horizon-summary critic tail. total += w_hc * gamma_c^T * mean_B W(obs(x_T)) with W's
+        # parameters FROZEN (stop-grad) so dL_pi/d(theta_W)=0; the ONLY policy gradient path is pathwise
+        # through x_T (the differentiable rollout endpoint). x still holds x_T here (the endpoint is not
+        # reassigned after the bptt loop). critic_net=None (horizon_critic.enabled=false) leaves `total`
+        # byte-identical to baseline. W reads the dim-19 base observation (no deficit channel).
+        if critic_net is not None:
+            hc_cfg = config["training"]["jt"]["horizon_critic"]
+            gamma_c = float(hc_cfg["gamma"]); w_hc = float(hc_cfg["weight"])
+            obs_tail = system.observation(x, scene)
+            with frozen_params(critic_net):
+                w_tail = critic_net(obs_tail)
+            total = total + w_hc * (gamma_c ** bptt_t) * w_tail.mean()
 
     return PolicyLossResult(
         total=total,

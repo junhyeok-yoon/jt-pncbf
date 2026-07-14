@@ -2,7 +2,7 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.5.0"
+  version: "v2.5.1"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
   system: double_integrator         # double_integrator | unicycle  (v2.3.0 DI plain: injection OFF, D_pi sliding-window experiment)
@@ -23,6 +23,13 @@ training:
     K_pi: 1
     bptt_T: 30                      # v2.3.0 SOTA baseline horizon (reset after v2.4.0 close; bptt_T=60 collapse root-caused)
     schedule_n_steps: 42000         # match v2.0.1 SOTA schedule budget (UNCHANGED for the 80k extension)
+    pi_init_ckpt: null              # v2.5.1 A2(a): policy warm-start (pi_state-only init); null => fresh run
+    horizon_critic:                 # v2.5.1 A2(b): horizon-summary critic W (performance channel only)
+      enabled: false                # false => bit-identical to baseline (critic_net=None, no W-step)
+      gamma: 0.99                   # gamma_c for the n-step discounted stage-cost-to-go + the gamma_c^T tail
+      n_step: 30                    # bootstrap horizon of the W regression rollout
+      lr: 1.0e-3                    # AdamW lr for W (house weight_decay / grad_clip / tau_polyak reused)
+      weight: 1.0                   # policy-loss tail weight: + weight * gamma_c^T * W(x_T)
   oc_pncbf:
     epochs: 1000
     grad_steps_per_epoch: 500
@@ -41,11 +48,16 @@ optim:
   metrics_log_every: 200             # write training metrics.csv/TB scalars every N value steps
 
 safety_channel:                    # v2.5.0 Stage B: source of the deployed CBF h_fn
-  type: value                       # value (learned V-hat, default/parity) | maneuver (analytic V_M); maneuver run set via --safety-channel
+  type: value                       # value (learned V-hat, default/parity) | maneuver (analytic V_M) | cpi (frozen learned certificate); non-default set via run_training(safety_channel=...)
   maneuver:                         # analytic maneuver-family barrier V_M (src/common/maneuver_value.py)
     J: 8                            # lateral horizons j=1..J both directions -> |M| = 1 + 2J = 17 (shift-closed)
     both_dirs: true
     gamma_m: 0.02                   # h_eff = V_M + gamma_m (G7-selected margin)
+  # v2.5.1 CPI loop: frozen learned certificate V_hat (raw, gamma_margin 0.0). checkpoint = canonical
+  # V_hat_{k-1} for iteration k (it1 = secured seed-42 iteration-0 best.pt). type stays 'value' by default
+  # (value/maneuver tests unaffected); it<k> runs pass safety_channel='cpi'.
+  checkpoint: data/secured_data/v2.5.1/certificate_chain/V_hat_2p/best.pt
+  gamma_margin: 0.0
 
 value_target:
   type: pncbf                       # pncbf | rpcbf
@@ -195,3 +207,41 @@ eval:
   # NOTE: eval.full.n stays 500 here (base default) so the trainer's automated final eval finds the
   # secured_data n500 pool. N=2000 is the reporting standard but is run via the manual in-RAM eval path
   # (data/eval_pools/eval_full_di_n2000_seed23456.pkl), since run_full reads the read-only secured_data/pools.
+
+cpi:
+  labels:
+    system: di
+    dt_vm: 0.05                # certificate grid; T_stop = ceil(v_max/(u_max*dt_vm)) = 25
+    n_scenes: 20000
+    states_per_scene_uniform: 60
+    states_per_scene_boundary: 40   # cap; filled from |V_raw| <= boundary_band candidates
+    boundary_band: 0.15
+    jitter_pos_sigma: 0.10
+    jitter_vel_sigma: 0.20
+    speed_dist: uniform_0_vmax # speed ~ U[0, v_max], direction ~ U(S^1); high-speed oversampling is deliberate
+    master_seed: 42            # single master; all label randomness = SeedSequence(master_seed).spawn(4)
+                               # in order [scene, state, oracle-subset, split]. No other seed constants.
+    label_batch: 65536         # pinned (05_code §7 eval-conditions pin)
+    oracle_subset:             # V_M17 ground-truth scorer, reference path
+      n_uniform: 200000
+      n_boundary: 200000
+  split:
+    by: scene
+    fractions: [0.72, 0.08, 0.10, 0.10]   # train / val(early-stop) / calib / test
+  value:
+    n_vs: 1                    # single member; conservatism lives in tau + eps_q, not ensemble-min
+    # trunk per 02_control §3.2: 3 x 256, Softplus(beta=20), raw linear head (no read-out clip used)
+  train:
+    tau_quantile: 0.9          # pinball level; penalizes optimism (V_hat < V) 9:1
+    batch_size: 16384
+    lr: 1.0e-3
+    weight_decay: 1.0e-4
+    grad_clip: 1.0
+    max_epochs: 60
+    early_stop_patience: 8     # on val pinball; calib/test never touch training or selection
+    seeds: [42, 99, 12345]     # standing seed convention
+  calib:
+    alpha: [0.10, 0.05, 0.01]
+    band: 0.125                # |V_hat| <= band, in h-units (= 2 * delta_grid)
+    band_sensitivity: [0.0625, 0.25]   # reported, not registered
+    report_both_tails: true    # (V - V_hat)_+ and (V_hat - V)_+

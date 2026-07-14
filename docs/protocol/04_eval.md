@@ -187,6 +187,8 @@ This option exists so that a clearly-marked single-seed result is not categorica
 
 **Multi-seed (strongly recommended).** Minimum 3 seeds; recommend 5+. Three seeds is the threshold required for any version to claim improvement over the previous version under the comparison rule below.
 
+**Canonical seed set (mandated).** Multi-seed runs use the training seeds $\{42, 99, 12345\}$, in that order: seed 42 is also the single-seed and canonical-chain seed, then 99, then 12345. Additional seeds extend this set; they never replace it. Any departure requires the Researcher's explicit approval and must be stated in the `seeds` column of `docs/ledger.md` and in the version's `results.md`. Training seeds are independent of the fixed pool seeds of §6 (in-loop 12345, full 23456) and of `eval.bootstrap.seed`; the shared value 12345 carries no coupling between a training run and the in-loop pool.
+
 **Within-seed bootstrap.** For each seed, sample episodes with replacement `eval.bootstrap.n_resample` times (default 1000) using `eval.bootstrap.seed` (default 20260508). For each resample, compute `cps` and components. The percentile CI is the 2.5/97.5 quantiles of the resample distribution, using NumPy's default linear interpolation method (`numpy.percentile(..., method="linear")`); the method is pinned so CIs are reproducible. The canonical input is the per-episode records of `eval_episodes.csv` (§7.3); the bootstrap consumes already-resolved per-episode outcomes and does not re-derive them.
 
 **Across-seed aggregation.** Report:

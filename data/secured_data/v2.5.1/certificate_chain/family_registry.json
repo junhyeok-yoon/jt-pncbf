@@ -1,0 +1,29 @@
+{
+  "V_hat_0": {
+    "path": "data/secured_data/v2.5.1/seed42/checkpoints/best.pt",
+    "sha256": "de804a22cb3ed28b107e6a3451ad49898d0ca09e6719f6f96d7ac2e368b3ec52"
+  },
+  "T_1": {
+    "vhat": "data/secured_data/v2.5.1/seed42/checkpoints/best.pt",
+    "pi": "data/previous_runs/v2.5.1__20260711-055538__seed42/checkpoints/best.pt",
+    "pi_sha256": "dd11055c1c61e90ce523a625248ba88aa889afe1f9d371dce85329bee2e05810"
+  },
+  "V_hat_1": {
+    "path": "data/previous_runs/v2.5.1__it1vhat__seed42/checkpoints/best.pt",
+    "sha256": "b87b97a3208434bbe40b80bb70cf79cdcf037075c47b49acd5724170818960e3"
+  },
+  "T_2": {
+    "vhat": "data/previous_runs/v2.5.1__it1vhat__seed42/checkpoints/best.pt",
+    "pi": "data/previous_runs/v2.5.1__20260711-211958__seed42/checkpoints/best.pt",
+    "pi_sha256": "547d37651eaf3a88bcc7a653610d8e66596c28a3504b392e7802700d15ee4098"
+  },
+  "V_hat_2dm": {
+    "path": "data/previous_runs/v2.5.1__vhat2dm__seed42/checkpoints/best.pt",
+    "sha256": "b8df7b0236ba849433910559b7b95ad4ad69c1dee50d2fc1015fb0a5f1e0c90e"
+  },
+  "T_3": {
+    "vhat": "data/previous_runs/v2.5.1__vhat2dm__seed42/checkpoints/best.pt",
+    "pi": "data/previous_runs/v2.5.1__20260712-051652__seed42/checkpoints/best.pt",
+    "pi_sha256": "024620eae04615913286d7b3ced248dc375f9036f8cc3919a874464d37f576db"
+  }
+}

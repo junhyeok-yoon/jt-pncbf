@@ -86,7 +86,7 @@ The verification harness (`05_code` §5) must remain green. If a source change b
 
 The Executor runs a **smoke** stage first (`03_train` §6) on one seed. The smoke must pass — gradient-routing assertions in §6, no NaN/Inf, the loop completes — before any full run.
 
-The Executor then launches the **full** stage for each seed in the eval plan (≥ 3, ideally in parallel if hardware allows). Each run writes to `data/v{X.Y.Z}__{TIMESTAMP}__seed{N}/`. The Researcher monitors via `tensorboard --logdir data/`.
+The Executor then launches the **full** stage for each seed in the eval plan — the canonical seed set $\{42, 99, 12345\}$ of `04_eval` §5 (≥ 3, ideally in parallel if hardware allows). Each run writes to `data/v{X.Y.Z}__{TIMESTAMP}__seed{N}/`. Every other artifact the version produces — eval-only diagnostics, label or dataset generation, supervised regression, demonstration sets, registries — is written to a directory following the `<run_id>` formats of `05_code` §3: the timestamp is never omitted, and no produced file is left loose at the top of `data/`. The Researcher monitors via `tensorboard --logdir data/`.
 
 If a halt triggers (`03_train` §4.7), the Executor reports the halt reason and the step at which it occurred, and waits for the Researcher's instruction. It does **not** auto-restart with adjusted hyperparameters.
 
@@ -165,8 +165,10 @@ The Executor copies the chosen final run(s) from `data/<run_id>/` into the secur
 1. `v<X>_results.md` authored/finalized at the `docs/versions/` main level.
 2. `docs/ledger.md` row updated. On SOTA change: bold the new row and add the standing
    line; mark the prior SOTA row superseded (keep history).
-3. Run data moved: all of the version's run dirs from `data/` to `data/previous_runs/`
-   (whole run_dir, as-is). The SOTA run is additionally saved to
+3. Run data moved: all of the version's artifact directories (`05_code` §3 — training runs,
+   eval-only diagnostics, dataset/regression/demonstration/registry runs) from `data/` to
+   `data/previous_runs/` (whole directory, as-is; nothing is renamed — §2.1 item 8). The
+   SOTA run is additionally saved to
    `data/secured_data/<version>/seed<N>/` as the standard file set (`checkpoints/`,
    `figures/`, `config.yaml`, `eval_metrics.csv`, `eval_episodes.csv`, `pool_manifest.json`,
    `git_commit.txt`, `report.md`, `status.json`, `ADOPTED.md`).

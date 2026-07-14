@@ -169,10 +169,16 @@ data/
             └── multi_seed_report.md
 ```
 
-**`<run_id>` formats:**
+**`<run_id>` formats.** Every artifact directory under `data/` — without exception — carries the version and a timestamp:
 
 - **Training runs:** `vX.Y.Z__YYYYMMDD-HHMMSS__seed<N>` (e.g., `v2.0.1__20260529-171057__seed42`). This is the canonical form.
 - **Eval-only diagnostic runs** (a run that does no training, only re-evaluates an existing checkpoint under an ablation): `vX.Y.Z__YYYYMMDD-HHMMSS__<descriptive>_seed<N>`, where `<descriptive>` is a short snake_case tag (e.g. `hardnet_oc`, `cbfqp_oc`, `slowmpc`). The descriptive form must never collide with a training run id (see `04_eval` §7.1).
+- **Non-training artifact runs** — dataset or label generation, supervised regression, demonstration collection, registries, and any other produced artifact set: `vX.Y.Z__YYYYMMDD-HHMMSS__<descriptive>[_seed<N>]`, under the same rules; `_seed<N>` is appended only when a seed identifies the artifact.
+
+Two rules follow, and they admit no exception:
+
+- **The timestamp is never omitted.** A directory named `vX.Y.Z__<descriptive>` is malformed regardless of what it holds.
+- **No loose files at the top of `data/`.** Every produced file lives inside a `<run_id>/` directory; a registry or manifest that spans several runs gets its own `<run_id>/` directory.
 
 The Researcher / Strategist sees the `<run_id>` format consistently across `metrics.csv`, `ledger.md`, and TensorBoard.
 

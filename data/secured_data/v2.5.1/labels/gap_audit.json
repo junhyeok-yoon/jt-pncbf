@@ -1,0 +1,14 @@
+{
+  "n_states": 241100,
+  "n_gap": 3072,
+  "frac_cert_m0": 0.8471256739941933,
+  "frac_cert_m17": 0.8598672749896309,
+  "certified_fraction_ratio": 0.9851818979904878,
+  "frac_C": 0.7766927083333334,
+  "remainder_breakdown": {
+    "not_closing_not_reachable": 3,
+    "closing_not_reachable": 395,
+    "not_closing_reachable": 288,
+    "C_satisfied": 2386
+  }
+}

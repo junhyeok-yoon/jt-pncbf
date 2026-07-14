@@ -62,22 +62,30 @@ agent learns from; how conservatively the agent then acts (its safety margin) is
 control-side choice defined in `02_control`.
 
 Let $\text{dist}_i = \|p - c_i\|$ be the distance from the position $p = (px, py)$ to
-obstacle center $c_i$ with radius $r_i$, over active obstacles.
+obstacle center $c_i$ with radius $r_i$, over active obstacles, and let the clearance to
+obstacle $i$ be $\text{clr}_i = \text{dist}_i - r_i$.
 
-- **Signed safety value** $h(x)$:
-  $h_i = (r_i - \text{dist}_i) / h_{\text{scale}}$, then
+- **Signed safety value** $h(x)$ (`src/common/signed_h.py`):
+  $h_i = 1 - 2\,\mathrm{clamp}(\text{clr}_i / h_{\text{scale}},\ 0,\ 1)$, then
   $h(x) = \mathrm{clip}(\max_i h_i,\ -1,\ 1)$.
-  - $h(x) > 0$ inside / overlapping an obstacle (unsafe); $h(x) < 0$ outside (safe).
-  - $h(x) = 0$ lies exactly on the collision boundary $\text{dist}_i = r_i$. No safety
-    margin is baked in — the signal marks true contact, not an inflated obstacle.
-  - $h_{\text{scale}} > 0$ is a fixed normalization constant
-    (`base_config.env.h_scale`, default 1.0) controlling the slope; it is not a safety
-    margin.
+  - $h(x) = +1$ at and inside contact ($\text{clr}_i \le 0$); $h(x) = -1$ once every
+    clearance reaches $h_{\text{scale}}$; between the two the ramp is linear with slope
+    $-2 / h_{\text{scale}}$ per unit of clearance.
+  - **Zero level set:** $h(x) = 0$ at clearance $\text{clr}_i = h_{\text{scale}} / 2$
+    (0.5 m at the default $h_{\text{scale}}$). The zero set is an *inflated* obstacle
+    boundary, not the contact surface — the safety signal the agent learns carries a
+    built-in geometric margin of $h_{\text{scale}} / 2$, and every certificate, filter,
+    and terminal built on $h$ inherits it.
+  - $h_{\text{scale}} > 0$ (`base_config.env.h_scale`, default 1.0) sets both the ramp
+    slope and the inflation. It is distinct from the control-side
+    $\gamma_{\text{margin}}$ of `02_control` §5.1, which shifts $h$ and is applied on top
+    of it.
 - **Collision predicate** (boolean, used for outcomes): collided iff
   $\text{dist}_i < r_i$ for any active obstacle. **No margin** — contact is exact.
 
-The two are consistent: $h(x) \geq 0$ iff the position is at or inside an obstacle
-boundary.
+The two are ordered, not identical. A state on the $h$ zero set is collision-free by
+$h_{\text{scale}} / 2$; contact is $h(x) = +1$. Reported `collision` outcomes always use
+the exact contact predicate, never the $h$ sign.
 
 ### 1.5 Goal and success
 

@@ -1,0 +1,25 @@
+{
+  "fixed_it0_state_set_n": 1241100,
+  "A6_family2p": {
+    "P_A1": "PASS",
+    "monotonicity_violations": 0,
+    "frac_cert": 0.8729738697635836,
+    "cert_ratio_over_M17": 1.015242578889993,
+    "gap_recovery": 0.9873046875,
+    "eps_q10_3seed": 0.0,
+    "canonical": "V_hat_2p (it2vhatP seed42)"
+  },
+  "P1_vhat2dm": {
+    "P_P1a": true,
+    "eps_q10_uniform": 0.0,
+    "eps_q10_onpolicy": 0.0,
+    "canonical": "V_hat_2dm (vhat2dm seed42)"
+  },
+  "P1_5_family3": {
+    "P_A1": "PASS",
+    "monotonicity_violations": 0,
+    "frac_cert": 0.8731812525922854,
+    "cert_ratio_over_M17": 1.0154837589357206,
+    "gap_recovery": 0.9895833333333334
+  }
+}

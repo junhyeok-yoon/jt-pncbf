@@ -393,18 +393,38 @@ stopping maneuvers can only lower $V_{\mathcal M}$ pointwise and enlarge the cer
 set (monotone augmentation). State-feedback maneuvers require a finite stopping
 certificate before admission.
 
+**Retention rule for evolving families.** When the family is regenerated across iterations
+— for instance when members are derived from a policy that changes between iterations —
+monotone augmentation holds only if the family is **cumulative**:
+$$\mathcal F_k = \{m_0\} \cup \{T_1, \dots, T_k\},$$
+retaining every member used in any earlier iteration. Retaining only the most recent
+member breaks the subset property $\mathcal F_k \supseteq \mathcal F_{k-1}$ wherever a
+dropped member was the pointwise argmin, and $V_k \le V_{k-1}$ then fails pointwise.
+Cumulative retention costs one additional member simulation per iteration and is the
+condition under which the certified set can only grow. Monotonicity must be asserted
+pointwise on a fixed state set at each iteration; a violation is a defect, not a result.
+
 **Margin.** $\gamma_{\text{margin}}$ applies exactly as in §5.1:
 $h_{\text{eff}} = V_{\mathcal M} + \gamma_{\text{margin}}$ (constant shift; gradients
 unchanged). **Adopted per-channel defaults:** learned-value filters (HardNet / CBF-QP) run
-$\gamma_{\text{margin}} = 0.0$ (historical default, §5.1); the maneuver channel runs
-$\gamma_{\text{margin}} = 0.02$ (v2.5.0 G7 default branch). **Grid-excursion cap:** margins
-interact with the certificate grid through
-$\delta_{\text{grid}} = v_{\max}\, dt_{V_{\mathcal M}} / (2\, h_{\text{scale}})$
-($= 0.0625$ at $dt_{V_{\mathcal M}} = 0.05$) — inter-sample excursions up to
-$\delta_{\text{grid}}$ are invisible to grid values, so margins below the cap cannot remove
-grid-admitted continuous-time excursions (measured: the collision floor is invariant across
-$\gamma_{\text{margin}} \in \{0.02, 0.05\}$, both below the cap; the
-$\gamma_{\text{margin}} \ge \delta_{\text{grid}}$ regime is untested).
+$\gamma_{\text{margin}} = 0.0$ (§5.1); the maneuver channel runs
+$\gamma_{\text{margin}} = 0.02$.
+
+**Grid-excursion cap.** A certificate evaluated on the grid $dt_{V_{\mathcal M}}$ is blind
+to what happens between samples. The worst inter-sample excursion toward an obstacle is,
+in geometric units,
+$\delta_{\text{grid}}^{\text{geom}} = v_{\max}\, dt_{V_{\mathcal M}} / 2$
+($= 0.0625$ m at $dt_{V_{\mathcal M}} = 0.05$); through the $h$ ramp of `01_env` §1.4
+(slope $2 / h_{\text{scale}}$ per unit clearance) the corresponding blind band in
+$h$-units is
+$$\delta_{\text{grid}} = v_{\max}\, dt_{V_{\mathcal M}} / h_{\text{scale}}
+\qquad (= 0.125 \text{ at } dt_{V_{\mathcal M}} = 0.05).$$
+Margins below $\delta_{\text{grid}}$ cannot remove grid-admitted continuous-time
+excursions: the collision floor is invariant across
+$\gamma_{\text{margin}} \in \{0.02, 0.05\}$, both below the cap. The
+$\gamma_{\text{margin}} \ge \delta_{\text{grid}}$ regime is untested. Any verification
+performed on a refined grid $dt_{\text{check}}$ obeys the same law at that grid; state the
+required clearance in geometric units, $v_{\max}\, dt_{\text{check}} / 2$.
 
 **Knobs and semantics.** $dt_{V_{\mathcal M}}$ — the certificate's internal grid — is a
 **safety knob**, independent of the control period $dt_{\text{ctrl}}$: a coarse grid

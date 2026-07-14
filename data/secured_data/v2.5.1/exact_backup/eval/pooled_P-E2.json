@@ -1,0 +1,22 @@
+{
+  "metric": "arm-A cps_v2 full n2000",
+  "per_seed": {
+    "42": 0.8226,
+    "99": 0.828,
+    "12345": 0.7974
+  },
+  "pooled": 0.816,
+  "pooled_ci": [
+    0.8009,
+    0.8294
+  ],
+  "pooled_collision": 0.0018,
+  "P_E1": "PASS (seed42 coll 0.0015<=0.010 AND cps 0.8226>=0.80)",
+  "P_E2": "PASS (pooled 0.8160>=0.79)",
+  "paired_vs_Vhat1_it2ws": {
+    "42": "+0.085 vs R1 0.7378",
+    "99": "+0.091 vs R5 0.7373",
+    "12345": "+0.049 vs R6 0.7482"
+  },
+  "P_I1_2": "PASS (0 verified-start collisions, all arms)"
+}

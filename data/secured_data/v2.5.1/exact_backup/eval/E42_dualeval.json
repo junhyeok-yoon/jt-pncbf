@@ -1,0 +1,38 @@
+{
+  "arm_A": {
+    "reach": 0.909,
+    "collision": 0.0015,
+    "oob": 0.0,
+    "stuck": 0.052,
+    "timeout": 0.0375,
+    "inf_canonical": 0.4552431817542767,
+    "inf_v2": 0.04228341736891154,
+    "cps_legacy": 0.6986770454737169,
+    "cps_v2": 0.8225649747893264,
+    "cps_v2_ci": [
+      0.7974778425569952,
+      0.8469363594631073
+    ],
+    "wall_s": 31.9,
+    "n": 2000
+  },
+  "arm_B": {
+    "reach": 0.909,
+    "collision": 0.0,
+    "oob": 0.0,
+    "stuck": 0.0535,
+    "timeout": 0.0375,
+    "cps_legacy": 0.83675,
+    "cps_v2": 0.83675,
+    "verified_start_frac": 1.0,
+    "overrides_per_ep": 0.19949999451637268,
+    "checks_per_ep": 200.0,
+    "wall_s": 51.3,
+    "shield_overhead_x": 1.61,
+    "verified_start_collisions": 0,
+    "n": 2000
+  },
+  "channel_type": "exact_m0",
+  "vhat": "none",
+  "it_run_dir": "data/previous_runs/v2.5.1__20260713-040300__seed42"
+}

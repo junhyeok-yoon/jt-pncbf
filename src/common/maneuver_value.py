@@ -275,13 +275,25 @@ def build_safety_h_fn(system: System, config: Mapping[str, Any], value_net: Any 
     """Single safety-channel h_fn builder for BOTH collection filtering and policy BPTT (and eval).
 
     safety_channel.type == 'maneuver' -> analytic V_M + gamma_m (library J=1..J, both dirs);
+    'cpi' -> a frozen learned CPI certificate V_hat from safety_channel.checkpoint (raw, gamma_margin=0.0);
     'value' (default) -> the learned make_h_fn(value_net) — value path bit-identical."""
     sc = config.get("safety_channel", {}) or {}
-    if str(sc.get("type", "value")) == "maneuver":
+    ch_type = str(sc.get("type", "value"))
+    if ch_type == "maneuver":
         m = sc.get("maneuver", {}) or {}
         j_max = int(m.get("J", 8))
         lateral_js = list(range(1, j_max + 1))   # build_library adds BOTH +/- per j (both_dirs)
         return make_maneuver_h_fn(system, config, lateral_js=lateral_js,
                                   gamma_m=float(m.get("gamma_m", 0.0)))
+    if ch_type == "cpi":
+        # local import: the safety-channel dispatch reaches the frameworks/cpi adapter (frozen-core
+        # boundary note, 05_code §1 — see phase_i1_loop_report PROTOCOL FOLLOW-UP).
+        from src.frameworks.cpi.channel import make_cpi_h_fn
+        return make_cpi_h_fn(sc["checkpoint"], system)
+    if ch_type == "exact_m0":
+        # v2.5.1 E: exact unclipped single-backup certificate V_m0 as the filter channel (no library, no
+        # learned weights, no clip; x-gradients by autograd). gamma_margin 0.0 (raw-range filter audited).
+        from src.frameworks.cpi.channel import make_exact_m0_h_fn
+        return make_exact_m0_h_fn(system, config)
     from src.common.value_net import make_h_fn
     return make_h_fn(value_net, system)

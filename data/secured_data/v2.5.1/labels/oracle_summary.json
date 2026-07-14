@@ -1,0 +1,8 @@
+{
+  "n_uniform": 200000,
+  "n_boundary": 41100,
+  "wall_s": 132.3,
+  "states_per_s": 1822.2,
+  "fast_vs_reference_max_delta_10k": 2.0265579223632812e-06,
+  "path": "reference (fast=False)"
+}

@@ -1,0 +1,119 @@
+{
+  "version": "v2.5.1",
+  "n_scenes": 20000,
+  "n_states": 1241100,
+  "dt_vm": 0.05,
+  "label_batch": 65536,
+  "t_stop": 25,
+  "split_scene_counts": {
+    "train": 14400,
+    "val": 1600,
+    "calib": 2000,
+    "test": 2000
+  },
+  "summary": {
+    "train": {
+      "n": 893524,
+      "n_uniform": 864000,
+      "n_boundary": 29524,
+      "vraw_q": [
+        -35.803611755371094,
+        -21.637685775756836,
+        -6.7567458152771,
+        -0.024786818772554398,
+        2.2556896209716797
+      ],
+      "frac_vraw_gt0": 0.0980331809777913,
+      "frac_absvraw_le_0.125": 0.01924626534933589
+    },
+    "val": {
+      "n": 99306,
+      "n_uniform": 96000,
+      "n_boundary": 3306,
+      "vraw_q": [
+        -35.86351776123047,
+        -21.64203643798828,
+        -6.734218597412109,
+        -0.011102259159088135,
+        2.2081687450408936
+      ],
+      "frac_vraw_gt0": 0.09922864680885345,
+      "frac_absvraw_le_0.125": 0.018991803113608444
+    },
+    "calib": {
+      "n": 124046,
+      "n_uniform": 120000,
+      "n_boundary": 4046,
+      "vraw_q": [
+        -36.59782791137695,
+        -22.33001708984375,
+        -6.9825639724731445,
+        -0.04236161708831787,
+        2.2249820232391357
+      ],
+      "frac_vraw_gt0": 0.096843106589491,
+      "frac_absvraw_le_0.125": 0.018791416087580413
+    },
+    "test": {
+      "n": 124224,
+      "n_uniform": 120000,
+      "n_boundary": 4224,
+      "vraw_q": [
+        -35.57174301147461,
+        -21.36387825012207,
+        -6.709567070007324,
+        -0.005698287393897772,
+        2.2361230850219727
+      ],
+      "frac_vraw_gt0": 0.09961038124678001,
+      "frac_absvraw_le_0.125": 0.019408487892838742
+    }
+  },
+  "shards": [
+    {
+      "file": "train_000.npz",
+      "split": "train",
+      "n": 250000,
+      "sha256": "bac7eb3b1f0953c6a9b567f4a49396ade48116b468d9fd5976f53f333511b1b2"
+    },
+    {
+      "file": "train_001.npz",
+      "split": "train",
+      "n": 250000,
+      "sha256": "d90a0b7af5b4b72ec94a1dc5acc705970c410f42c11f06c5f6b9adc8306a67d5"
+    },
+    {
+      "file": "train_002.npz",
+      "split": "train",
+      "n": 250000,
+      "sha256": "1677b58802b4252846ea2be32f42c558c0e868702a901154dcaa821a301f9da6"
+    },
+    {
+      "file": "train_003.npz",
+      "split": "train",
+      "n": 143524,
+      "sha256": "3efbf11c2c587e3149ee35c826a6750e04492ae5121a5d31deeb5d030ad2525d"
+    },
+    {
+      "file": "val_000.npz",
+      "split": "val",
+      "n": 99306,
+      "sha256": "cde1d767e3474e28bac70e1f214a304e88c4be16b09eca97b15a65b3b5c64664"
+    },
+    {
+      "file": "calib_000.npz",
+      "split": "calib",
+      "n": 124046,
+      "sha256": "234ec1666e85d7be8581fe89115dae45da62d370ac0deba9296e80941a42ee41"
+    },
+    {
+      "file": "test_000.npz",
+      "split": "test",
+      "n": 124224,
+      "sha256": "1fdeb792678184b515ea4f809811ceb4c0a37590dcd63ff5efb24f57c2bc25fa"
+    }
+  ],
+  "stop_check_float64_max_speed_10k": 6.938893903907228e-18,
+  "label_dtype": "float32",
+  "h_raw": "1 - 2*(dist-r)/h_scale (unclipped signed_h)"
+}

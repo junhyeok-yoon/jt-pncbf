@@ -275,6 +275,7 @@ def run_training(
     value_batch_size_override: int | None = None,
     schedule_n_steps_override: int | None = None,
     resume_ckpt: Path | None = None,
+    pi_init_ckpt: Path | None = None,
     safety_channel: str | None = None,
     w_friction: float | None = None,
 ) -> JTTrainingResult:
@@ -285,6 +286,8 @@ def run_training(
         config.setdefault("safety_channel", {})["type"] = safety_channel
     if w_friction is not None:       # v2.5.0 Stage B-2: filter-friction weight override
         config["loss"]["policy"]["w_friction"] = float(w_friction)
+    if pi_init_ckpt is not None:     # v2.5.1 A2(a): policy warm-start (pi_state only; see the loader below)
+        config["training"]["jt"]["pi_init_ckpt"] = str(pi_init_ckpt)
     if seed is not None:
         config["run"]["seed"] = int(seed)
     if obstacle_distribution is not None:
@@ -338,6 +341,29 @@ def run_training(
         weight_decay=float(config["optim"]["weight_decay"]),
     )
 
+    # v2.5.1 A2(b): horizon-summary critic W (PERFORMANCE CHANNEL ONLY — never touches h_fn, the filter,
+    # the shield, or the labels). W = house value trunk (CPIValue: 3x256 Softplus(beta=20) + raw linear
+    # head) on the dim-19 base observation, own parameters; a Polyak target net for its bootstrap. Built
+    # ONLY when training.jt.horizon_critic.enabled is true; enabled=false leaves everything below inert
+    # (critic_net=None threads through to policy_bptt_loss => byte-identical to baseline).
+    hc_cfg = dict(config["training"]["jt"].get("horizon_critic", {}))
+    horizon_critic_enabled = bool(hc_cfg.get("enabled", False))
+    critic_net = None
+    critic_target = None
+    opt_w = None
+    if horizon_critic_enabled:
+        from src.frameworks.cpi.value import CPIValue
+        if bool(config["loss"]["policy"].get("obs_deficit_feedback", False)):
+            raise ValueError("horizon_critic is not supported with obs_deficit_feedback (dim-19 obs assumed).")
+        critic_net = CPIValue(obs_dim=system.obs_dim).to(device=train_device, dtype=train_dtype)
+        critic_target = deepcopy(critic_net)
+        critic_target.requires_grad_(False)
+        opt_w = optim.AdamW(
+            critic_net.parameters(),
+            lr=float(hc_cfg.get("lr", 1.0e-3)),
+            weight_decay=float(config["optim"]["weight_decay"]),
+        )
+
     # v2.4.0 Step 2: learned recovery conditioning policy pi_b (residual around the analytic brake),
     # trained by an avoid-only BPTT loss and consumed (via a Polyak target copy) by the value target.
     # Only built when value_target.conditioning == "learned_recovery"; otherwise all-None (the brake /
@@ -377,6 +403,23 @@ def run_training(
         start_step = int(ckpt["step"])
         config["run"]["resume_ckpt"] = str(resume_ckpt)
         config["run"]["resume_from_step"] = start_step
+
+    # v2.5.1 A2(a): policy WARM-START. Loads ONLY pi_state into policy_net; the optimizer, LR/sigma
+    # schedules, step counter (start_step stays 0), value net, target net, AND the certificate safety
+    # channel all start fresh — unlike resume_ckpt (a full joint resume). pi_init_ckpt=null (default)
+    # never opens the loader, so a fresh run is byte-identical. Mutually exclusive with resume_ckpt. The
+    # source path + sha256 are stamped into config["run"] for provenance.
+    pi_init_ckpt_cfg = config["training"]["jt"].get("pi_init_ckpt")
+    if pi_init_ckpt_cfg is not None:
+        if resume_ckpt is not None:
+            raise ValueError("pi_init_ckpt (warm-start) and resume_ckpt (full resume) are mutually exclusive.")
+        import hashlib
+        pi_init_path = Path(pi_init_ckpt_cfg)
+        pi_init_sha = hashlib.sha256(pi_init_path.read_bytes()).hexdigest()
+        pi_ckpt = torch.load(pi_init_path, map_location=train_device, weights_only=False)
+        policy_net.load_state_dict(pi_ckpt["pi_state"])
+        config["run"]["pi_init_ckpt"] = str(pi_init_path)
+        config["run"]["pi_init_ckpt_sha256"] = pi_init_sha
 
     # v2.4.2: task_raw_lagged conditioning. pi_b is a Polyak-lagged, grad-free copy of the task policy
     # (in no optimizer), initialized from the starting policy_net. The value target conditions its label
@@ -438,7 +481,10 @@ def run_training(
     # v2.5.0 Stage B: analytic-maneuver safety channel. The value net is not learned (K_V=0), no warmup,
     # and detach_filter_coeffs is forced on (first-order only through the 30-step V_M rollout). Applied
     # AFTER the smoke reduction so it wins over smoke's K_V=1. Value mode (default) is untouched.
-    maneuver_mode = str(config.get("safety_channel", {}).get("type", "value")) == "maneuver"
+    # Frozen safety channel (no value learning, K_V=0): analytic maneuver V_M OR a frozen learned CPI
+    # certificate. Both deploy build_safety_h_fn and use the first-order _ManeuverEvalFramework for in-loop
+    # eval (create_graph=False; no graph accumulation). v2.5.1 CPI loop extends this gate to 'cpi'.
+    maneuver_mode = str(config.get("safety_channel", {}).get("type", "value")) in ("maneuver", "cpi", "exact_m0")
     if maneuver_mode:
         k_v = 0
         vs_warmup_steps = 0
@@ -587,6 +633,7 @@ def run_training(
                 config=config,
                 step=step,
                 log=do_log,
+                critic_net=critic_net,
             )
             pi_finite = bool(policy_scalars.pop("pi_finite"))
             leak_exceeds = bool(policy_scalars.pop("leak_exceeds"))
@@ -606,6 +653,29 @@ def run_training(
                 last_policy_loss = policy_scalars["L_pi_total"]
                 last_pi_grad = policy_scalars["grad_norm_pi"]
                 max_policy_leak = max(max_policy_leak, policy_scalars["grad_leak_VS_from_Lpi"])
+
+        # v2.5.1 A2(b): one horizon-critic W regression step per macro step (independent of the vs_warmup
+        # window). Grad-free 30-step rollout of the DEPLOYED (filtered) policy + Polyak-target bootstrap;
+        # W never affects collection, the filter, or eval. Inert when horizon_critic.enabled is false.
+        if horizon_critic_enabled:
+            critic_scalars = _critic_updates(
+                system=system,
+                critic_net=critic_net,
+                critic_target=critic_target,
+                optimizer=opt_w,
+                value_net=value_net,
+                policy_net=policy_net,
+                buffers=buffers,
+                torch_generator=torch_rng,
+                batch_size=policy_batch_size,
+                config=config,
+                log=do_log,
+            )
+            if not critic_scalars.pop("critic_finite"):
+                halt_reason = "nan_or_inf_L_W"
+                break
+            if do_log:
+                value_scalars.update(critic_scalars)
 
         if do_log:
             last_value_loss = value_scalars["L_V_total"]
@@ -1352,6 +1422,7 @@ def _policy_updates(
     config: Mapping[str, Any],
     step: int = 0,
     log: bool = True,
+    critic_net: nn.Module | None = None,
 ) -> dict[str, Any]:
     # Optimizer math runs EVERY step. The grad-leak SAFETY check is decided on-device every step
     # (grad_sq_norm -> single 'leak_exceeds' bool); host-side row scalars + the leak magnitude are
@@ -1395,6 +1466,7 @@ def _policy_updates(
             batch=batch,
             config=config,
             step=step,
+            critic_net=critic_net,
         )
         result.total.backward()
         leak_sq = grad_sq_norm(value_net.parameters())          # on-device sum of squared value grads
@@ -1440,6 +1512,68 @@ def _policy_updates(
     if log:
         out.update(_host_scalars({key: torch.stack(values).mean() for key, values in accum.items()}))
         out["grad_leak_VS_from_Lpi"] = float(leak_sq_max.sqrt().item())
+    return out
+
+
+def _critic_updates(
+    *,
+    system: System,
+    critic_net: nn.Module,
+    critic_target: nn.Module,
+    optimizer: optim.Optimizer,
+    value_net: ValueNetEnsemble,
+    policy_net: ControlNet,
+    buffers: JTReplayBuffers,
+    torch_generator: torch.Generator | None,
+    batch_size: int,
+    config: Mapping[str, Any],
+    log: bool = True,
+) -> dict[str, Any]:
+    # v2.5.1 A2(b): one horizon-critic W regression step. W(obs(x_0)) regresses the n-step (n=30)
+    # bootstrapped discounted stage-cost-to-go of the EXACT L_pi stage cost c = d2 + lambda_v*v2 + mu_u*u2
+    # under the DEPLOYED (filtered) policy: target = sum_{t<n} gamma_c^t c_t + gamma_c^n * W_target(x_n),
+    # entirely grad-free. Then Polyak the target net (house tau). Never touches collection/filter/eval.
+    from src.common.maneuver_value import build_safety_h_fn
+    from src.common.rk4 import rk4_step
+    from src.frameworks.jt_pncbf.losses import _scene_goal
+
+    hc_cfg = config["training"]["jt"]["horizon_critic"]
+    gamma_c = float(hc_cfg["gamma"]); n_step = int(hc_cfg["n_step"])
+    dt = float(config["env"]["dt"]); tau = float(config["optim"]["tau_polyak"])
+    pc = config["loss"]["policy"]; lambda_v = float(pc["lambda_v"]); mu_u = float(pc["mu_u"])
+    detach_coeffs = bool(pc.get("detach_filter_coeffs", False))
+    hardnet = HardNetFilter(system, build_safety_h_fn(system, config, value_net), config)
+
+    batch = buffers.policy.sample_tensor_batch(batch_size, generator=torch_generator)
+    with torch.no_grad():
+        x = system.wrap_state(batch.states.detach())
+        scene = batch.scene
+        obs0 = system.observation(x, scene)
+        cost_to_go = x.new_zeros(x.shape[0])
+        discount = 1.0
+        for _ in range(n_step):
+            u_nom = policy_net(system.observation(x, scene))
+            u_safe, _ = hardnet(x, scene, u_nom, detach_coeffs=detach_coeffs)
+            x = rk4_step(system, x, u_safe, dt)
+            pos_error = system.position(x) - _scene_goal(scene, x)
+            d2 = torch.sum(pos_error * pos_error, dim=1)
+            v2 = system.speed(x) * system.speed(x)
+            u2 = torch.sum(u_safe * u_safe, dim=1)
+            cost_to_go = cost_to_go + discount * (d2 + lambda_v * v2 + mu_u * u2)
+            discount *= gamma_c
+        target = cost_to_go + (gamma_c ** n_step) * critic_target(system.observation(x, scene))
+
+    pred = critic_net(obs0)
+    loss = torch.mean((pred - target) * (pred - target))
+    optimizer.zero_grad(set_to_none=True)
+    loss.backward()
+    grad = nn.utils.clip_grad_norm_(critic_net.parameters(), max_norm=float(config["optim"]["grad_clip"]))
+    optimizer.step()
+    _polyak_update(critic_target, critic_net, tau=tau)
+    out: dict[str, Any] = {"critic_finite": bool(torch.isfinite(loss).item())}
+    if log:
+        out["L_W"] = float(loss.detach().item())
+        out["grad_norm_W"] = float(grad)
     return out
 
 
