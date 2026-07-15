@@ -153,6 +153,7 @@ if __name__ == "__main__":
     import argparse
     import yaml
     from src.envs.double_integrator import DoubleIntegrator
+    from src.envs.unicycle import Unicycle
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
@@ -172,7 +173,8 @@ if __name__ == "__main__":
     cfg = mrg(yaml.safe_load(open(REPO / "src/configs/base_config.yaml")),
               yaml.safe_load(open(REPO / "src/configs/exp_config.yaml")))
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    sysm = DoubleIntegrator(cfg); sysm.u_bounds = sysm.u_bounds.to(device=dev, dtype=torch.float32)
+    _cls = Unicycle if str(cfg.get("run", {}).get("system", "double_integrator")) == "unicycle" else DoubleIntegrator
+    sysm = _cls(cfg); sysm.u_bounds = sysm.u_bounds.to(device=dev, dtype=torch.float32)
     m = collect_onpolicy(cfg, a.out, sysm, dev, a.vhat, a.pi,
                          n_scenes=a.n_scenes, subsample=a.subsample, cap=a.cap)
     print(json.dumps({k: m[k] for k in ("n_states", "states_per_scene_mean", "states_per_scene_min",

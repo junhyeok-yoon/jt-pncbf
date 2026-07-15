@@ -14,7 +14,8 @@ import yaml
 from src.envs.double_integrator import DoubleIntegrator
 from src.envs.scene_init import Scene
 from src.frameworks.cpi.channel import make_cpi_h_fn
-from src.frameworks.cpi.shield import shield_eval, verify_plan, _deadband
+from src.frameworks.cpi.shield import shield_eval, verify_plan
+from src.frameworks.cpi.backup import deadband_brake
 
 REPO = Path(__file__).resolve().parents[1]
 CKPT = REPO / "data/secured_data/v2.5.1/seed42/checkpoints/best.pt"
@@ -47,11 +48,11 @@ def test_verify_plan_clear_and_doomed():
     At = torch.as_tensor(A)[None]
     # clear: at (-3,0) moving away -> pass
     x_clear = torch.tensor([[-3.0, 0.0, -1.0, 0.0]])
-    ok = verify_plan(x_clear, _deadband(x_clear[:, 2:4], 2.0, 0.05), Ct, Rt, At, system, 0.05, 0.01, 40, 0.0125, 2.0, 2.5)
+    ok = verify_plan(x_clear, deadband_brake(x_clear, system, cfg, 0.05), Ct, Rt, At, system, cfg, 0.05, 0.01, 40, 0.0125)
     assert bool(ok[0])
     # doomed: just outside the obstacle at high speed straight into it -> brake cannot clear -> fail
     x_doom = torch.tensor([[1.4, 0.0, 2.5, 0.0]])
-    ok = verify_plan(x_doom, torch.tensor([[2.0, 0.0]]), Ct, Rt, At, system, 0.05, 0.01, 40, 0.0125, 2.0, 2.5)
+    ok = verify_plan(x_doom, torch.tensor([[2.0, 0.0]]), Ct, Rt, At, system, cfg, 0.05, 0.01, 40, 0.0125)
     assert not bool(ok[0])
 
 

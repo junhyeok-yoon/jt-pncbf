@@ -57,7 +57,7 @@ def build_transports(pairs, system, config):
 def family_value(states, C, R, A, G, transports, system, config, *, t_bailout=40, chunk=65536):
     """V_k over the bail-out family. states [N,4]; per-state scenes [N,K,*], G [N,2]. transports = list of
     (policy_net, h_fn) deploy pairs. Returns V_k [N] (unclipped, min over the family)."""
-    dt = float(config["env"]["dt"]); u_max = float(config["env"]["bounds"]["double_integrator"]["u_max"])
+    dt = float(config["env"]["dt"])   # (v2.5.1's u_max read here was dead — brake goes through m0_value_raw)
     h_scale = float(config["env"]["h_scale"]); params = _hardnet_params(config); bounds = system.u_bounds
     out = []
     for s0 in range(0, states.shape[0], chunk):

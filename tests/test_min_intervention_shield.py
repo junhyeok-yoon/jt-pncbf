@@ -72,19 +72,20 @@ def test_ladder_applied_actions_are_all_verified_on_a_verified_start_batch():
     """Policy-independent ladder property: from a VERIFIED-START state (brake-now clears), the ladder never
     applies an unverified action — a doomed accelerate candidate is rejected and every action the ladder can
     emit (each blend it accepts, and the brake floor) fully verifies. This is the invariant behind P-I1-2."""
-    from src.frameworks.cpi.shield import verify_plan, _deadband
+    from src.frameworks.cpi.shield import verify_plan
+    from src.frameworks.cpi.backup import deadband_brake
     cfg = _cfg(); system = DoubleIntegrator(cfg); system.u_bounds = system.u_bounds.to(torch.float32)
-    dt = float(cfg["env"]["dt"]); u_max = 2.0; v_max = 2.5
+    dt = float(cfg["env"]["dt"])
     # obstacle far enough ahead that braking clears (verified-start), but accelerating straight in overshoots
     C = torch.tensor([[[3.0, 0.0]] + [[0.0, 0.0]] * 11]); R = torch.tensor([[0.5] + [0.0] * 11])
     A = torch.tensor([[True] + [False] * 11])
     x = torch.tensor([[0.0, 0.0, 2.5, 0.0]])
-    u_brake = _deadband(x[:, 2:4], u_max, dt)
-    assert bool(verify_plan(x, u_brake, C, R, A, system, dt, 0.01, 40, 0.0125, u_max, v_max)[0]), \
+    u_brake = deadband_brake(x, system, cfg, dt)
+    assert bool(verify_plan(x, u_brake, C, R, A, system, cfg, dt, 0.01, 40, 0.0125)[0]), \
         "state must be verified-start (brake clears)"
     applied = u_brake
     for lam in (0.75, 0.5, 0.25):
         u_lam = lam * torch.tensor([[2.0, 0.0]]) + (1 - lam) * u_brake
-        if bool(verify_plan(x, u_lam, C, R, A, system, dt, 0.01, 40, 0.0125, u_max, v_max)[0]):
+        if bool(verify_plan(x, u_lam, C, R, A, system, cfg, dt, 0.01, 40, 0.0125)[0]):
             applied = u_lam; break
-    assert bool(verify_plan(x, applied, C, R, A, system, dt, 0.01, 40, 0.0125, u_max, v_max)[0])
+    assert bool(verify_plan(x, applied, C, R, A, system, cfg, dt, 0.01, 40, 0.0125)[0])

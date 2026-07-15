@@ -108,27 +108,41 @@ evaluation — a full-pool final, an in-loop best, or an eval-only re-evaluation
 existing checkpoint under a changed deploy axis — the Executor appends one row to
 `docs/ledger.md` as part of completing the eval task, without waiting for a separate
 instruction. The row uses the current schema
-(`version | date | parent | seeds | cps_v2 | eval_source | reach | collision | oob | stuck | timeout | infeas | sat_rate | cps | verdict`;
+(`version | system | date | parent | seeds | cps_v2 | eval_source | reach | collision | oob | stuck | timeout | infeas | sat_rate | cps | verdict`;
+`system` is the evaluated system's `System.name` (`05_code` §2 — e.g. `double_integrator`,
+`unicycle`), read from the run's `config.yaml` and never inferred from the run-id or the
+verdict text;
 `cps_v2` is scored per `04_eval` §1's current definition — `n/a` = filter semantics out of
 scope (e.g. CBF-QP slack rows), `-` = artifact unrecoverable),
 filled from the run's real eval artifacts (never approximated; blank any field the eval did
 not record). `eval_source` states provenance: `full_n2000`, `inloop_n500@<step>`, or
 `eval_only(<note>)` for a re-evaluation that is not a new training run (e.g. a filter swap on
-an adopted checkpoint). `parent` records the source checkpoint for an eval-only or
+an adopted checkpoint). When one checkpoint is reported under more than one deployment arm,
+each arm gets its own row and the arm is carried in `eval_source` (e.g. `full_n2000 (arm A)`);
+an arm that did not exist for a given run is recorded `n/a`, which is not a regression.
+`parent` records the source checkpoint for an eval-only or
 warm-started row. The ledger is a docs file the Executor may edit; protocol files are never
 edited by the Executor.
 
-**Per-version SOTA marking (bold).** For each version block in `docs/ledger.md`, the
-single row with the highest `cps` among rows with `eval_source = full_n2000` of that version
-is marked as the version's SOTA by bolding every cell in that row (markdown `**...**`).
-At most one row per version is bolded. Rows with `eval_source` of `inloop_n500@<step>` or
+**`cps` is not commensurable across systems.** Systems differ in dynamics, control bounds, and
+evaluation pools, so a `cps` measured on one system is never compared with, ranked against, or
+substituted for a `cps` measured on another. The comparison rule of `04_eval` §5 and the SOTA
+rule below are both scoped to a single `system`. A cross-system comparison is reported as
+"comparison unavailable" (§5), never as a caveated number.
+
+**Per-version, per-system SOTA marking (bold).** Within each version block in
+`docs/ledger.md`, and separately for each `system` appearing in that block, the single row with
+the highest `cps` among rows with `eval_source = full_n2000` is marked as that (version, system)
+SOTA by bolding every cell in the row (markdown `**...**`).
+At most one row per (version, system) pair is bolded. Rows with `eval_source` of `inloop_n500@<step>` or
 `eval_only(<note>)` are not eligible for SOTA bolding. Rows from a **different deployment
 or training class** than the standing comparison basis — e.g. training-free
 analytic-barrier arms, or evaluations at non-default deploy rates ($dt_{\text{ctrl}}$,
 $dt_{V_{\mathcal M}}$) — are likewise never SOTA-bolded on `cps` alone; the Executor
 flags such rows for Researcher classification instead. When a new full-pool result
-supersedes the previous version SOTA, the previous bold is removed and the new row is
-bolded in the same edit that registers the new row.
+supersedes the previous SOTA **of the same system**, the previous bold is removed and the new
+row is bolded in the same edit that registers the new row. A system's first full-pool row
+establishes that system's baseline and supersedes nothing.
 
 **Ledger inclusion and formatting.** Smoke runs and runs that produced no usable
 evaluation row are not registered. Numeric outcome fields (`reach`, `collision`, `oob`,

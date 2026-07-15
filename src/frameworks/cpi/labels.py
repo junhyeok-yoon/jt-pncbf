@@ -28,15 +28,13 @@ import torch
 
 from src.common.rk4 import rk4_step
 from src.envs.scene_init import sample_train_scene
+from src.frameworks.cpi.backup import brake_accel_bound, deadband_brake, speed_max, t_stop  # noqa: F401
 
 Tensor = torch.Tensor
 NEG_INF = -1.0e30
 
-
-def t_stop(config: Mapping[str, Any]) -> int:
-    env = config["env"]; u_max = float(env["bounds"]["double_integrator"]["u_max"])
-    v_max = float(env["bounds"]["double_integrator"]["v_max"]); dt = float(config["cpi"]["labels"]["dt_vm"])
-    return int(math.ceil(v_max / (u_max * dt)))
+# t_stop / deadband_brake / the bounds accessors are the single system-dispatched primitive (backup.py).
+# Re-exported here for the existing labels API; `t_stop(system, config, dt)` (was `t_stop(config)` in v2.5.1).
 
 
 def label_streams(config: Mapping[str, Any]) -> dict[str, np.random.Generator]:
@@ -49,8 +47,10 @@ def label_streams(config: Mapping[str, Any]) -> dict[str, np.random.Generator]:
 
 
 def sample_scenes(n: int, rng: np.random.Generator, config: Mapping[str, Any]) -> list[Any]:
-    """n training scenes via the 03_train §1 sampler (§1.3 acceptance predicates apply). rng = scene stream."""
-    return [sample_train_scene(rng, config, "double_integrator") for _ in range(n)]
+    """n training scenes via the 03_train §1 sampler (§1.3 acceptance predicates apply). rng = scene stream.
+    System threaded from `config.run.system` (the sampler already supports {double_integrator, unicycle})."""
+    system_name = str(config.get("run", {}).get("system", "double_integrator"))
+    return [sample_train_scene(rng, config, system_name) for _ in range(n)]
 
 
 def stack_scene_obstacles(scenes: list[Any], device, dtype=torch.float32):
@@ -78,15 +78,15 @@ def outside_all_obstacles(p: Tensor, C: Tensor, R: Tensor, A: Tensor) -> Tensor:
 
 
 def m0_value_raw(states: Tensor, C: Tensor, R: Tensor, A: Tensor, system, config, dt_vm: float) -> Tensor:
-    """Batched V_raw over the m_0 brake rollout. states [N,4]; per-state obstacles [N,K,*]. -> V_raw [N]."""
-    env = config["env"]; h_scale = float(env["h_scale"])
-    u_max = float(env["bounds"]["double_integrator"]["u_max"])
-    tstop = t_stop(config)
+    """Batched V_raw over the m_0 brake rollout (system-dispatched brake + T_stop). states [N, state_dim];
+    per-state obstacles [N,K,*]. -> V_raw [N]. Position via `x[:, :2]` (both systems); the brake action and
+    horizon dispatch on `system.name` (backup.py)."""
+    h_scale = float(config["env"]["h_scale"])
+    tstop = t_stop(system, config, dt_vm)
     x = states
     vraw = h_raw_position(x[:, :2], C, R, A, h_scale)
     for _ in range(tstop):
-        v = x[:, 2:4]
-        u = torch.where(v.abs() > u_max * dt_vm, -u_max * torch.sign(v), -v / dt_vm)   # deadband brake m_0
+        u = deadband_brake(x, system, config, dt_vm)                                    # m_0 (DI or unicycle)
         x = rk4_step(system, x, u, dt_vm)
         vraw = torch.maximum(vraw, h_raw_position(x[:, :2], C, R, A, h_scale))
     return vraw
@@ -127,7 +127,7 @@ def sample_boundary_states(pos_u, vel_u, sid_u, vraw_u, scenes_obs, state_rng, c
     pos outside obstacles up to 20 redraws) until states_per_scene_boundary or candidates exhausted."""
     lc = config["cpi"]["labels"]; band = float(lc["boundary_band"]); cap = int(lc["states_per_scene_boundary"])
     jp = float(lc["jitter_pos_sigma"]); jv = float(lc["jitter_vel_sigma"])
-    v_max = float(config["env"]["bounds"]["double_integrator"]["v_max"])
+    v_max = float(config["env"]["bounds"][str(config.get("run", {}).get("system", "double_integrator"))]["v_max"])
     C, R, A, _ = scenes_obs; S = C.shape[0]
     sid_np = sid_u.cpu().numpy(); vr_np = vraw_u.cpu().numpy()
     posc, velc, sidc = [], [], []
@@ -197,7 +197,7 @@ def build_dataset(config, out_dir: Path, system, device, n_scenes=None, dtype=to
     """Full label pipeline: sample scenes -> uniform + boundary states -> V_raw -> obs -> split by scene ->
     npz shards + manifest.json (SHA-256, per-split counts + V_raw summary). Returns the manifest dict."""
     lc = config["cpi"]["labels"]; dt_vm = float(lc["dt_vm"]); lb = int(lc["label_batch"])
-    v_max = float(config["env"]["bounds"]["double_integrator"]["v_max"]); world = float(config["env"]["world_lim"])
+    v_max = speed_max(system, config); world = float(config["env"]["world_lim"])
     n_scenes = int(lc["n_scenes"]) if n_scenes is None else int(n_scenes)
     streams = label_streams(config)
     scenes = sample_scenes(n_scenes, streams["scene"], config)
@@ -246,7 +246,7 @@ def build_dataset(config, out_dir: Path, system, device, n_scenes=None, dtype=to
     sub = state_rng.integers(0, pos.shape[0], size=min(10000, pos.shape[0]))
     stop_max = _stop_check_float64(pos[sub], vel[sub], system, config)
     manifest = {"version": config["run"]["version"], "n_scenes": n_scenes, "n_states": int(pos.shape[0]),
-                "dt_vm": dt_vm, "label_batch": lb, "t_stop": t_stop(config),
+                "dt_vm": dt_vm, "label_batch": lb, "t_stop": t_stop(system, config, dt_vm),
                 "split_scene_counts": {k: len(v) for k, v in parts.items()},
                 "summary": summary, "shards": shards,
                 "stop_check_float64_max_speed_10k": stop_max,
@@ -308,13 +308,11 @@ def build_oracle(config, out_dir: Path, dataset_dir: Path, system, device, dtype
 
 
 def _stop_check_float64(pos, vel, system, config):
-    from src.envs.double_integrator import DoubleIntegrator
     cfg = config; dev = pos.device
-    s64 = DoubleIntegrator(cfg); s64.u_bounds = s64.u_bounds.to(device=dev, dtype=torch.float64)
-    dt = float(cfg["cpi"]["labels"]["dt_vm"]); u_max = float(cfg["env"]["bounds"]["double_integrator"]["u_max"])
+    s64 = type(system)(cfg); s64.u_bounds = s64.u_bounds.to(device=dev, dtype=torch.float64)  # same class, float64
+    dt = float(cfg["cpi"]["labels"]["dt_vm"])
     x = torch.cat([pos, vel], 1).to(torch.float64)
-    for _ in range(t_stop(cfg)):
-        v = x[:, 2:4]
-        u = torch.where(v.abs() > u_max * dt, -u_max * torch.sign(v), -v / dt)
+    for _ in range(t_stop(s64, cfg, dt)):
+        u = deadband_brake(x, s64, cfg, dt)
         x = rk4_step(s64, x, u, dt)
-    return float(torch.linalg.norm(x[:, 2:4], dim=1).max())
+    return float(s64.speed(x).max())

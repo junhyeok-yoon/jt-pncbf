@@ -184,7 +184,13 @@ def plot_cbf_contours(
     plt.rcParams["font.family"] = FONT_FAMILY
     world_lim = float(config["env"]["world_lim"])
     device, dtype = _module_device_dtype(value_net, system)
-    h_fn = make_h_fn(value_net, system, use_target=False)
+    # v2.5.2 fix: plot the DEPLOYED filter h (build_safety_h_fn) not the trainer's value_net. In a
+    # frozen-channel run (exact_m0/maneuver/cpi) value_net is fresh-init (K_V forced to 0), so make_h_fn
+    # would render a random field; build_safety_h_fn returns the actual deployed certificate. Value mode
+    # (default) -> build_safety_h_fn returns make_h_fn(value_net), so it is unchanged there.
+    from src.common.maneuver_value import build_safety_h_fn
+    from types import SimpleNamespace
+    h_fn = build_safety_h_fn(system, config, value_net)
 
     x_axis = torch.linspace(-world_lim, world_lim, resolution, device=device, dtype=dtype)
     y_axis = torch.linspace(-world_lim, world_lim, resolution, device=device, dtype=dtype)
@@ -210,12 +216,19 @@ def plot_cbf_contours(
     contour_mappable = None
 
     for row, scene in enumerate(scenes[:2]):
+        # tensorised scene (obstacle arrays as [K,*] tensors) so the deployed h_fn — value-net OR the
+        # frozen exact_m0/maneuver channels — receives torch obstacles; both broadcast [K,*] against the grid.
+        scene_t = SimpleNamespace(
+            obstacle_centers=torch.as_tensor(scene.obstacle_centers, dtype=dtype, device=device),
+            obstacle_radii=torch.as_tensor(scene.obstacle_radii, dtype=dtype, device=device),
+            obstacle_active=torch.as_tensor(scene.obstacle_active, dtype=torch.bool, device=device),
+            goal=torch.as_tensor(np.asarray(scene.goal), dtype=dtype, device=device))
         for col, (velocity_label, velocity_value) in enumerate(velocity_columns):
             axis = axes[row, col]
             velocity = velocity_value.to(device=device, dtype=dtype)
             states = _contour_states(system, positions, velocity)
             with torch.no_grad():
-                h_values = torch.clamp(h_fn(states, scene), -1.0, 1.0)
+                h_values = torch.clamp(h_fn(states, scene_t), -1.0, 1.0)
             h_grid = _to_numpy(h_values.reshape(resolution, resolution))
             h_min = min(h_min, float(np.min(h_grid)))
             h_max = max(h_max, float(np.max(h_grid)))

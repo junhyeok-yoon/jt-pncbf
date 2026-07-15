@@ -40,7 +40,7 @@ def test_brake_stop_and_hold_float64():
     d = torch.empty(4096, 2, device=dev, dtype=DT).uniform_(-1.0, 1.0)
     d = d / d.norm(dim=1, keepdim=True).clamp_min(1e-12)
     x[:, 2:] = d * torch.empty(4096, 1, device=dev, dtype=DT).uniform_(0.0, v_max)
-    for _ in range(L.t_stop(cfg)):
+    for _ in range(L.t_stop(system, cfg, dtv)):
         v = x[:, 2:4]
         u = torch.where(v.abs() > u_max * dtv, -u_max * torch.sign(v), -v / dtv)
         x = rk4_step(system, x, u, dtv)
