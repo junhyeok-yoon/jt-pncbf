@@ -225,7 +225,7 @@ def _pool_payload(pool: EvaluationPool) -> dict[str, Any]:
     start = np.stack([scene.start for scene in pool.scenes])
     goal = np.stack([scene.goal for scene in pool.scenes])
     init_velocity = _stack_init_velocity(pool.scenes)
-    return {
+    payload = {
         "pool_format_version": POOL_FORMAT_VERSION,
         "system": pool.system,
         "seed": pool.seed,
@@ -237,6 +237,15 @@ def _pool_payload(pool: EvaluationPool) -> dict[str, Any]:
         "goal": goal,
         "init_velocity": init_velocity,
     }
+    if pool.scenes[0].system == "quadrotor_planar":
+        # quadrotor_planar carries attitude + angular rate in addition to the 2D linear velocity.
+        payload["init_attitude"] = np.array(
+            [float(scene.initial_attitude) for scene in pool.scenes], dtype=np.float64
+        )
+        payload["init_omega"] = np.array(
+            [float(scene.initial_omega) for scene in pool.scenes], dtype=np.float64
+        )
+    return payload
 
 
 def _stack_init_velocity(scenes: list[Scene]) -> np.ndarray:
@@ -260,12 +269,22 @@ def _scenes_from_payload(payload: Mapping[str, Any]) -> list[Scene]:
     system = str(payload["system"])
     n_scenes = int(payload["n_scenes"])
     init_velocity = np.asarray(payload["init_velocity"], dtype=np.float64)
+    init_attitude = payload.get("init_attitude")
+    init_omega = payload.get("init_omega")
     scenes = []
     for idx in range(n_scenes):
+        initial_attitude = None
+        initial_omega = None
         if system == "double_integrator":
             initial_velocity = init_velocity[idx]
             initial_speed = None
             initial_heading = None
+        elif system == "quadrotor_planar":
+            initial_velocity = init_velocity[idx]
+            initial_speed = None
+            initial_heading = None
+            initial_attitude = float(init_attitude[idx])
+            initial_omega = float(init_omega[idx])
         else:
             initial_velocity = None
             initial_speed = float(init_velocity[idx, 0])
@@ -282,6 +301,8 @@ def _scenes_from_payload(payload: Mapping[str, Any]) -> list[Scene]:
                 initial_velocity=initial_velocity,
                 initial_speed=initial_speed,
                 initial_heading=initial_heading,
+                initial_attitude=initial_attitude,
+                initial_omega=initial_omega,
             )
         )
     return scenes

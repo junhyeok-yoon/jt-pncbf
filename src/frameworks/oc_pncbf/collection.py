@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 import torch
 
+from src.common.quadrotor_barrier import value_target_barrier
 from src.common.signed_h import signed_h
 from src.common.system import System
 from src.envs.scene_batch import BatchedScene, batch_scenes, initial_states_from_batch
@@ -554,6 +555,7 @@ def collect(
     h_scale: float = 1.0,
     storage_device: torch.device | None = None,
     storage_dtype: torch.dtype | None = None,
+    config: Mapping[str, Any] | None = None,
 ) -> OCReplayBuffer:
     if buffer is None:
         capacity = max(1, n_episodes * max(1, max_steps))
@@ -566,7 +568,11 @@ def collect(
     x0 = initial_states_from_batch(batched_scene)
     with torch.no_grad():
         states = rollout_lqr(system, batched_scene, x0, max_steps, dt)
-        h_values = signed_h(system.position(states), batched_scene, h_scale)
+        # v2.6.0: value target barrier is h_star (phi + c v^T Re) for the quadrotor, phi otherwise.
+        if config is not None:
+            h_values = value_target_barrier(system, states, batched_scene, config)
+        else:
+            h_values = signed_h(system.position(states), batched_scene, h_scale)
     buffer.append_batch(
         scenes,
         batched_scene,

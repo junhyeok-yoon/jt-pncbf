@@ -24,6 +24,8 @@ class BatchedScene:
     initial_velocity: Tensor | None = None
     initial_speed: Tensor | None = None
     initial_heading: Tensor | None = None
+    initial_attitude: Tensor | None = None
+    initial_omega: Tensor | None = None
 
 
 def batch_scenes(
@@ -65,14 +67,27 @@ def batch_scenes(
         device=device,
     )
 
+    initial_speed = None
+    initial_heading = None
+    initial_attitude = None
+    initial_omega = None
     if scenes[0].initial_velocity is not None:
         initial_velocity = torch.as_tensor(
             np.stack([scene.initial_velocity for scene in scenes]),
             dtype=dtype,
             device=device,
         )
-        initial_speed = None
-        initial_heading = None
+        if system == "quadrotor_planar":
+            initial_attitude = torch.as_tensor(
+                [float(scene.initial_attitude) for scene in scenes],
+                dtype=dtype,
+                device=device,
+            )
+            initial_omega = torch.as_tensor(
+                [float(scene.initial_omega) for scene in scenes],
+                dtype=dtype,
+                device=device,
+            )
     else:
         initial_velocity = None
         initial_speed = torch.as_tensor(
@@ -97,10 +112,25 @@ def batch_scenes(
         initial_velocity=initial_velocity,
         initial_speed=initial_speed,
         initial_heading=initial_heading,
+        initial_attitude=initial_attitude,
+        initial_omega=initial_omega,
     )
 
 
 def initial_states_from_batch(scene: BatchedScene) -> Tensor:
+    if scene.system == "quadrotor_planar":
+        # [px, py, theta, vx, vy, omega]
+        return torch.stack(
+            [
+                scene.start[:, 0],
+                scene.start[:, 1],
+                scene.initial_attitude,
+                scene.initial_velocity[:, 0],
+                scene.initial_velocity[:, 1],
+                scene.initial_omega,
+            ],
+            dim=1,
+        )
     if scene.initial_velocity is not None:
         return torch.cat([scene.start, scene.initial_velocity], dim=1)
     if scene.initial_speed is None or scene.initial_heading is None:

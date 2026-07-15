@@ -6,8 +6,8 @@ termination. It does **not** define the agent (nominal policy, neural CBF, safet
 safety margin) — that is `02_control` — nor how scenes are sampled for training and
 evaluation — that is `03_train` and `04_eval`.
 
-Two systems are defined: **Double Integrator** and **Unicycle**. A planar quadrotor is
-discussed only as a future extension (§3.3).
+Three systems are defined: **Double Integrator**, **Unicycle**, and the **planar quadrotor**
+(§3.3), the last being underactuated (thrust + torque, no direct lateral force).
 
 Run-level knobs (`dt`, control bounds, `v_init_max`, episode length, RNG seed, and other
 tunables) live in `src/configs/` — see `base_config.yaml` for the rarely-changed task and
@@ -204,11 +204,37 @@ not redefine it.
   $\theta$. Absolute position and $\theta$ are excluded, so the observation is invariant
   to both translation and rotation.
 
-### 3.3 Remark: planar quadrotor (future extension)
+### 3.3 Planar quadrotor (underactuated)
 
-A planar quadrotor is underactuated and is not implemented in v2 initially. It can be
-brought under the same interface by wrapping a PD attitude controller that maps a desired
-acceleration command to thrust and torque, reducing the quadrotor to a
-double-integrator-like acceleration-controlled system. The Double Integrator safety
-machinery then transfers with the PD inner loop absorbing the underactuation. This is a
-planned extension, not a current definition.
+- **State** (dim 6): $(px, py, \theta, vx, vy, \omega)$, with attitude $\theta$ maintained in
+  $[-\pi, \pi]$.
+- **Control** (dim 2): $(f_{\text{thr}}, \tau)$ — scalar body-axis thrust
+  $f_{\text{thr}}$ and torque $\tau$, box-bounded $f_{\text{thr}} \in [0,\, 19.62]$,
+  $\tau \in [-0.2,\, 0.2]$ (`exp_config.env.quadrotor_planar`). The channels are **decoupled
+  inputs**: thrust drives $\dot v$ through the attitude-steered axis, torque drives $\dot\omega$
+  only. There is no rotor/arm model — thrust and torque are independent controls, and the box
+  bounds are set per channel rather than from a shared moment arm.
+- **Dynamics** (control-affine, $\dot x = f(x) + g(x) u$), with $Re = (-\sin\theta,\ \cos\theta)$
+  the body thrust axis, mass $\mathsf m$, inertia $J$, gravity $g$ along $-y$:
+  - $\dot{px} = vx$
+  - $\dot{py} = vy$
+  - $\dot{vx} = \tfrac{1}{\mathsf m}\, f_{\text{thr}}\, (-\sin\theta)$
+  - $\dot{vy} = \tfrac{1}{\mathsf m}\, f_{\text{thr}}\, \cos\theta - g$
+  - $\dot\theta = \omega$
+  - $\dot\omega = \tau / J$
+- **Canonical constants:** $\mathsf m = 1.0$, $J = 0.01$, $g = 9.81$, speed clamp
+  $v_{\max} = 2.5$, rate clamp $\omega_{\max} = 4.0$ (`exp_config.env.quadrotor_planar`). After
+  each RK4 step $\|(vx, vy)\|$ is scaled to $v_{\max}$ and $|\omega|$ to $\omega_{\max}$
+  (velocity/rate clamp per §2), and $\theta$ is wrapped to $[-\pi, \pi]$.
+- **Observation** (dim 20, body-frame):
+  $[v^{\text{body}}_x,\, v^{\text{body}}_y,\, \omega,\, \text{goal}^{\text{body}}_x,\,
+  \text{goal}^{\text{body}}_y]$ followed by the Top-5 obstacles, each
+  $(\text{obs}^{\text{body}}_x,\, \text{obs}^{\text{body}}_y,\, r_i)$, where velocity,
+  goal-relative, and obstacle relative positions are rotated into the body frame by $\theta$.
+  Absolute position and $\theta$ are excluded — as with the Unicycle, attitude is observable
+  only through its effect on the body-frame vectors, not as a feature; the angular rate
+  $\omega$ is exposed as a raw scalar.
+
+The barrier machinery that acts on this system (the analytic attitude-augmented $h_\star$ and the
+direct box-aware HardNet projection onto $(f_{\text{thr}}, \tau)$) is defined agent-side in
+`02_control`, not here.

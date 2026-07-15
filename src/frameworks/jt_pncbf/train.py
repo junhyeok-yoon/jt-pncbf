@@ -21,7 +21,9 @@ from src.common.control_net import ControlNet
 from src.common.filter_hardnet import HardNetFilter
 from src.common.system import System
 from src.common.value_net import ValueNetEnsemble, make_h_fn
+from src.common.quadrotor_barrier import lg_authority_loss
 from src.envs.double_integrator import DoubleIntegrator
+from src.envs.quadrotor_planar import QuadrotorPlanar
 from src.envs.scene_init import sample_train_scene
 from src.envs.scene_init_fixed import sample_train_fixed_scene
 from src.envs.unicycle import Unicycle
@@ -270,24 +272,30 @@ def run_training(
     smoke_eval_scenes: int = 2,
     device: str = "auto",
     train_dtype_name: str = "float32",
+    system: str | None = None,
     obstacle_distribution: str | None = None,
     n_steps_override: int | None = None,
     value_batch_size_override: int | None = None,
     schedule_n_steps_override: int | None = None,
     resume_ckpt: Path | None = None,
     pi_init_ckpt: Path | None = None,
+    value_init_ckpt: Path | None = None,
     safety_channel: str | None = None,
     w_friction: float | None = None,
 ) -> JTTrainingResult:
     config = load_effective_config()
     config["run"]["version"] = __version__
     config["run"]["framework"] = "jt_pncbf"
+    if system is not None:           # v2.6.0: explicit system override (exp_config default is quadrotor_planar)
+        config["run"]["system"] = system
     if safety_channel is not None:   # v2.5.0 Stage B: --safety-channel maneuver activates the analytic V_M
         config.setdefault("safety_channel", {})["type"] = safety_channel
     if w_friction is not None:       # v2.5.0 Stage B-2: filter-friction weight override
         config["loss"]["policy"]["w_friction"] = float(w_friction)
     if pi_init_ckpt is not None:     # v2.5.1 A2(a): policy warm-start (pi_state only; see the loader below)
         config["training"]["jt"]["pi_init_ckpt"] = str(pi_init_ckpt)
+    if value_init_ckpt is not None:  # v2.6.0: value warm-start (v_s_state only; see the loader below)
+        config["training"]["jt"]["value_init_ckpt"] = str(value_init_ckpt)
     if seed is not None:
         config["run"]["seed"] = int(seed)
     if obstacle_distribution is not None:
@@ -420,6 +428,24 @@ def run_training(
         policy_net.load_state_dict(pi_ckpt["pi_state"])
         config["run"]["pi_init_ckpt"] = str(pi_init_path)
         config["run"]["pi_init_ckpt_sha256"] = pi_init_sha
+
+    # v2.6.0: VALUE warm-start. Loads ONLY v_s_state (+ target) into value_net/target_value_net; policy,
+    # optimizers, schedules, step counter start FRESH. For M4 (JT joint) warm-started from the M1 OC value
+    # V^{h_star, pi_nominal} (an OC checkpoint has no pi_state, so resume_ckpt does not apply). Mutually
+    # exclusive with resume_ckpt; the source path + sha256 are stamped for provenance.
+    value_init_ckpt_cfg = config["training"]["jt"].get("value_init_ckpt")
+    if value_init_ckpt_cfg is not None:
+        if resume_ckpt is not None:
+            raise ValueError("value_init_ckpt (warm-start) and resume_ckpt (full resume) are mutually exclusive.")
+        import hashlib as _hl
+        vi_path = Path(value_init_ckpt_cfg)
+        vi_sha = _hl.sha256(vi_path.read_bytes()).hexdigest()
+        vi_ckpt = torch.load(vi_path, map_location=train_device, weights_only=False)
+        value_net.load_state_dict(_state_to_dtype(vi_ckpt["v_s_state"], train_dtype))
+        target_value_net.load_state_dict(
+            _state_to_dtype(vi_ckpt.get("v_s_target_state", vi_ckpt["v_s_state"]), train_dtype))
+        config["run"]["value_init_ckpt"] = str(vi_path)
+        config["run"]["value_init_ckpt_sha256"] = vi_sha
 
     # v2.4.2: task_raw_lagged conditioning. pi_b is a Polyak-lagged, grad-free copy of the task policy
     # (in no optimizer), initialized from the starting policy_net. The value target conditions its label
@@ -1244,6 +1270,9 @@ def _value_updates(
         "sob_grad_label_v_mean": [], "sob_dhdv_pred_mean": [], "sob_v_spline_mean": [],
         "sob_gate_mean": [], "sob_gate_frac_active": [], "sob_gate_dhdv_pred": [],
     }
+    lg_auth_weight = float(config["loss"]["value"].get("lg_authority", {}).get("weight", 0.0))
+    lg_auth_enabled = lg_auth_weight > 0.0 and getattr(system, "name", None) == "quadrotor_planar"
+    lg_logs: dict[str, list[float]] = {"L_lg_raw": [], "lg_min": [], "lg_median": [], "lg_degen_frac": []}
     vt_unsafe: list[float] = []          # v2.4.0: fraction of value-minibatch targets y > 0
     vt_mean: list[float] = []            # v2.4.2: mean value-minibatch label y (label_mean)
     tp_push: list[float] = []            # v2.4.2 Exp 2: tail_push_mean (raw_lagged only; 0 otherwise)
@@ -1323,6 +1352,16 @@ def _value_updates(
                             "sob_dhdv_pred_mean", "sob_v_spline_mean",
                             "sob_gate_mean", "sob_gate_frac_active", "sob_gate_dhdv_pred"):
                     sob_logs[key].append(sob.diagnostics[key])
+        if lg_auth_enabled:
+            # v2.6.0 R2 epsilon_g: protect ||L_g V_hat|| authority on B_0 (note O3). System-generic
+            # penalty over near-B_0 states; weight 0 or non-quadrotor => skipped (no RNG/_cbf_terms).
+            lg_loss, lg_diag = lg_authority_loss(system, value_net, config, torch_generator)
+            total_loss = total_loss + lg_auth_weight * lg_loss
+            if log:
+                lg_logs["L_lg_raw"].append(float(lg_loss.detach().item()))
+                lg_logs["lg_min"].append(lg_diag["lg_min"])
+                lg_logs["lg_median"].append(lg_diag["lg_median"])
+                lg_logs["lg_degen_frac"].append(lg_diag["lg_degen_frac"])
         optimizer.zero_grad(set_to_none=True)
         total_loss.backward()
         grad = nn.utils.clip_grad_norm_(
@@ -1359,6 +1398,10 @@ def _value_updates(
             out.update({key: float(np.mean(vals)) for key, vals in sob_logs.items()})
         else:
             out.update({key: 0.0 for key in sob_logs})
+        if lg_auth_enabled and lg_logs["lg_min"]:
+            out.update({key: float(np.mean(vals)) for key, vals in lg_logs.items()})
+        else:
+            out.update({key: 0.0 for key in lg_logs})
         out["value_target_unsafe_frac"] = float(np.mean(vt_unsafe)) if vt_unsafe else 0.0
         out["rho_unsafe_label"] = float(np.mean(vt_unsafe)) if vt_unsafe else 0.0
         out["label_mean"] = float(np.mean(vt_mean)) if vt_mean else 0.0
@@ -1618,6 +1661,8 @@ def make_system(config: Mapping[str, Any]) -> System:
         return DoubleIntegrator(config)
     if system_name == "unicycle":
         return Unicycle(config)
+    if system_name == "quadrotor_planar":
+        return QuadrotorPlanar(config)
     raise ValueError(f"Unsupported system: {system_name!r}")
 
 
@@ -1836,20 +1881,23 @@ def _record_eval(
         output_dir=run_dir / "figures/inloop",
         filename_template=f"step_{step:06d}_grid_{{letter}}.png",
     )
-    contour_path = write_cbf_contour_figure(
-        eval_result=eval_result,
-        config=config,
-        system=system,
-        value_net=value_net,
-        output_path=run_dir / "figures/inloop" / f"step_{step:06d}_cbf_contour.png",
-        role="JT in-loop eval CBF contour",
-    )
-    log_png_to_tensorboard(
-        writer,
-        f"eval/in_loop/step_{step:06d}_cbf_contour",
-        contour_path,
-        step,
-    )
+    # v2.6.0: the CBF contour uses per-system velocity-column settings (2D velocity slice); the 6D
+    # quadrotor has no 2D slice, so the contour figure is skipped (viz-only, not gate-relevant).
+    if system.name != "quadrotor_planar":
+        contour_path = write_cbf_contour_figure(
+            eval_result=eval_result,
+            config=config,
+            system=system,
+            value_net=value_net,
+            output_path=run_dir / "figures/inloop" / f"step_{step:06d}_cbf_contour.png",
+            role="JT in-loop eval CBF contour",
+        )
+        log_png_to_tensorboard(
+            writer,
+            f"eval/in_loop/step_{step:06d}_cbf_contour",
+            contour_path,
+            step,
+        )
     _write_tb_scalars(writer, f"eval/{eval_result.eval_row['mode']}", eval_result.eval_row, step)
 
 

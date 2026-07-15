@@ -68,7 +68,7 @@ def test_exact_m0_xgrad_finite_and_nonzero():
 def test_exact_m0_frozen_gate_ride(tmp_path: Path):
     from src.frameworks.jt_pncbf.train import run_training
     r = run_training(stage="smoke", output_root=tmp_path, seed=5, smoke_eval_scenes=1,
-                     device="cpu", safety_channel="exact_m0")
+                     device="cpu", system="double_integrator", safety_channel="exact_m0")
     assert not r.halted
     # frozen channel => no value learning (K_V=0): the value loss column is a hard 0.0.
     assert r.last_value_loss == 0.0

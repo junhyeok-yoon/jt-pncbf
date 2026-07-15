@@ -107,12 +107,13 @@ def run_full_eval(
         output_path=run_dir / "figures/cbf_contour.png",
         role="Final eval CBF contour",
     )
-    _write_tb_image(
-        run_dir / "tensorboard",
-        "eval/final/cbf_contour",
-        contour_path,
-        int(checkpoint["step"]),
-    )
+    if contour_path is not None:                       # v2.6.0: None => contour skipped (quadrotor)
+        _write_tb_image(
+            run_dir / "tensorboard",
+            "eval/final/cbf_contour",
+            contour_path,
+            int(checkpoint["step"]),
+        )
     if include_insertion:
         insertion_eval_rows, insertion_episode_rows = _run_online_insertion(
             framework,
@@ -134,7 +135,7 @@ def run_full_eval(
     return FullEvalResult(
         run_dir=run_dir,
         eval_result=eval_result,
-        figure_paths=[*figure_result.paths, contour_path],
+        figure_paths=[*figure_result.paths, *( [contour_path] if contour_path is not None else [] )],
         filter_works_count=filter_works_count,
         intervention_episode_count=figure_result.intervention_episode_count,
         plotted_episode_count=figure_result.plotted_episode_count,
@@ -245,7 +246,11 @@ def write_cbf_contour_figure(
     value_net: Any,
     output_path: Path,
     role: str,
-) -> Path:
+) -> Path | None:
+    # v2.6.0: the CBF contour uses a 2D velocity-column slice; the 6D quadrotor has none, so the figure
+    # is skipped (viz-only, not gate-relevant). PROTOCOL FOLLOW-UP: a 6D-appropriate contour if wanted.
+    if getattr(system, "name", None) == "quadrotor_planar":
+        return None
     plot_cbf_contours(
         scenes=eval_result.pool.scenes[:2],
         output_path=output_path,

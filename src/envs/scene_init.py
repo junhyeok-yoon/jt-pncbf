@@ -22,6 +22,8 @@ class Scene:
     initial_velocity: Array | None = None
     initial_speed: float | None = None
     initial_heading: float | None = None
+    initial_attitude: float | None = None      # quadrotor_planar: body attitude theta
+    initial_omega: float | None = None         # quadrotor_planar: body angular rate omega
 
 
 @dataclass(frozen=True)
@@ -55,7 +57,7 @@ def _sample_scene(
     system: str,
     params: _SceneModeParams,
 ) -> Scene:
-    if system not in {"double_integrator", "unicycle"}:
+    if system not in {"double_integrator", "unicycle", "quadrotor_planar"}:
         raise ValueError(f"Unsupported system: {system!r}")
 
     for _ in range(_MAX_RETRIES):
@@ -201,6 +203,29 @@ def _make_scene(
             initial_velocity=initial_velocity,
         )
 
+    if system == "quadrotor_planar":
+        # v2.6.0 §4 IC set: v ~ U(disk radius v_init), theta ~ U[-pi,pi], omega ~ U[-omega_init_max, .].
+        q = config["env"]["quadrotor_planar"]
+        v_init = float(q["v_init_max"])
+        omega_init = float(q["omega_init_max"])
+        radius = v_init * float(np.sqrt(rng.uniform()))       # uniform-in-disk
+        angle = float(rng.uniform(-np.pi, np.pi))
+        initial_velocity = np.array(
+            [radius * np.cos(angle), radius * np.sin(angle)], dtype=np.float64
+        )
+        return Scene(
+            obstacle_centers=centers,
+            obstacle_radii=radii,
+            obstacle_active=active,
+            start=start,
+            goal=goal,
+            system=system,
+            mode=mode,
+            initial_velocity=initial_velocity,
+            initial_attitude=float(rng.uniform(-np.pi, np.pi)),
+            initial_omega=float(rng.uniform(-omega_init, omega_init)),
+        )
+
     initial_speed = float(rng.uniform(-v_init_max, v_init_max))
     initial_heading = float(rng.uniform(-np.pi, np.pi))
     return Scene(
@@ -283,6 +308,11 @@ def _initial_velocity_vector(scene: Scene) -> Array:
             dtype=np.float64,
         )
 
+    if scene.system == "quadrotor_planar":
+        if scene.initial_velocity is None:
+            raise ValueError("Quadrotor scene is missing initial_velocity.")
+        return scene.initial_velocity
+
     raise ValueError(f"Unsupported system: {scene.system!r}")
 
 
@@ -291,4 +321,10 @@ def _acceleration_bound(config: Mapping[str, Any], system: str) -> float:
         return float(config["env"]["bounds"]["double_integrator"]["u_max"])
     if system == "unicycle":
         return float(config["env"]["bounds"]["unicycle"]["a_max"])
+    if system == "quadrotor_planar":
+        # Heuristic init-feasibility pre-filter only. The quadrotor is underactuated (instantaneous
+        # accel direction is attitude-fixed), so a scalar bound is approximate; gravity g is the net
+        # vertical authority magnitude. IC speeds <= v_init 1.5 make stopping_distance ~ 0.11 m, so
+        # this bound barely gates. Recorded as PROTOCOL FOLLOW-UP (approximate underactuated filter).
+        return float(config["env"]["quadrotor_planar"]["gravity"])
     raise ValueError(f"Unsupported system: {system!r}")

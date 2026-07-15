@@ -50,7 +50,9 @@ network:
     n_layers: 2
     hidden: 256
     activation: leaky_relu            # LeakyReLU(0.01); value uses softplus for differentiability
-    output: softsign                  # softsign | tanh
+    output: clamp_tanh                # softsign | tanh | clamp_tanh (v2.6.0: over-range+clamp REACHES the box
+                                      # boundary; softsign/tanh are open (-1,1) and cannot command |u|=u_max)
+    output_gain: 1.4286               # clamp_tanh over-range gain 1/0.7: boundary reached at |z|=atanh(0.7)
 
 filter:
   gamma_margin: 0.0                 # agent safety margin (used in CBF-QP h_eff)

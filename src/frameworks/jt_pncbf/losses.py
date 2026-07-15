@@ -559,9 +559,12 @@ def policy_bptt_loss(
                     sq_excess = sq_excess * gate
                 pretanh_penalties.append(sq_excess.mean())
 
-            sat_excess = (
-                u_nom.abs() - float(policy_cfg["sat_excess_threshold"])
-            ).clamp_min(0.0)
+            # v2.6.0: sat_excess_threshold may be per-channel [thrust, torque] (quadrotor box bounds) or a
+            # scalar (DI/unicycle). Broadcast a per-channel tensor over the action dim.
+            _sat_thr = policy_cfg["sat_excess_threshold"]
+            sat_thr = (torch.tensor(_sat_thr, device=u_nom.device, dtype=u_nom.dtype)
+                       if isinstance(_sat_thr, (list, tuple)) else float(_sat_thr))
+            sat_excess = (u_nom.abs() - sat_thr).clamp_min(0.0)
             sat_excess_values.append((sat_excess * sat_excess).sum(dim=1).mean())
 
             if w_deficit > 0.0 or obs_deficit:
@@ -600,6 +603,20 @@ def policy_bptt_loss(
             u2 = torch.sum(u_safe * u_safe, dim=1)
             task_cost = task_cost + discount * (d2 + lambda_v * v2 + mu_u * u2)
             discount *= gamma_t
+
+        # v2.6.0 credit-horizon axis: BPTT TERMINAL VALUE at x_T (03_train §4.4 currently has NO terminal
+        # and NO in-window termination, so goal-reaching beyond the ~1.5 s window is never credited and
+        # myopic hover is the local optimum). Add an analytic goal-progress terminal V_term = -||p_T - g||
+        # (a COST +||p_T - g|| here, since task_cost is minimized), weighted by the running discount
+        # (gamma_T^T). DIFFERENTIABLE through x_T (it must carry the credit gradient) — NOT the learned V_hat
+        # (a hazard sup-h value, not a goal value). Inside the same g_in safe-region gate as task_cost.
+        # PROTOCOL FOLLOW-UP: this changes the §4.4 rollout return; 03_train edit deferred until utility
+        # confirmed (Researcher-directed).
+        w_term = float(policy_cfg.get("w_terminal", 0.0))
+        if w_term > 0.0:
+            goal_T = _scene_goal(scene, x)
+            dist_T = torch.linalg.norm(system.position(x) - goal_T, dim=1)   # ||p_T - g||
+            task_cost = task_cost + discount * w_term * dist_T               # discount == gamma_T^T here
 
         action_stack = torch.stack(nominal_actions, dim=0)
         safe_stack = torch.stack(safe_actions, dim=0)

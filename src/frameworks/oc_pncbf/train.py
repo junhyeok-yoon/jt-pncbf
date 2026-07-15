@@ -19,6 +19,7 @@ import yaml
 from src._version import __version__
 from src.common.filter_cbfqp import CBFQPFilter
 from src.common.system import System
+from src.common.quadrotor_barrier import lg_authority_loss
 from src.common.value_net import ValueNetEnsemble, make_h_fn
 from src.envs.double_integrator import DoubleIntegrator
 from src.envs.scene_batch import BatchedScene
@@ -71,6 +72,10 @@ METRIC_COLUMNS = [
     "L_out",
     "L_pi_total",
     "grad_norm_VS",
+    "L_lg_raw",              # v2.6.0 epsilon_g (R2): weighted-in raw penalty + ||L_g V_hat|| gate stats
+    "lg_min",
+    "lg_median",
+    "lg_degen_frac",
     "grad_norm_pi",
     "grad_leak_VS_from_Lpi",
     "proj_mag_ema",
@@ -152,11 +157,14 @@ def run_training(
     smoke_eval_scenes: int = 20,
     device: str = "auto",
     train_dtype_name: str = "float32",
+    system: str | None = None,
     obstacle_distribution: str | None = None,
 ) -> TrainingResult:
     config = load_effective_config()
     config["run"]["version"] = __version__
     config["run"]["framework"] = "oc_pncbf"
+    if system is not None:           # v2.6.0: explicit system override (exp_config default is quadrotor_planar)
+        config["run"]["system"] = system
     if seed is not None:
         config["run"]["seed"] = int(seed)
     if obstacle_distribution is not None:
@@ -258,6 +266,7 @@ def run_training(
             h_scale=float(config["env"]["h_scale"]),
             storage_device=train_device,
             storage_dtype=train_dtype,
+            config=config,
         )
 
         for _ in range(grad_steps_per_epoch):
@@ -458,6 +467,9 @@ def make_system(config: Mapping[str, Any]) -> System:
         return DoubleIntegrator(config)
     if system_name == "unicycle":
         return Unicycle(config)
+    if system_name == "quadrotor_planar":
+        from src.envs.quadrotor_planar import QuadrotorPlanar
+        return QuadrotorPlanar(config)
     raise ValueError(f"Unsupported system: {system_name!r}")
 
 
@@ -509,6 +521,14 @@ def _value_step(
     prediction = value_net(obs)
     loss_r = torch.mean((prediction - targets.unsqueeze(1)) ** 2)
     loss_v = float(config["loss"]["value"]["lambda_R"]) * loss_r
+    # v2.6.0 R2 epsilon_g: protect ||L_g V_hat|| on B_0 (note O3). Quadrotor only; weight 0 => skipped.
+    lg_auth_weight = float(config["loss"]["value"].get("lg_authority", {}).get("weight", 0.0))
+    lg_diag = {"lg_min": 0.0, "lg_median": 0.0, "lg_degen_frac": 0.0}
+    lg_raw = loss_r.detach().new_zeros(())
+    if lg_auth_weight > 0.0 and getattr(system, "name", None) == "quadrotor_planar":
+        lg_loss, lg_diag = lg_authority_loss(system, value_net, config, torch_generator)
+        loss_v = loss_v + lg_auth_weight * lg_loss
+        lg_raw = lg_loss.detach()
     loss_v.backward()
     grad_norm = nn.utils.clip_grad_norm_(
         value_net.parameters(),
@@ -520,6 +540,10 @@ def _value_step(
         "L_A": loss_r.detach().new_zeros(()),
         "L_C": loss_r.detach().new_zeros(()),
         "L_V_total": loss_v.detach(),
+        "L_lg_raw": lg_raw,
+        "lg_min": torch.as_tensor(lg_diag["lg_min"], device=loss_v.device, dtype=loss_v.dtype),
+        "lg_median": torch.as_tensor(lg_diag["lg_median"], device=loss_v.device, dtype=loss_v.dtype),
+        "lg_degen_frac": torch.as_tensor(lg_diag["lg_degen_frac"], device=loss_v.device, dtype=loss_v.dtype),
         "grad_norm_VS": torch.as_tensor(
             grad_norm,
             device=loss_v.device,
@@ -552,6 +576,8 @@ def _targets_for_tensor_batch(
 
 def _value_step_scalars(step_result: Mapping[str, Tensor]) -> dict[str, float]:
     keys = ["L_R", "L_A", "L_C", "L_V_total", "grad_norm_VS"]
+    if "lg_min" in step_result:                     # v2.6.0 epsilon_g diagnostics (quadrotor)
+        keys = keys + ["L_lg_raw", "lg_min", "lg_median", "lg_degen_frac"]
     values = torch.stack([step_result[key].reshape(()) for key in keys])
     host_values = values.detach().cpu().tolist()
     return {key: float(value) for key, value in zip(keys, host_values, strict=True)}
@@ -600,6 +626,9 @@ def _metrics_row(
             "grad_norm_VS": float(step_result["grad_norm_VS"]),
         }
     )
+    for k in ("L_lg_raw", "lg_min", "lg_median", "lg_degen_frac"):   # v2.6.0 epsilon_g diagnostics
+        if k in step_result:
+            row[k] = float(step_result[k])
     return row
 
 
@@ -630,20 +659,22 @@ def _record_eval(
         output_dir=run_dir / "figures/inloop",
         filename_template=f"step_{step:06d}_grid_{{letter}}.png",
     )
-    contour_path = write_cbf_contour_figure(
-        eval_result=eval_result,
-        config=config,
-        system=system,
-        value_net=value_net,
-        output_path=run_dir / "figures/inloop" / f"step_{step:06d}_cbf_contour.png",
-        role="In-loop eval CBF contour",
-    )
-    log_png_to_tensorboard(
-        writer,
-        f"eval/in_loop/step_{step:06d}_cbf_contour",
-        contour_path,
-        step,
-    )
+    # v2.6.0: skip the CBF contour for the 6D quadrotor (no 2D velocity slice; viz-only).
+    if system.name != "quadrotor_planar":
+        contour_path = write_cbf_contour_figure(
+            eval_result=eval_result,
+            config=config,
+            system=system,
+            value_net=value_net,
+            output_path=run_dir / "figures/inloop" / f"step_{step:06d}_cbf_contour.png",
+            role="In-loop eval CBF contour",
+        )
+        log_png_to_tensorboard(
+            writer,
+            f"eval/in_loop/step_{step:06d}_cbf_contour",
+            contour_path,
+            step,
+        )
     _write_tb_scalars(
         writer,
         f"eval/{eval_result.eval_row['mode']}",

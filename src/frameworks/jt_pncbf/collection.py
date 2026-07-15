@@ -11,6 +11,7 @@ from src.common.filter_cbfqp import CBFQPFilter
 from src.common.filter_hardnet import HardNetFilter
 from src.common.rk4 import rk4_step
 from src.common.signed_h import signed_h
+from src.common.quadrotor_barrier import value_target_barrier
 from src.common.system import System
 from src.common.value_net import ValueNetEnsemble, make_h_fn
 from src.envs.scene_batch import BatchedScene, batch_scenes, initial_states_from_batch
@@ -103,11 +104,8 @@ def collect_policy_rollouts(
         obs_deficit=bool(config.get("loss", {}).get("policy", {}).get("obs_deficit_feedback", False)),  # type: ignore[union-attr]
     )
     with torch.no_grad():
-        h_values = signed_h(
-            system.position(states),
-            batched_scene,
-            float(config["env"]["h_scale"]),  # type: ignore[index]
-        )
+        # v2.6.0: the value target barrier is h_star (phi + c v^T Re) for the quadrotor, phi for DI/uni.
+        h_values = value_target_barrier(system, states, batched_scene, config)
     buffer.append_batch(scenes, batched_scene, states.detach(), h_values.detach())
     unsafe_fraction = _unsafe_episode_fraction(h_values)
     sigma_after = adaptive_sigma_update(float(sigma), unsafe_fraction, config)
@@ -371,7 +369,7 @@ def collect_precursors(
         obs_deficit=bool(config.get("loss", {}).get("policy", {}).get("obs_deficit_feedback", False)),  # type: ignore[union-attr]
     )
     with torch.no_grad():
-        h_values = signed_h(system.position(states_t), batched_scene, h_scale)
+        h_values = value_target_barrier(system, states_t, batched_scene, config)
     buffer.append_batch(scenes, batched_scene, states_t.detach(), h_values.detach())
     max_h = h_values.max(dim=0).values  # max-over-time per precursor (target proxy, pre-bootstrap)
     return PrecursorStats(

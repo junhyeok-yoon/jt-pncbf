@@ -28,15 +28,15 @@ def _ckpt_step(ckpt_path: Path) -> int:
 
 
 def test_pi_warmstart_loads_pi_only_and_starts_fresh(tmp_path: Path) -> None:
-    donor = run_training(stage="smoke", output_root=tmp_path, seed=7, smoke_eval_scenes=1, device="cpu")
+    donor = run_training(stage="smoke", output_root=tmp_path, seed=7, smoke_eval_scenes=1, system="double_integrator", device="cpu")
     assert not donor.halted
     donor_ckpt = donor.run_dir / "checkpoints/final.pt"
     donor_pi = _pi_state(donor_ckpt)
 
     # warm-start from the donor under a DIFFERENT seed; and a fresh run at the same seed for contrast.
-    warm = run_training(stage="smoke", output_root=tmp_path, seed=999, smoke_eval_scenes=1, device="cpu",
+    warm = run_training(stage="smoke", output_root=tmp_path, seed=999, smoke_eval_scenes=1, system="double_integrator", device="cpu",
                         pi_init_ckpt=donor_ckpt)
-    fresh = run_training(stage="smoke", output_root=tmp_path, seed=999, smoke_eval_scenes=1, device="cpu")
+    fresh = run_training(stage="smoke", output_root=tmp_path, seed=999, smoke_eval_scenes=1, system="double_integrator", device="cpu")
     assert not warm.halted and not fresh.halted
 
     # (1) provenance recorded; NOT a full resume.
@@ -55,8 +55,8 @@ def test_pi_warmstart_loads_pi_only_and_starts_fresh(tmp_path: Path) -> None:
 
 
 def test_pi_warmstart_and_resume_are_mutually_exclusive(tmp_path: Path) -> None:
-    donor = run_training(stage="smoke", output_root=tmp_path, seed=3, smoke_eval_scenes=1, device="cpu")
+    donor = run_training(stage="smoke", output_root=tmp_path, seed=3, smoke_eval_scenes=1, system="double_integrator", device="cpu")
     ckpt = donor.run_dir / "checkpoints/final.pt"
     with pytest.raises(ValueError):
-        run_training(stage="smoke", output_root=tmp_path, seed=3, smoke_eval_scenes=1, device="cpu",
+        run_training(stage="smoke", output_root=tmp_path, seed=3, smoke_eval_scenes=1, system="double_integrator", device="cpu",
                      resume_ckpt=ckpt, pi_init_ckpt=ckpt)

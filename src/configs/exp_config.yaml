@@ -2,10 +2,10 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.5.2"
+  version: "v2.6.0"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
-  system: double_integrator         # double_integrator | unicycle  (v2.3.0 DI plain: injection OFF, D_pi sliding-window experiment)
+  system: quadrotor_planar          # double_integrator | unicycle | quadrotor_planar  (v2.6.0: direct-input planar quadrotor)
 
 env:
   goal_speed_radius: 0.30           # v2.3.0 DI run: canonical DI criterion 0.30 (was 0.50 carried from the
@@ -14,6 +14,27 @@ env:
     unicycle:
       v_max: 2.5                    # Step 1: unicycle speed bound matching the DI kinematic scale
                                     # (same a_max=2.0, arena, dt); clamped (signed) in unicycle.wrap_state
+    quadrotor_planar:               # v2.6.0 §4 pinned constants (theory note Def 2.1 is symbolic; no reference env)
+      f_min: 0.0                    # asymmetric thrust box [f_min, f_max]; contains hover m*g=9.81
+      f_max: 19.62                  # net vertical accel +/- g
+      tau_max: 0.2                  # torque box [-tau_max, tau_max]; max alpha=20 rad/s^2
+      v_max: 2.5                    # A3 velocity clamp ||v||<=v_max (shared DI scale)
+      omega_max: 4.0                # attitude-rate clamp for wrap_state
+  quadrotor_planar:                 # v2.6.0 §4: physical constants + IC set + h_star gain
+    mass: 1.0
+    inertia: 0.01
+    gravity: 9.81
+    v_init_max: 1.5                 # IC linear velocity ~ U(disk radius 1.5)
+    omega_init_max: 1.0             # IC angular velocity ~ U[-1, 1]
+    c_gain: 0.3                     # h_star gain c: M6/P1 fixed final=0.3 (largest admissible with mean
+                                    # distortion <=0.25; degen_frac 0, median ||L_gV||=0.3). Was 0.5 (center).
+
+lqr:                                # v2.6.0 nominal cascaded PD (A1: admissible (f_thr,tau)); NOT the filter
+  quadrotor_planar:
+    kp_pos: 1.0                     # outer position loop: a_des = -kp_pos*(p-goal) - kd_pos*v
+    kd_pos: 2.0
+    kp_att: 40.0                    # inner attitude loop: tau = J*(-kp_att*wrap(theta-theta_des) - kd_att*omega)
+    kd_att: 8.0
 
 training:
   jt:
@@ -108,6 +129,10 @@ loss:
     lambda_R: 1.0
     lambda_A: 0.0
     lambda_C: 0.0
+    lg_authority:               # v2.6.0 R2 epsilon_g (system-generic; quadrotor only). Replaces the
+      weight: 5.0               # DI-hardcoded cbf_deriv. L = w*mean_{near B_0} ReLU(eps_g - ||L_g V_hat||)
+      eps_g: 0.05               # 7x the v5 starved 0.0072; 1/6 of thrust floor c/m=0.3 (changes.md §4)
+      n_samples: 256
     cbf_deriv:                  # v2.2.1 box-feasibility CBF-derivative aux term (value-side)
       weight: 0.0               # v2.2.2: L_feas OFF (gate path fully skipped; weight=0 parity proven exact)
       gamma_strict: 0.3         # gamma: strict-descent slack (0.05->0.3; fire on the safe-side boundary)
@@ -147,7 +172,12 @@ loss:
       lateral_frac: 0.5         # lateral velocity spread as fraction of inward speed
   policy:
     gamma_T: 0.99
-    detach_filter_coeffs: false     # standing hygiene flag (default off); v2.4.0 Step 5 audit C1 fix, only needed for long-horizon BPTT
+    w_terminal: 30.0                # v2.6.0 credit-horizon axis: BPTT terminal-value weight. Adds
+                                    # discount(=gamma_T^T)*w_terminal*||p_T-g|| to the rollout return
+                                    # (03_train §4.4 has no terminal) so goal-closing beyond the ~1.5 s
+                                    # window is credited, breaking the myopic-hover trap. 0.0 = off
+                                    # (DI/unicycle parity); quadrotor sets it. PROTOCOL FOLLOW-UP: §4.4.
+    detach_filter_coeffs: true      # v2.6.0 M6: ON to remove the filter-Jacobian BPTT gradient explosion (M5 grad_norm_pi max 178k) that drowned the terminal's credit; 03_train §7 (forward byte-identical, backward drops coeff state-dependence). Was false (v2.4.0 Step 5 audit C1 fix, default off for DI/unicycle).
     w_friction: 0.0                 # v2.5.0 Stage B-2: filter-friction weight w_friction*||u_safe-u_nom||^2 (0.0 = parity default; B-2 run sets 0.05 via --w-friction)
     w_deficit: 0.0                  # v2.4.1 Exp 2 (deficit LOSS off; obs channel is the axis) — Exp 1: control-deficit policy-feedback weight (0.0 = off; adaptive-calibrated, see build_log)
     deficit_cap: 4.0                # v2.4.1: norm cap (= 2*u_max) on the raw box-free deficit delta_u (bounds the alpha_unsafe=100 ask)
@@ -160,9 +190,12 @@ loss:
     lambda_a: 0.05                  # action_norm
     lambda_s: 0.1                   # smoothness
     lambda_sat: 1.0                 # sat_excess (on pre-projection |a_phi|)
-    sat_excess_threshold: 2.0
+    sat_excess_threshold: [19.62, 0.2]   # v2.6.0 PER-CHANNEL [thrust, torque] = box bounds (was DI-scalar
+                                    # 2.0 which penalized the ~10 hover thrust). In-box output -> penalty 0.
     lambda_pretanh: 1.0
-    z_target: 0.867                 # atanh(0.70)
+    z_target: 1.0                   # v2.6.0 raised 0.867->1.0: clamp_tanh reaches the box at |z|=0.867, so
+                                    # z_target>=0.867 leaves boundary-reaching (incl. deep-safe tilted-IC
+                                    # attitude-righting) UNPENALIZED; L_pre only discourages deep-clamp runaway.
     vs_gated_pretanh: true
     vs_gate_tau: 0.05
     input_rate:                     # v2.2.2 input-rate (du) axis: FAILED across all forms -> OFF for the u_reg run

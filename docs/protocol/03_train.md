@@ -448,13 +448,22 @@ $$
 with $\lambda_v$ and $\mu_u$ from `loss.policy`. The discounted return is
 
 $$
-R(\theta; x_0) = -\sum_{t=0}^{T-1} \gamma_T^t\, c^{\text{task}}_t,
+R(\theta; x_0) = -\sum_{t=0}^{T-1} \gamma_T^t\, c^{\text{task}}_t
+\;-\; \gamma_T^{T}\, w_{\text{term}}\, \|p_T - g\|,
 \qquad \gamma_T = \texttt{loss.policy.gamma\_T}.
 $$
 
-The rollout integrates the cost over the full fixed horizon $T$: it does not terminate,
-mask, or apply a terminal value when a trajectory reaches the goal, penetrates an obstacle,
-or leaves the arena mid-window, and $\text{wrap\_state}$ bounds velocity but not position.
+The final term is an **end-of-horizon terminal goal-distance** with weight
+$w_{\text{term}} = \texttt{loss.policy.w\_terminal}$: it credits closing distance to the goal
+beyond the BPTT window, which the windowed sum alone cannot reward. It uses the analytic goal
+distance (not the learned $V_S$, which is a hazard value), and is differentiable through $x_T$.
+Setting $w_{\text{term}} = 0$ recovers the plain windowed return; it is $0$ by default and used
+only where the fixed window $T$ is short relative to the time to reach the goal.
+
+The rollout integrates the cost over the full fixed horizon $T$ and does not terminate or mask
+mid-window when a trajectory reaches the goal, penetrates an obstacle, or leaves the arena;
+$\text{wrap\_state}$ bounds velocity but not position. It applies the single end-of-horizon
+terminal above but **no in-window terminal or termination**.
 Reference (known limitation, not currently handled): a v2.4.0 measurement found a
 substantial fraction of the discounted return accruing after the first such
 physically-terminal event; horizon-lengthening experiments in that version were also found
@@ -812,7 +821,10 @@ hypothesis and a clean ablation against the baseline:
   coefficients (the $h$-Hessian, the $\alpha$ jump at $h=0$, and the box-argmin geometry)
   at filter-active steps can compound multiplicatively over a long BPTT window; a v2.4.0
   study measured per-sample policy-gradient tails growing sharply with horizon and this
-  flag removing that tail while leaving the median/p90 gradient unchanged. Default off.
+  flag removing that tail while leaving the median/p90 gradient unchanged. Default **off** for
+  the Double Integrator and Unicycle; **on** for the planar quadrotor, where the long-horizon
+  coefficient-gradient tail otherwise dominates the BPTT update and clips the task-credit away
+  (forward is byte-identical either way, so this changes only the backward path).
 - **Reserved halts (§4.7-3..5) activation** — wire the sigma-pin, cps-floor, and
   early-stop halts into the trainer's halt path.
 - **Saturation and catastrophic-failure halt detectors** with thresholds set once baseline

@@ -13,6 +13,7 @@ def test_jt_train_smoke_completes_and_writes_artifacts(tmp_path: Path) -> None:
         seed=23,
         smoke_eval_scenes=1,
         device="cpu",
+        system="double_integrator",   # v2.6.0: exp_config default is quadrotor_planar; pin the DI training path
     )
 
     assert not result.halted

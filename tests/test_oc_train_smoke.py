@@ -12,6 +12,7 @@ def test_oc_train_smoke_completes_and_writes_run_dir(tmp_path: Path) -> None:
         output_root=tmp_path,
         seed=17,
         smoke_eval_scenes=1,
+        system="double_integrator",   # v2.6.0: exp_config default is quadrotor_planar; pin the DI training path
     )
 
     assert not result.halted
