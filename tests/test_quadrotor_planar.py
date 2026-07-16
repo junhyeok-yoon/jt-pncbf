@@ -176,10 +176,10 @@ def test_hardnet_direct_input_asymmetric_box():
     u_out = u_out.detach()
 
     lo = s.u_bounds[:, 0].to(torch.float64); hi = s.u_bounds[:, 1].to(torch.float64)
-    # (1) output lands in the ASYMMETRIC box [0,19.62] x [-0.2,0.2]
+    # (1) output lands in the ASYMMETRIC box [0,19.62] x [-1.0,1.0]  (v2.6.1: torque box 0.2->1.0)
     assert bool((u_out[:, 0] >= lo[0] - 1e-7).all() and (u_out[:, 0] <= hi[0] + 1e-7).all())
     assert bool((u_out[:, 1] >= lo[1] - 1e-7).all() and (u_out[:, 1] <= hi[1] + 1e-7).all())
-    assert abs(float(hi[0]) - 19.62) < 1e-9 and abs(float(hi[1]) - 0.2) < 1e-9   # asymmetric, not a square
+    assert abs(float(hi[0]) - 19.62) < 1e-9 and abs(float(hi[1]) - 1.0) < 1e-9   # asymmetric, not a square
 
     # reconstruct the CBF constraint row  L_g V . u <= row_upper  ( = -L_f V - alpha V )
     h, lf, lg = _cbf_terms(s, v_fn, x, sc, u_nom, create_graph=False)
@@ -226,10 +226,10 @@ def test_clamp_tanh_head_reaches_box_boundary_and_stays_in_box():
         out_hi = net(obs0)
         net.head.bias.fill_(-100.0)                      # large -preactivation -> clamp -> lower box
         out_lo = net(obs0)
-    # boundary REACHED (softsign/tanh never would): f_max=19.62, tau_max=0.2 ; f_min=0, -tau_max
+    # boundary REACHED (softsign/tanh never would): f_max=19.62, tau_max=1.0 ; f_min=0, -tau_max (v2.6.1 box 0.2->1.0)
     assert torch.allclose(out_hi, hi.expand_as(out_hi), atol=1e-6), out_hi[0]
     assert torch.allclose(out_lo, lo.expand_as(out_lo), atol=1e-6), out_lo[0]
-    assert abs(float(out_hi[0, 1]) - 0.2) < 1e-6 and abs(float(out_lo[0, 1]) + 0.2) < 1e-6   # torque box
+    assert abs(float(out_hi[0, 1]) - 1.0) < 1e-6 and abs(float(out_lo[0, 1]) + 1.0) < 1e-6   # torque box
     # random preactivation stays IN the asymmetric box
     with torch.no_grad():
         torch.manual_seed(0)

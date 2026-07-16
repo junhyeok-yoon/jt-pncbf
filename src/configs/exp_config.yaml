@@ -2,7 +2,7 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.6.0"
+  version: "v2.6.1"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
   system: quadrotor_planar          # double_integrator | unicycle | quadrotor_planar  (v2.6.0: direct-input planar quadrotor)
@@ -17,7 +17,7 @@ env:
     quadrotor_planar:               # v2.6.0 §4 pinned constants (theory note Def 2.1 is symbolic; no reference env)
       f_min: 0.0                    # asymmetric thrust box [f_min, f_max]; contains hover m*g=9.81
       f_max: 19.62                  # net vertical accel +/- g
-      tau_max: 0.2                  # torque box [-tau_max, tau_max]; max alpha=20 rad/s^2
+      tau_max: 1.0                  # v2.6.1 Axis A: plant-coherent torque box [-1.0, 1.0] (was 0.2, ~1/5 of the plant-coherent tau_bar=L_J*f_max/2~0.98 from arm L_J=sqrt(J/m)=0.1m; see torque_box_plausibility.md + changes.md §4). HardNet box reads this key. NB alpha_max=tau_max/J=100 rad/s^2; omega_max=4.0 clamp may bind (changes.md §6, watch).
       v_max: 2.5                    # A3 velocity clamp ||v||<=v_max (shared DI scale)
       omega_max: 4.0                # attitude-rate clamp for wrap_state
   quadrotor_planar:                 # v2.6.0 §4: physical constants + IC set + h_star gain
@@ -177,6 +177,11 @@ loss:
                                     # (03_train §4.4 has no terminal) so goal-closing beyond the ~1.5 s
                                     # window is credited, breaking the myopic-hover trap. 0.0 = off
                                     # (DI/unicycle parity); quadrotor sets it. PROTOCOL FOLLOW-UP: §4.4.
+    w_terminal_v: 30.0              # v2.6.1 Axis B: velocity-aware terminal weight. Adds
+                                    # discount*w_terminal_v*||v_T|| to the rollout return (alongside the
+                                    # position terminal) so the policy is credited for SLOWING at the goal,
+                                    # converting near-goal loiters (v2.6.0 D1) to reaches. 0.0 = off
+                                    # (DI/unicycle parity). Rides detach_filter_coeffs=true. changes.md §4.
     detach_filter_coeffs: true      # v2.6.0 M6: ON to remove the filter-Jacobian BPTT gradient explosion (M5 grad_norm_pi max 178k) that drowned the terminal's credit; 03_train §7 (forward byte-identical, backward drops coeff state-dependence). Was false (v2.4.0 Step 5 audit C1 fix, default off for DI/unicycle).
     w_friction: 0.0                 # v2.5.0 Stage B-2: filter-friction weight w_friction*||u_safe-u_nom||^2 (0.0 = parity default; B-2 run sets 0.05 via --w-friction)
     w_deficit: 0.0                  # v2.4.1 Exp 2 (deficit LOSS off; obs channel is the axis) — Exp 1: control-deficit policy-feedback weight (0.0 = off; adaptive-calibrated, see build_log)
@@ -190,8 +195,9 @@ loss:
     lambda_a: 0.05                  # action_norm
     lambda_s: 0.1                   # smoothness
     lambda_sat: 1.0                 # sat_excess (on pre-projection |a_phi|)
-    sat_excess_threshold: [19.62, 0.2]   # v2.6.0 PER-CHANNEL [thrust, torque] = box bounds (was DI-scalar
-                                    # 2.0 which penalized the ~10 hover thrust). In-box output -> penalty 0.
+    sat_excess_threshold: [19.62, 1.0]   # v2.6.1 Axis A (dependent): torque component 0.2->1.0 to TRACK the
+                                    # new torque box so L_sat stays 0 within the legal box. PER-CHANNEL
+                                    # [thrust, torque] = box bounds (was [19.62, 0.2] in v2.6.0). In-box output -> penalty 0.
     lambda_pretanh: 1.0
     z_target: 1.0                   # v2.6.0 raised 0.867->1.0: clamp_tanh reaches the box at |z|=0.867, so
                                     # z_target>=0.867 leaves boundary-reaching (incl. deep-safe tilted-IC

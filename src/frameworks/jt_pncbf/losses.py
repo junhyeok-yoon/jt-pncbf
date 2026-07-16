@@ -612,11 +612,17 @@ def policy_bptt_loss(
         # (a hazard sup-h value, not a goal value). Inside the same g_in safe-region gate as task_cost.
         # PROTOCOL FOLLOW-UP: this changes the §4.4 rollout return; 03_train edit deferred until utility
         # confirmed (Researcher-directed).
+        # v2.6.1 Axis B: velocity-aware terminal. The v2.6.0 terminal credits goal POSITION (||p_T - g||) but
+        # not goal SPEED, so the policy overshoots and loiters near the goal (v2.6.0 D1: 57% of timeouts reach
+        # within goal_radius but miss the goal-speed criterion). Add discount*w_terminal_v*||v_T|| so slowing
+        # at the horizon is credited. Differentiable through x_T; same gate_in; rides detach_filter_coeffs.
         w_term = float(policy_cfg.get("w_terminal", 0.0))
-        if w_term > 0.0:
+        w_term_v = float(policy_cfg.get("w_terminal_v", 0.0))
+        if w_term > 0.0 or w_term_v > 0.0:
             goal_T = _scene_goal(scene, x)
             dist_T = torch.linalg.norm(system.position(x) - goal_T, dim=1)   # ||p_T - g||
-            task_cost = task_cost + discount * w_term * dist_T               # discount == gamma_T^T here
+            speed_T = system.speed(x)                                       # ||v_T|| (world linear velocity)
+            task_cost = task_cost + discount * (w_term * dist_T + w_term_v * speed_T)  # discount == gamma_T^T here
 
         action_stack = torch.stack(nominal_actions, dim=0)
         safe_stack = torch.stack(safe_actions, dim=0)

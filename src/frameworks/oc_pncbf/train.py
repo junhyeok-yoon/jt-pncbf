@@ -659,16 +659,17 @@ def _record_eval(
         output_dir=run_dir / "figures/inloop",
         filename_template=f"step_{step:06d}_grid_{{letter}}.png",
     )
-    # v2.6.0: skip the CBF contour for the 6D quadrotor (no 2D velocity slice; viz-only).
-    if system.name != "quadrotor_planar":
-        contour_path = write_cbf_contour_figure(
-            eval_result=eval_result,
-            config=config,
-            system=system,
-            value_net=value_net,
-            output_path=run_dir / "figures/inloop" / f"step_{step:06d}_cbf_contour.png",
-            role="In-loop eval CBF contour",
-        )
+    # v2.6.1: CBF contour saved every eval for ALL systems (write_cbf_contour_figure dispatches on
+    # system.name — quadrotor gets a position-plane approach-speed contour; None only on failure). Viz-only.
+    contour_path = write_cbf_contour_figure(
+        eval_result=eval_result,
+        config=config,
+        system=system,
+        value_net=value_net,
+        output_path=run_dir / "figures/inloop" / f"step_{step:06d}_cbf_contour.png",
+        role="In-loop eval CBF contour",
+    )
+    if contour_path is not None:
         log_png_to_tensorboard(
             writer,
             f"eval/in_loop/step_{step:06d}_cbf_contour",

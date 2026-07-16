@@ -320,6 +320,81 @@ def plot_cbf_contours(
     )
 
 
+def plot_quadrotor_cbf_contour(
+    scenes: list[Any],
+    output_path: Path,
+    config: Mapping[str, Any],
+    system: Any,
+    value_net: Any,
+    *,
+    resolution: int = 160,
+    role: str = "CBF contour",
+) -> Path:
+    """6D-appropriate CBF contour for the planar quadrotor (the 2D-velocity-slice contour does not apply).
+    Renders the deployed h(x)=V_hat on the POSITION plane (px,py) for up to two scenes across three
+    approach-speed slices s=v^T Re (theta=0, omega=0 -> Re=(0,1), v=(0,s)) — the h_star velocity channel.
+    Convention (matches the gate gate_in=sigmoid(-h)): h<0 safe (blue), h=0 boundary (black), h>0 unsafe."""
+    plt.rcParams["font.family"] = FONT_FAMILY
+    device, dtype = _module_device_dtype(value_net, system)
+    h_fn = make_h_fn(value_net, system)
+    world_lim = float(config["env"]["world_lim"])
+    goal_radius = float(config["env"].get("goal_radius", 0.15))
+    slices = [(-2.0, "v.Re=-2"), (0.0, "hover v.Re=0"), (2.0, "v.Re=+2")]
+    use_scenes = scenes[:2] if len(scenes) >= 2 else scenes[:1]
+    ax_lin = torch.linspace(-world_lim, world_lim, resolution, device=device, dtype=dtype)
+    gx, gy = torch.meshgrid(ax_lin, ax_lin, indexing="xy")
+    pos = torch.stack([gx.reshape(-1), gy.reshape(-1)], dim=1)
+    axn = _to_numpy(ax_lin)
+    norm = TwoSlopeNorm(vmin=-1.0, vcenter=0.0, vmax=1.0)
+    nrow, ncol = len(use_scenes), len(slices)
+    fig, axes = plt.subplots(nrow, ncol, figsize=(4.8 * ncol, 4.4 * nrow), dpi=FIG_DPI, squeeze=False)
+    fig.suptitle(f"{__version__} · {role} · quadrotor_planar · h<0 safe (blue), h=0 boundary, h>0 unsafe",
+                 fontsize=TITLE_FONT_SIZE, fontweight="normal")
+    mappable = None
+    from types import SimpleNamespace
+    for r, sc in enumerate(use_scenes):
+        active = _to_numpy(torch.as_tensor(np.asarray(sc.obstacle_active))).astype(bool)
+        centers = np.asarray(sc.obstacle_centers)[active]
+        radii = np.asarray(sc.obstacle_radii)[active]
+        goal = np.asarray(sc.goal)
+        scene_t = SimpleNamespace(
+            obstacle_centers=torch.as_tensor(np.asarray(sc.obstacle_centers), dtype=dtype, device=device),
+            obstacle_radii=torch.as_tensor(np.asarray(sc.obstacle_radii), dtype=dtype, device=device),
+            obstacle_active=torch.as_tensor(np.asarray(sc.obstacle_active), dtype=torch.bool, device=device),
+            goal=torch.as_tensor(goal, dtype=dtype, device=device))
+        for c, (s, label) in enumerate(slices):
+            axis = axes[r][c]
+            x = torch.zeros(pos.shape[0], 6, device=device, dtype=dtype)
+            x[:, :2] = pos
+            x[:, 4] = s                                              # vy = s (theta=0 -> v^T Re = vy)
+            with torch.no_grad():
+                h = torch.clamp(h_fn(x, scene_t), -1.0, 1.0).reshape(resolution, resolution)
+            h = _to_numpy(h)
+            mappable = axis.contourf(axn, axn, h, levels=CONTOUR_LEVELS, cmap=CONTOUR_CMAP, norm=norm, extend="both")
+            if float(np.min(h)) <= 0.0 <= float(np.max(h)):
+                axis.contour(axn, axn, h, levels=[0.0], colors="black", linewidths=CONTOUR_ZERO_LINE_WIDTH)
+            for ctr, rad in zip(centers, radii):
+                axis.add_patch(Circle((ctr[0], ctr[1]), rad, fill=False, ec="k", lw=1.2, ls="--"))
+                axis.add_patch(Circle((ctr[0], ctr[1]), rad, fill=True, fc="k", alpha=0.12))
+            axis.plot(goal[0], goal[1], marker="*", ms=15, mfc="gold", mec="k", mew=1.0, zorder=5)
+            axis.add_patch(Circle((goal[0], goal[1]), goal_radius, fill=False, ec="gold", lw=1.0))
+            axis.set_xlim(-world_lim, world_lim); axis.set_ylim(-world_lim, world_lim)
+            axis.set_aspect("equal")
+            axis.set_title(f"scene{r} ({int(active.sum())} obs) · {label}", fontsize=9)
+            if c == 0:
+                axis.set_ylabel("py")
+            if r == nrow - 1:
+                axis.set_xlabel("px")
+    if mappable is not None:
+        fig.subplots_adjust(right=0.90, top=0.86, hspace=0.22, wspace=0.16)
+        cax = fig.add_axes([0.92, 0.12, 0.014, 0.72])
+        fig.colorbar(mappable, cax=cax, label="h(x)=V_hat")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, bbox_inches="tight")
+    plt.close(fig)
+    return output_path
+
+
 def plot_scene_grid(
     scenes: list[Any],
     output_path: Path,

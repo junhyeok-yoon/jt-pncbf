@@ -41,6 +41,7 @@ from src.eval.plotting import (
     PANELS_PER_FIGURE,
     EpisodeControlSpec,
     plot_cbf_contours,
+    plot_quadrotor_cbf_contour,
     plot_trajectory_control_grid,
 )
 from src.eval.rollout import RolloutResult
@@ -247,10 +248,21 @@ def write_cbf_contour_figure(
     output_path: Path,
     role: str,
 ) -> Path | None:
-    # v2.6.0: the CBF contour uses a 2D velocity-column slice; the 6D quadrotor has none, so the figure
-    # is skipped (viz-only, not gate-relevant). PROTOCOL FOLLOW-UP: a 6D-appropriate contour if wanted.
+    # v2.6.1: the 6D quadrotor has no 2D velocity-column slice, so it uses a position-plane contour across
+    # three approach-speed slices (h_star velocity channel). Viz-only, not gate-relevant; wrapped so a
+    # figure error never propagates into the eval / training loop.
     if getattr(system, "name", None) == "quadrotor_planar":
-        return None
+        try:
+            return plot_quadrotor_cbf_contour(
+                scenes=eval_result.pool.scenes[:2],
+                output_path=output_path,
+                config=config,
+                system=system,
+                value_net=value_net,
+                role=role,
+            )
+        except Exception:
+            return None
     plot_cbf_contours(
         scenes=eval_result.pool.scenes[:2],
         output_path=output_path,

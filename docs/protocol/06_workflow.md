@@ -191,13 +191,39 @@ The Executor copies the chosen final run(s) from `data/<run_id>/` into the secur
 5. Close preparation complete (items 1-4 done and reported). The Researcher then performs
    `git add` / `commit` / `push` directly (§2.6); the Executor does NOT run git.
 
+**Close trigger — the Strategist close sequence (automated on "close").** When the Researcher
+directs a close (says "close" or equivalent), the Strategist runs the following in order,
+**without re-requesting permission at each step**, pausing only at the marked decision points:
+
+1. **Fact-gather retrieve.** Author and issue a read-only retrieve collecting the final
+   metrics, artifact inventory, gate outcomes, and open `PROTOCOL FOLLOW-UP` items the
+   documents below need.
+2. **`results.md`.** Draft `docs/versions/v<X>_results.md` (the four parts above), stating the
+   seed basis explicitly (single-seed vs pooled).
+3. **Close execute.** Author and issue the Executor close prompt — checklist items 2–3 (ledger
+   row(s), secured snapshot + `ADOPTED.md`, run move) plus the `docs/index.md` dashboard update
+   and tagging of any untagged `PROTOCOL FOLLOW-UP`. **No git.**
+4. **Protocol delta.** For each `PROTOCOL FOLLOW-UP` item that describes the current system or
+   method (not a future axis), author the before→after edit as a diff (Prohibition 3: state the
+   rule on its own merits, no version narrative), then apply approved edits to `docs/protocol/`
+   directly (the Strategist edits protocol; §1).
+5. **Git commands.** Present the step-by-step `git` sequence (§2.6) for the Researcher to run.
+
+**Decision points (the sequence pauses and asks; nothing else is re-asked):** (a) **multi-seed
+escalation** — whether to promote a verdict-grade single-seed result to `{42, 99, 12345}` before
+the verdict; (b) **protocol-delta approval** (step 4, before applying); (c) **git execution**
+(step 5, always the Researcher). Absent a decision-point answer, the Strategist proceeds with the
+other steps and surfaces the pending decision, rather than blocking the whole close.
+
 Version string bumps are done AFTER push, not during close.
 
 ### 2.6 Push
 
-The Executor prepares the close (checklist items 1-4) and recommends the git command, but does
-NOT run git. The Researcher performs `git add` / `commit` / `push` / `tag` directly via bash once
-close preparation is complete and reported.
+The Strategist presents the git command sequence, including the commit message; the Executor
+prepares the close (checklist items 2–3) but does NOT run git and does NOT draft or recommend
+git commands or commit messages (`00_constitution` §1, §3 Prohibition 4). The Executor's only
+git-adjacent contribution is the grouped file list from its action log. The Researcher performs
+`git add` / `commit` / `push` / `tag` directly via bash once close preparation is complete.
 Since `docs/versions/` is local-only (§6.2), the version's `changes.md`, build-logs, and
 results are not staged; what is committed is the code/config change, the updated dashboard
 and ledger, and the secured snapshot:
@@ -212,7 +238,7 @@ git tag vX.Y.Z
 git push && git push --tags
 ```
 
-`docs/index.md` (the state dashboard) and `docs/ledger.md` (one row per run, with lineage and `cps`) are updated as part of the same commit. Protocol edits, if any, are committed in the same step. The tag `vX.Y.Z` is the authoritative reference to this version's code state; secured artifacts in `data/secured_data/` are the authoritative reference to its results. The version's process documents remain in the local-only `docs/versions/` and are not part of the tagged commit.
+`docs/index.md` (the state dashboard) and `docs/ledger.md` (one row per run, with lineage and `cps`) are updated as part of the same commit. Protocol edits, if any, are committed in the same step. The commit message is **one line, prose, no metrics or data** (`vX.Y.Z: <one-line summary>`) — the version's *what*, not its numbers; results, deltas, and CIs live in `results.md` and the ledger, never in the commit message. The tag `vX.Y.Z` is the authoritative reference to this version's code state; secured artifacts in `data/secured_data/` are the authoritative reference to its results. The version's process documents remain in the local-only `docs/versions/` and are not part of the tagged commit.
 
 Between version pushes, the Strategist reads the **last pushed state** (commits, secured data); in-flight, unsecured work is not the Strategist's source of truth.
 
