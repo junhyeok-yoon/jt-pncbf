@@ -497,6 +497,19 @@ def policy_bptt_loss(
     lambda_v = float(policy_cfg["lambda_v"])
     mu_u = float(policy_cfg["mu_u"])
     tau_gate = float(policy_cfg["tau_gate"])
+    # v2.6.2: situation-dependent velocity objective (running-cost redesign, changes.md §4). QUADROTOR ONLY
+    # — the obstacle-approach term needs the linear-velocity VECTOR (x[:,3:5]), whose layout is
+    # quadrotor-specific; DI/unicycle keep the legacy quadratic d2 cost (byte-identical parity). Activated
+    # only when a new key is set AND system is quadrotor_planar; each added term is weight-gated (w_settle=0
+    # or w_appr=0 -> inert, for the goal-only ablation).
+    # goal DISTANCE stays quadratic ||p-g||^2 (the Huber variant was reverted per the build-log amendment);
+    # the mechanism is the two gated SPEED terms below.
+    situational = getattr(system, "name", None) == "quadrotor_planar"
+    w_settle = float(policy_cfg.get("w_settle", 0.0))       # 0 -> no goal-gated settling term
+    settle_rho = float(policy_cfg.get("settle_rho", 0.30))
+    w_appr = float(policy_cfg.get("w_appr", 0.0))           # 0 -> no obstacle-approach (braking-envelope) term
+    tau_brake = float(policy_cfg.get("tau_brake", 0.6))     # braking-envelope lookahead time (amendment 2)
+    use_situational = situational and (w_settle > 0.0 or w_appr > 0.0)
     # v2.4.0 Step 5 (audit C1 fix): when set, detach the CBF coefficients inside the differentiable
     # policy BPTT rollout so the policy gradient does not flow through the projection's state-dependent
     # coefficient Jacobian (the T=60 gradient-explosion source). Default off => byte-identical.
@@ -524,6 +537,11 @@ def policy_bptt_loss(
     with frozen_params(value_net):
         x = system.wrap_state(batch.states.detach())
         scene = batch.scene
+        # v2.6.2 obstacle-approach term: fetch the (static-per-episode) obstacle geometry ONCE; the term is
+        # vectorized over the top-K obstacles inside the rollout loop (on-GPU, no Python obstacle loop).
+        if use_situational and w_appr > 0.0:
+            from src.common.observation import scene_obstacle_tensors
+            _obs_c, _obs_r, _obs_a = scene_obstacle_tensors(scene, x.device, x.dtype)   # [B,K,2],[B,K],[B,K]
         v_now = value_net.deployed_h(system.observation(x, scene)).detach()
         gate_in = torch.sigmoid(-v_now / tau_gate)
         gate_out = torch.sigmoid(v_now / tau_gate)
@@ -598,10 +616,43 @@ def policy_bptt_loss(
             x = rk4_step(system, x, u_safe, dt)
             goal = _scene_goal(scene, x)
             pos_error = system.position(x) - goal
-            d2 = torch.sum(pos_error * pos_error, dim=1)
             v2 = system.speed(x) * system.speed(x)
             u2 = torch.sum(u_safe * u_safe, dim=1)
-            task_cost = task_cost + discount * (d2 + lambda_v * v2 + mu_u * u2)
+            if use_situational:
+                # v2.6.2 situation-dependent velocity objective (changes.md §4 + build-log amendment). The
+                # goal-DISTANCE term stays the original quadratic ||p-g||^2 (v2.6.1); the Huber variant was
+                # REVERTED (audit: no smooth cost has a nonvanishing gradient at its minimizer, and the
+                # specified Huber weakened the far-field goal gradient ~40x — a confound both ablation arms
+                # would carry). The v2.6.2 MECHANISM is the two gated SPEED terms: dense goal-gated settling
+                # (penalize speed ONLY near the goal) + dense obstacle-gated approach (penalize INWARD speed
+                # ONLY near obstacles). lambda_v*v2 (global) and mu_u*u2 retained.
+                r = torch.linalg.norm(pos_error, dim=1)                     # ||p - g|| (for the settling gate)
+                d2 = torch.sum(pos_error * pos_error, dim=1)                # original quadratic goal distance
+                step_cost = d2 + lambda_v * v2 + mu_u * u2
+                if w_settle > 0.0:
+                    step_cost = step_cost + w_settle * torch.exp(-(r * r) / (settle_rho * settle_rho)) * v2
+                if w_appr > 0.0:
+                    # v2.6.2 AMENDMENT 2: BRAKING-ENVELOPE obstacle-approach deficit (replaces the fixed-d0
+                    # gaussian gate, which was inert — diag Phase-1 B/C: closed 0.018 at 1 m surface, past the
+                    # PNR, and ~36x below the goal term). Form: w_appr*sum_k relu(s_k*tau_brake - surf_k)^2,
+                    # s_k = inward speed. Zero when receding (s=0) or outside the envelope (surf > s*tau_brake),
+                    # C^1, no division, and the envelope RADIUS = s*tau_brake grows with the approach speed, so
+                    # it engages EARLIER the FASTER the approach — the property the fixed gate lacked.
+                    p = system.position(x)                                 # [B,2]
+                    vel = x[:, 3:5]                                        # [B,2] quadrotor world velocity
+                    rel = p.unsqueeze(1) - _obs_c                          # [B,K,2] obstacle-center -> body
+                    dist_c = torch.linalg.norm(rel, dim=2)                 # [B,K]
+                    surf = dist_c - _obs_r                                 # [B,K] surface distance
+                    normal = rel / dist_c.unsqueeze(2).clamp_min(1.0e-9)   # [B,K,2] outward surface normal
+                    v_dot_n = torch.sum(vel.unsqueeze(1) * normal, dim=2)  # [B,K] (>0 = moving away)
+                    inward = torch.relu(-v_dot_n)                          # [B,K] inward speed s_k (>=0)
+                    deficit = torch.relu(inward * tau_brake - surf)        # [B,K] envelope violation (>0 inside)
+                    deficit = deficit * _obs_a.to(surf.dtype)              # mask inactive obstacles
+                    step_cost = step_cost + w_appr * torch.sum(deficit * deficit, dim=1)
+                task_cost = task_cost + discount * step_cost
+            else:
+                d2 = torch.sum(pos_error * pos_error, dim=1)               # legacy quadratic (DI/unicycle parity)
+                task_cost = task_cost + discount * (d2 + lambda_v * v2 + mu_u * u2)
             discount *= gamma_t
 
         # v2.6.0 credit-horizon axis: BPTT TERMINAL VALUE at x_T (03_train §4.4 currently has NO terminal

@@ -442,23 +442,49 @@ it to $u^{\text{safe}}_t$, and the state advances
 $x_{t+1} = \text{RK4}(x_t, u^{\text{safe}}_t)$. The task cost per step is
 
 $$
-c^{\text{task}}_t = \|p_t - g\|^2 + \lambda_v\, \|v_t\|^2 + \mu_u\, \|u^{\text{safe}}_t\|^2,
+c^{\text{task}}_t = \|p_t - g\|^2 + \lambda_v\, \|v_t\|^2
++ w_s\, e^{-\|p_t-g\|^2/\rho_s^2}\, \|v_t\|^2
++ w_a \sum_{k} \mathrm{relu}\big(s_{k,t}\,\tau_b - d_{k,t}\big)^2
++ \mu_u\, \|u^{\text{safe}}_t\|^2,
 $$
 
-with $\lambda_v$ and $\mu_u$ from `loss.policy`. The discounted return is
+with $\lambda_v$ and $\mu_u$ from `loss.policy`, and two **situational velocity terms** (keys
+`loss.policy.{w_settle, settle_rho, w_appr, tau_brake}`; all default $0$, which recovers the
+plain cost — DI/Unicycle parity):
+
+- **Goal-gated settling** ($w_s = $ `w_settle`, $\rho_s = $ `settle_rho`): penalizes speed only
+  near the goal, converting arrival into settling densely at every step. This is the running
+  replacement for the sparse velocity terminal below; the two should not be active together.
+- **Braking-envelope approach** ($w_a = $ `w_appr`, $\tau_b = $ `tau_brake`): with
+  $s_k = \mathrm{relu}(-v^\top n_k)$ the inward closure speed toward obstacle $k$ and $d_k$ its
+  **surface** distance, the deficit $s_k \tau_b - d_k$ is the distance the current inward speed
+  covers in $\tau_b$ beyond what remains — a soft stopping-distance constraint, exactly $0$ when
+  receding or outside the envelope, engaging **earlier the faster the approach** (a
+  fixed-distance gate cannot do this). It shapes the demand side of filter feasibility (the
+  required correction grows with the approach rate) so the policy keeps the filter feasible
+  rather than entering states no admissible action can save.
+
+The discounted return is
 
 $$
 R(\theta; x_0) = -\sum_{t=0}^{T-1} \gamma_T^t\, c^{\text{task}}_t
-\;-\; \gamma_T^{T}\, w_{\text{term}}\, \|p_T - g\|,
+\;-\; \gamma_T^{T}\,\big( w_{\text{term}}\, \|p_T - g\| + w_{\text{term},v}\, \|v_T\| \big),
 \qquad \gamma_T = \texttt{loss.policy.gamma\_T}.
 $$
 
-The final term is an **end-of-horizon terminal goal-distance** with weight
-$w_{\text{term}} = \texttt{loss.policy.w\_terminal}$: it credits closing distance to the goal
-beyond the BPTT window, which the windowed sum alone cannot reward. It uses the analytic goal
-distance (not the learned $V_S$, which is a hazard value), and is differentiable through $x_T$.
-Setting $w_{\text{term}} = 0$ recovers the plain windowed return; it is $0$ by default and used
-only where the fixed window $T$ is short relative to the time to reach the goal.
+The final term is an **end-of-horizon terminal** with weights
+$w_{\text{term}} = \texttt{loss.policy.w\_terminal}$ and
+$w_{\text{term},v} = \texttt{loss.policy.w\_terminal\_v}$: the position part credits closing
+distance to the goal beyond the BPTT window, which the windowed sum alone cannot reward. It uses
+the analytic goal distance (not the learned $V_S$, which is a hazard value), and is
+differentiable through $x_T$. Setting $w_{\text{term}} = 0$ recovers the plain windowed return;
+it is $0$ by default and used only where the fixed window $T$ is short relative to the time to
+reach the goal. The velocity part $w_{\text{term},v}$ is a **sparse** settling signal (once per
+window, position-blind about where it fires); its default is $0$ — the dense goal-gated settling
+term above supersedes it, and a per-window $\|v_T\|$ penalty at mostly mid-field window ends
+acts as an unintended global damper. Per-system standard: quadrotor
+$w_s = 1.0$, $\rho_s = 0.30$, $w_a = 30$, $\tau_b = 0.6$, $w_{\text{term}} = 30$,
+$w_{\text{term},v} = 0$; DI/Unicycle: all four situational keys $0$.
 
 The rollout integrates the cost over the full fixed horizon $T$ and does not terminate or mask
 mid-window when a trajectory reaches the goal, penetrates an obstacle, or leaves the arena;

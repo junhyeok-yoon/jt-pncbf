@@ -210,10 +210,15 @@ not redefine it.
   $[-\pi, \pi]$.
 - **Control** (dim 2): $(f_{\text{thr}}, \tau)$ — scalar body-axis thrust
   $f_{\text{thr}}$ and torque $\tau$, box-bounded $f_{\text{thr}} \in [0,\, 19.62]$,
-  $\tau \in [-0.2,\, 0.2]$ (`exp_config.env.quadrotor_planar`). The channels are **decoupled
+  $\tau \in [-1.0,\, 1.0]$ (`exp_config.env.quadrotor_planar`). The channels are **decoupled
   inputs**: thrust drives $\dot v$ through the attitude-steered axis, torque drives $\dot\omega$
-  only. There is no rotor/arm model — thrust and torque are independent controls, and the box
-  bounds are set per channel rather than from a shared moment arm.
+  only. There is no rotor/arm model — thrust and torque are independent controls — but the
+  torque bound is sized **plant-coherently**: with $\mathsf m = 1.0$ and $J = 0.01$ the implied
+  arm length is $L_J = \sqrt{J/\mathsf m} = 0.1$ m, whose coherent torque scale is
+  $\bar\tau \approx L_J f_{\max}/2 \approx 0.98$. An undersized torque bound is a filter
+  **feasibility** defect, not a mere agility choice: the box magnitude in the authority-loaded
+  channel must dominate the required safety correction (the theory note's box-feasibility
+  characterization).
 - **Dynamics** (control-affine, $\dot x = f(x) + g(x) u$), with $Re = (-\sin\theta,\ \cos\theta)$
   the body thrust axis, mass $\mathsf m$, inertia $J$, gravity $g$ along $-y$:
   - $\dot{px} = vx$
@@ -226,14 +231,19 @@ not redefine it.
   $v_{\max} = 2.5$, rate clamp $\omega_{\max} = 4.0$ (`exp_config.env.quadrotor_planar`). After
   each RK4 step $\|(vx, vy)\|$ is scaled to $v_{\max}$ and $|\omega|$ to $\omega_{\max}$
   (velocity/rate clamp per §2), and $\theta$ is wrapped to $[-\pi, \pi]$.
-- **Observation** (dim 20, body-frame):
+- **Observation** (dim 22, body-frame):
   $[v^{\text{body}}_x,\, v^{\text{body}}_y,\, \omega,\, \text{goal}^{\text{body}}_x,\,
   \text{goal}^{\text{body}}_y]$ followed by the Top-5 obstacles, each
-  $(\text{obs}^{\text{body}}_x,\, \text{obs}^{\text{body}}_y,\, r_i)$, where velocity,
-  goal-relative, and obstacle relative positions are rotated into the body frame by $\theta$.
-  Absolute position and $\theta$ are excluded — as with the Unicycle, attitude is observable
-  only through its effect on the body-frame vectors, not as a feature; the angular rate
-  $\omega$ is exposed as a raw scalar.
+  $(\text{obs}^{\text{body}}_x,\, \text{obs}^{\text{body}}_y,\, r_i)$, followed by the attitude
+  features $(\sin\theta,\ \cos\theta)$ — equivalently the body-frame gravity direction.
+  **Design rule:** the observation may quotient only by the symmetry group of the closed-loop
+  dynamics-plus-task. Translations are a symmetry (absolute position is excluded); rotations
+  are **not** for this system — gravity fixes a world direction, so a body-frame encoding that
+  also drops $\theta$ over-quotients and aliases dynamically distinct states (upright vs
+  inverted), an information loss no training can remove. The attitude therefore enters
+  explicitly via $(\sin\theta, \cos\theta)$; the angular rate $\omega$ is a raw scalar. (The
+  Unicycle and DI are kinematic/gravity-free, so their full-SE(2)/translation quotients remain
+  exact — this rule changes nothing there.)
 
 The barrier machinery that acts on this system (the analytic attitude-augmented $h_\star$ and the
 direct box-aware HardNet projection onto $(f_{\text{thr}}, \tau)$) is defined agent-side in

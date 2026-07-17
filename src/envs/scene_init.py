@@ -79,6 +79,8 @@ def _sample_scene(
             continue
         if not _passes_unavoidable_collision_filter(scene, config, params):
             continue
+        if not _passes_recoverability_filter(scene, config):   # v2.6.2 amendment 3 (quadrotor only, additive)
+            continue
         return scene
 
     raise RuntimeError(
@@ -239,6 +241,26 @@ def _make_scene(
         initial_speed=initial_speed,
         initial_heading=initial_heading,
     )
+
+
+def _passes_recoverability_filter(scene: Scene, config: Mapping[str, Any]) -> bool:
+    """v2.6.2 amendment 3: ANALYTIC attitude-aware IC recoverability test (quadrotor_planar ONLY; additive to
+    the position/velocity filter above). Rejects born-doomed ICs — where the thrust axis cannot rotate onto
+    the obstacle normal and brake the inward closure before impact. No-op (returns True) for DI/unicycle and
+    if the recov_margin key is absent. See src/common/quadrotor_recoverability.py."""
+    if scene.system != "quadrotor_planar":
+        return True
+    q = config["env"].get("quadrotor_planar", {})
+    if "recov_margin" not in q:
+        return True
+    from src.common.quadrotor_recoverability import is_recoverable, plant_params
+    return is_recoverable(
+        p0=np.asarray(scene.start, dtype=np.float64),
+        v0=_initial_velocity_vector(scene),
+        theta0=float(scene.initial_attitude if scene.initial_attitude is not None else 0.0),
+        omega0=float(scene.initial_omega if scene.initial_omega is not None else 0.0),
+        centers=scene.obstacle_centers, radii=scene.obstacle_radii, active=scene.obstacle_active,
+        plant=plant_params(config), margin=float(q["recov_margin"]))
 
 
 def _has_start_goal_clearance(scene: Scene, clearance: float) -> bool:

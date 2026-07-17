@@ -237,3 +237,56 @@ def test_clamp_tanh_head_reaches_box_boundary_and_stays_in_box():
         out = net(torch.randn(256, system.obs_dim, dtype=torch.float64))
     assert bool((out[:, 0] >= lo[0] - 1e-9).all() and (out[:, 0] <= hi[0] + 1e-9).all())
     assert bool((out[:, 1] >= lo[1] - 1e-9).all() and (out[:, 1] <= hi[1] + 1e-9).all())
+
+
+# ---- v2.6.2 amendment 3: attitude-aware IC recoverability filter ----
+
+def test_recoverability_rejects_flipped_fast_inward_accepts_hover_far() -> None:
+    import numpy as np
+    from src.common.quadrotor_recoverability import is_recoverable, plant_params, _min_time_align
+    cfg = _cfg()
+    plant = plant_params(cfg)
+    # alpha_max = tau_max/J = 1.0/0.01 = 100; a_brake = f_max/m - g = 19.62 - 9.81 = 9.81
+    assert abs(plant["alpha_max"] - 100.0) < 1e-9 and abs(plant["a_brake"] - 9.81) < 1e-6
+    c = np.array([[0.0, 0.0]]); r = np.array([0.5]); a = np.array([True])
+    # (i) pi-flipped fast-inward IC near an obstacle -> REJECT: body just outside (surf 0.4), fast inward
+    # (s=2.5), thrust axis Re(theta=pi/2)=(-1,0) points INTO the obstacle (must flip 180 deg first).
+    assert is_recoverable(np.array([0.9, 0.0]), np.array([-2.5, 0.0]), np.pi / 2, 0.0, c, r, a, plant, 0.1) is False
+    # (ii) hover far from obstacles -> ACCEPT
+    assert is_recoverable(np.array([3.5, 3.5]), np.array([0.0, 0.0]), 0.0, 0.0, c, r, a, plant, 0.1) is True
+    # receding (moving away) is never doomed regardless of attitude
+    assert is_recoverable(np.array([1.2, 0.0]), np.array([2.5, 0.0]), np.pi / 2, 0.0, c, r, a, plant, 0.2) is True
+    # adverse omega_0 costs more time than helping omega_0 (align a 180 deg flip)
+    assert _min_time_align(np.pi, -4.0, 100.0, 4.0) > _min_time_align(np.pi, 4.0, 100.0, 4.0)
+    # deterministic / pure
+    assert is_recoverable(np.array([0.9, 0.0]), np.array([-2.5, 0.0]), np.pi / 2, 0.0, c, r, a, plant, 0.1) \
+        == is_recoverable(np.array([0.9, 0.0]), np.array([-2.5, 0.0]), np.pi / 2, 0.0, c, r, a, plant, 0.1)
+
+
+def test_ballistic_doom_flags_surface_head_on_spares_grazing() -> None:
+    import numpy as np
+    from src.common.quadrotor_ballistic_doom import (accel_bound, is_doomed_ballistic, min_approach,
+                                                     radius_bucket_down)
+    cfg = _cfg()
+    A = accel_bound(cfg)
+    assert abs(A - 29.43) < 1e-6                                   # f_max/m + g = 3g
+    c = np.array([[0.0, 0.0]]); r = np.array([0.5]); act = np.array([True])
+    # (i) surface-contact head-on, fast inward -> FLAG. d_k = 0.02 < s^2/(2A) = 1.5^2/58.86 = 0.0382.
+    assert is_doomed_ballistic(np.array([0.52, 0.0]), np.array([-1.5, 0.0]), c, r, act, A) is True
+    # (ii) grazing: same point, velocity TANGENTIAL -> NOT flagged (slides past; min approach at t=0 = 0.52)
+    assert is_doomed_ballistic(np.array([0.52, 0.0]), np.array([0.0, 1.5]), c, r, act, A) is False
+    # (iii) head-on but ample clearance (d_k = 0.30 >> braking 0.038) -> NOT flagged
+    assert is_doomed_ballistic(np.array([0.80, 0.0]), np.array([-1.5, 0.0]), c, r, act, A) is False
+    # (iv) receding -> never doomed; hover far -> never doomed
+    assert is_doomed_ballistic(np.array([0.52, 0.0]), np.array([1.5, 0.0]), c, r, act, A) is False
+    assert is_doomed_ballistic(np.array([3.0, 3.0]), np.array([0.0, 0.0]), c, r, act, A) is False
+    # head-on closed form: min approach == d - s^2/(2A) (analytic), matches the ternary search
+    d, s = 0.52, 1.5
+    assert abs(min_approach(np.array([d, 0.0]), np.array([-s, 0.0]), np.array([0.0, 0.0]), A, 0.5)
+               - (d - s * s / (2.0 * A))) < 1e-5
+    # radius rounds DOWN to the shared bucket grid (conservative)
+    assert radius_bucket_down(0.53) == 0.50 and radius_bucket_down(0.79) == 0.75
+    assert radius_bucket_down(0.10) == 0.15                        # clamp below range
+    # deterministic
+    assert is_doomed_ballistic(np.array([0.52, 0.0]), np.array([-1.5, 0.0]), c, r, act, A) \
+        == is_doomed_ballistic(np.array([0.52, 0.0]), np.array([-1.5, 0.0]), c, r, act, A)
