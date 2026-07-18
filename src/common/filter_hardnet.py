@@ -29,6 +29,8 @@ class _HardNetParams:
     lookahead_beta: float
     lookahead_delta: float
     dt: float
+    empty_fallback_mode: str = "none"       # v2.7.1 Stage-1: none | kstep (eval-only; none = bit-parity)
+    empty_fallback_k: int = 10
 
 
 class HardNetFilter:
@@ -119,6 +121,22 @@ class HardNetFilter:
             row_upper,
             bounds,
         )
+        # v2.7.1 Stage-1: k-step empty-branch ACTION fallback (eval-only, default off). On rows where the
+        # geometric intersection is empty, replace the least-violating action with the first-phase control of
+        # the two-phase k-step argmin. INVARIANT: the returned flag `singular | empty_intersection` is NOT
+        # touched — the row stays counted infeasible (metric/cps comparability, see retrieve §5). Singular-only
+        # rows keep the current selection (empty-only scope). Non-box-aware path never reaches here (early
+        # return above), so DI/unicycle parity holds.
+        if self.params.empty_fallback_mode == "kstep" and bool(empty_intersection.any()):
+            from src.common.kstep_fallback import grid_controls, kstep_select, slice_scene
+            m = empty_intersection
+            G = grid_controls(self.system, x.device, x.dtype)
+            u1_star, _ = kstep_select(x[m], slice_scene(scene, m), self.h_fn, self.system, G,
+                                      self.params.empty_fallback_k, self.params.dt)
+            box_projected = box_projected.clone()
+            box_projected[m] = u1_star.to(box_projected.dtype)
+        self.last_empty = empty_intersection.detach()          # split logging (S1d); additive, not the flag
+        self.last_singular = singular.detach()
         if return_deficit_aux:
             return box_projected, singular | empty_intersection, u_cbf_raw, singular
         return box_projected, singular | empty_intersection
@@ -303,6 +321,8 @@ def _hardnet_params(config: Mapping[str, Any]) -> _HardNetParams:
         lookahead_beta=float(lookahead_cfg.get("beta", 0.0)),
         lookahead_delta=max(float(lookahead_cfg.get("delta", 0.1)), 1.0e-8),
         dt=float(config.get("env", {}).get("dt", 0.05)),
+        empty_fallback_mode=str(config["filter"].get("empty_fallback", {}).get("mode", "none")),
+        empty_fallback_k=int(config["filter"].get("empty_fallback", {}).get("k", 10)),
     )
 
 

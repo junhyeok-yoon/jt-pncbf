@@ -20,6 +20,8 @@ class RolloutResult:
     u_safe: Tensor
     intervention_mask: Tensor
     infeasible: Tensor
+    empty: Tensor | None = None          # v2.7.1 S1d: per-step empty_intersection (split from infeasible)
+    singular: Tensor | None = None       # v2.7.1 S1d: per-step singular (split); additive, not the combined flag
 
 
 def rollout(
@@ -43,6 +45,9 @@ def rollout(
     u_nom_steps = []
     u_safe_steps = []
     infeasible_steps = []
+    empty_steps: list[Tensor] = []          # v2.7.1 S1d: split empty/singular (HardNet filter, if present)
+    singular_steps: list[Tensor] = []
+    _fobj = getattr(getattr(filter_fn, "__self__", None), "_filter", None)
 
     for _ in range(max_steps):
         u_nom = policy_fn(x, scene)
@@ -73,6 +78,11 @@ def rollout(
         u_nom_steps.append(u_nom)
         u_safe_steps.append(u_safe)
         infeasible_steps.append(infeasible.to(device=x.device, dtype=torch.bool))
+        _le = getattr(_fobj, "last_empty", None); _ls = getattr(_fobj, "last_singular", None)
+        empty_steps.append(_le.to(device=x.device, dtype=torch.bool) if _le is not None
+                           else infeasible.to(device=x.device, dtype=torch.bool))
+        singular_steps.append(_ls.to(device=x.device, dtype=torch.bool) if _ls is not None
+                              else torch.zeros(x.shape[0], dtype=torch.bool, device=x.device))
 
     if max_steps == 0:
         empty_action = x.new_empty((0, x.shape[0], system.action_dim))
@@ -94,6 +104,8 @@ def rollout(
         u_safe=u_safe_tensor,
         intervention_mask=intervention,
         infeasible=torch.stack(infeasible_steps, dim=0),
+        empty=torch.stack(empty_steps, dim=0),
+        singular=torch.stack(singular_steps, dim=0),
     )
 
 
@@ -139,6 +151,9 @@ def rollout_eval(
     u_nom_steps = []
     u_safe_steps = []
     infeasible_steps = []
+    empty_steps: list[Tensor] = []          # v2.7.1 S1d: split empty/singular from the HardNet filter, if present
+    singular_steps: list[Tensor] = []
+    _fobj = getattr(getattr(filter_fn, "__self__", None), "_filter", None)
     physical_done = _physical_done_mask(system, scene, torch.stack(states, dim=0), config)
 
     for _ in range(max_steps):
@@ -180,6 +195,11 @@ def rollout_eval(
         u_nom_steps.append(u_nom)
         u_safe_steps.append(u_safe)
         infeasible_steps.append(infeasible)
+        _le = getattr(_fobj, "last_empty", None); _ls = getattr(_fobj, "last_singular", None)
+        _eb = (_le.to(device=x.device, dtype=torch.bool) if _le is not None else infeasible.clone())
+        _sb = (_ls.to(device=x.device, dtype=torch.bool) if _ls is not None else torch.zeros_like(infeasible))
+        empty_steps.append(torch.where(physical_done, torch.zeros_like(_eb), _eb))
+        singular_steps.append(torch.where(physical_done, torch.zeros_like(_sb), _sb))
         physical_done = physical_done | _physical_done_mask(
             system,
             scene,
@@ -207,6 +227,8 @@ def rollout_eval(
         u_safe=u_safe_tensor,
         intervention_mask=intervention,
         infeasible=torch.stack(infeasible_steps, dim=0),
+        empty=torch.stack(empty_steps, dim=0),
+        singular=torch.stack(singular_steps, dim=0),
     )
 
 

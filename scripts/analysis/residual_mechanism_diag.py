@@ -130,15 +130,9 @@ INTERP_MAP = (
 
 
 def _grid_controls(system, dev):
-    """G = box corners (4) + hover (mg,0) + max-thrust-with-max-|tau| pair (coincides with 2 corners). |G|<=16."""
-    b = system.u_bounds.to(dev, torch.float32)                      # [2,2] rows=(thrust,torque) cols=(min,max)
-    tmin, tmax = float(b[0, 0]), float(b[0, 1]); qmin, qmax = float(b[1, 0]), float(b[1, 1])
-    mg = 9.81
-    G = [(tmin, qmin), (tmin, qmax), (tmax, qmin), (tmax, qmax),   # 4 box corners
-         (mg, 0.0),                                                # hover
-         (tmax, qmax), (tmax, qmin)]                               # max-thrust with max |tau| (dup of 2 corners)
-    uniq = sorted(set(G))
-    return torch.tensor(uniq, dtype=torch.float32, device=dev)      # [k,2]
+    """G = box corners + hover + max-thrust pair (|G|<=16). Shared with the filter fallback (no fork)."""
+    from src.common.kstep_fallback import grid_controls
+    return grid_controls(system, dev, torch.float32)
 
 
 def _mc_md_lg(R, ep_idx, t_idx):
@@ -166,6 +160,52 @@ def _mc_md_lg(R, ep_idx, t_idx):
         vn = h_fn(xn, sube).reshape(x.shape[0], k)
         m_d = (vn - v_x.unsqueeze(1)).min(dim=1).values.detach().cpu().numpy()   # <0 == discrete-improvable
     return m_c, m_d, lg_norm, h.detach().cpu().numpy()
+
+
+def _md_kstep(R, ep_idx, t_idx, k):
+    """P-B' k-step discrete margin: min over TWO-PHASE piecewise-constant candidate sequences (G per phase,
+    phase lengths ceil(k/2) + floor(k/2)) of [V_hat(x_k) - V_hat(x0)]. <0 == k-step improvable. Removes P-B's
+    1-step-underestimation caveat by giving torque time to act over O(k*dt)."""
+    system, h_fn, dev = R["system"], R["h_fn"], R["dev"]; scenes = R["scenes"]; dt = R["dt"]
+    G = _grid_controls(system, dev); ng = G.shape[0]; k1 = (k + 1) // 2; k2 = k - k1
+    sub = batch_scenes([scenes[i] for i in ep_idx], device=dev, dtype=torch.float32)
+    x0 = torch.tensor(np.stack([R["states"][i, t] for i, t in zip(ep_idx, t_idx)]), dtype=torch.float32, device=dev)
+    n = x0.shape[0]
+    with torch.no_grad():
+        v0 = h_fn(x0, sub).reshape(-1)
+        best = torch.full((n,), float("inf"), device=dev)
+        for a in range(ng):
+            for b in range(ng):
+                x = x0.clone()
+                u1 = G[a].unsqueeze(0).expand(n, -1); u2 = G[b].unsqueeze(0).expand(n, -1)
+                for _ in range(k1):
+                    x = rk4_step(system, x, u1, dt)
+                for _ in range(k2):
+                    x = rk4_step(system, x, u2, dt)
+                best = torch.minimum(best, h_fn(x, sub).reshape(-1) - v0)
+    return best.cpu().numpy()
+
+
+def probe_pbprime(R, pb_recs, TILT):
+    """P-B' — k-step (k in {5,10}) authority 2x2 tables on the t0 residual states, beside 1-step m_d / m_c."""
+    t0 = [r for r in pb_recs if r["state"] == "t0"]
+    ep = [r["episode_idx"] for r in t0]; ts = [r["t_step"] for r in t0]
+    out = {"n": len(t0)}
+    for k in (5, 10):
+        mdk = _md_kstep(R, ep, ts, k)
+        tab = {(ci, di): 0 for ci in (0, 1) for di in (0, 1)}
+        tabt = {(ci, di): 0 for ci in (0, 1) for di in (0, 1)}
+        for r, m in zip(t0, mdk):
+            ci = r["cont_infeasible"]; di = int(m < 0)
+            tab[(ci, di)] += 1
+            if r["tilted"] == 1:
+                tabt[(ci, di)] += 1
+        out[f"k{k}"] = {"all": _fmt_tbl(tab, len(t0)),
+                        "tilted": _fmt_tbl(tabt, sum(1 for r in t0 if r["tilted"] == 1)),
+                        "frac_kstep_improvable": round(float((mdk < 0).mean()), 3),
+                        "cont_infeas_and_kstep_improvable": tab[(1, 1)],
+                        "cont_infeas_and_both_dead": tab[(1, 0)]}
+    return out
 
 
 def probe_pb(R, aset, th0, TILT):
@@ -485,6 +525,9 @@ def main():
     print("[P-B authority 2x2 ALL]", json.dumps(pb["table_all"]), flush=True)
     print("[P-B authority 2x2 TILTED]", json.dumps(pb["table_tilted"]), flush=True)
     print("[P-B mc-vs-empty@t0 agreement]", pb["mc_vs_empty_t0_agreement"], flush=True)
+    pbp = probe_pbprime(R, pb_recs, TILT)
+    print("[P-B' k-step k5]", json.dumps(pbp["k5"]["all"]), "frac_improvable", pbp["k5"]["frac_kstep_improvable"], flush=True)
+    print("[P-B' k-step k10]", json.dumps(pbp["k10"]["all"]), "frac_improvable", pbp["k10"]["frac_kstep_improvable"], flush=True)
     pc_recs, pc = probe_pc(R, aset, th0, TILT)
     print("[P-C entry anatomy]", json.dumps(pc["counts"]), json.dumps({k: pc[k] for k in ("born_inside", "fast_approach", "other", "pool_median_speed")}), flush=True)
     pd = probe_pd(R)
@@ -508,6 +551,7 @@ def main():
 
     out["P_A4_d2"] = d2
     out["P_B_authority"] = pb
+    out["P_Bprime_kstep"] = pbp
     out["P_C_entry"] = pc
     out["P_D_offline"] = pd
     out["interp_map"] = INTERP_MAP

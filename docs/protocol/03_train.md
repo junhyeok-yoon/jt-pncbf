@@ -894,7 +894,10 @@ hypothesis and a clean ablation against the baseline:
   cell is actually rare under the sampler; predicates whose natural mass is not small
   cannot be meaningfully oversampled. The single-band tilt predicate
   ($|\theta_0| > \pi/2$, natural mass $\approx 0.5$) is a refuted instantiation and may not
-  be reintroduced.
+  be reintroduced. Corridor-cell START-injection is refuted: when the target cell is dynamically transient,
+  episode-start injection cannot materially raise state-level visitation (a structural ceiling independent of the
+  natural-mass pre-gate). The pre-gate therefore also requires a statement on the cell's dynamical persistence
+  before any injection axis is registered.
 - **Lateral/collinear bonus** in the policy task return, and collinear scene sampling.
 - **Policy action smoothness curriculum** (smoothness weight ramped over training).
 - **Alternative output heads** for the value network.

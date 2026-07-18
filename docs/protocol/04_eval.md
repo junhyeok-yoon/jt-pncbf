@@ -91,6 +91,10 @@ batch-2000 path. Alternate rollout implementations (manual loops, different batc
 flip individual episode outcomes at the few-per-2000 level; their counts are never headline
 numbers.
 
+**Deployed filter mode.** Headline rows must state the deployed filter mode (including any empty-branch fallback
+setting); rows with different modes are comparable only with the mode stated beside each. Fallback-class
+mechanisms preserve cps comparability only if they leave the infeasibility flag and metric unchanged.
+
 **Probe protocol (re-rolled analyses).** Mechanism probes that re-roll trajectories operate
 on the AGREED set — episodes whose outcome matches between the probe roll and the canonical
 eval; boundary episodes are excluded from the analysis and reported with their IDs. Every

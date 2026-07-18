@@ -460,12 +460,21 @@ def _rollout_live_insertion(
         config,
         t_insert,
     )
+    empty_steps: list[torch.Tensor] = []
+    singular_steps: list[torch.Tensor] = []
+    _ff = getattr(framework, "_filter", None)                        # v2.7.1 S1d: split-logging source
     for step in range(max_steps):
         scene = original_batch if step < t_insert else inserted_batch
         u_nom = framework.policy(x, scene)
         filtered = framework.filter(x, u_nom, scene)
         u_safe = filtered[0]
         infeasible = filtered[1].to(device=x.device, dtype=torch.bool)
+        _le = getattr(_ff, "last_empty", None)
+        empty_b = (_le.to(device=x.device, dtype=torch.bool) if _le is not None
+                   else infeasible.clone())
+        _ls = getattr(_ff, "last_singular", None)
+        singular_b = (_ls.to(device=x.device, dtype=torch.bool) if _ls is not None
+                      else torch.zeros_like(infeasible))
         done_action = physical_done.unsqueeze(1)
         u_nom = torch.where(done_action, torch.zeros_like(u_nom), u_nom)
         u_safe = torch.where(done_action, torch.zeros_like(u_safe), u_safe)
@@ -480,6 +489,8 @@ def _rollout_live_insertion(
         u_nom_steps.append(u_nom)
         u_safe_steps.append(u_safe)
         infeasible_steps.append(infeasible)
+        empty_steps.append(torch.where(physical_done, torch.zeros_like(empty_b), empty_b))
+        singular_steps.append(torch.where(physical_done, torch.zeros_like(singular_b), singular_b))
         physical_done = physical_done | _insertion_physical_done(
             framework.system,
             original_batch,
@@ -497,6 +508,8 @@ def _rollout_live_insertion(
         u_safe=u_safe_tensor,
         intervention_mask=torch.linalg.norm(u_safe_tensor - u_nom_tensor, dim=-1) > 1.0e-3,
         infeasible=torch.stack(infeasible_steps, dim=0),
+        empty=torch.stack(empty_steps, dim=0),
+        singular=torch.stack(singular_steps, dim=0),
     )
 
 
@@ -552,12 +565,15 @@ def _lqr_result_from_states(states: torch.Tensor, scene: Scene, system: Any) -> 
 
 
 def _slice_rollout(result: RolloutResult, batch_index: int) -> RolloutResult:
+    _bi = slice(batch_index, batch_index + 1)
     return RolloutResult(
         states=result.states[:, batch_index : batch_index + 1, :],
         u_nom=result.u_nom[:, batch_index : batch_index + 1, :],
         u_safe=result.u_safe[:, batch_index : batch_index + 1, :],
         intervention_mask=result.intervention_mask[:, batch_index : batch_index + 1],
         infeasible=result.infeasible[:, batch_index : batch_index + 1],
+        empty=None if result.empty is None else result.empty[:, _bi],
+        singular=None if result.singular is None else result.singular[:, _bi],
     )
 
 
@@ -599,6 +615,8 @@ def _insertion_episode_row(
     timeout = 1.0 if outcome == "timeout" else 0.0
     active_steps = active_action_steps(physical_event_step, result.u_safe.shape[0])
     infeasible = active_bool_fraction(result.infeasible, active_steps)
+    empty_frac = active_bool_fraction(result.empty, active_steps) if result.empty is not None else infeasible
+    singular_frac = active_bool_fraction(result.singular, active_steps) if result.singular is not None else 0.0
     saturation = saturation_step_fraction(result, system, active_steps=active_steps)
     projection = torch.linalg.norm(result.u_safe - result.u_nom, dim=-1)
     positions = system.position(result.states)
@@ -628,6 +646,8 @@ def _insertion_episode_row(
         "stuck": stuck,
         "timeout": timeout,
         "infeasible_step_frac": infeasible,
+        "empty_step_frac": empty_frac,
+        "singular_step_frac": singular_frac,
         "saturation_step_frac": saturation,
         "min_window_displacement": min_window_displacement,
         "mean_proj_mag": float(projection.mean().item()) if projection.numel() else 0.0,

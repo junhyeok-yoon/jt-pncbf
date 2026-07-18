@@ -77,6 +77,8 @@ EVAL_EPISODE_COLUMNS = [
     "stuck",
     "timeout",
     "infeasible_step_frac",
+    "empty_step_frac",
+    "singular_step_frac",
     "saturation_step_frac",
     "min_window_displacement",
     "mean_proj_mag",
@@ -297,6 +299,8 @@ def _slice_rollout(result: RolloutResult, batch_index: int) -> RolloutResult:
         u_safe=result.u_safe[:, batch_index : batch_index + 1, :],
         intervention_mask=result.intervention_mask[:, batch_index : batch_index + 1],
         infeasible=result.infeasible[:, batch_index : batch_index + 1],
+        empty=None if result.empty is None else result.empty[:, batch_index : batch_index + 1],
+        singular=None if result.singular is None else result.singular[:, batch_index : batch_index + 1],
     )
 
 
@@ -400,6 +404,8 @@ def _episode_row(
     stuck = 1.0 if outcome == "stuck" else 0.0
     timeout = 1.0 if outcome == "timeout" else 0.0
     infeasible_step_frac = active_bool_fraction(result.infeasible, active_steps)
+    empty_step_frac = active_bool_fraction(result.empty, active_steps) if result.empty is not None else infeasible_step_frac
+    singular_step_frac = active_bool_fraction(result.singular, active_steps) if result.singular is not None else 0.0
     saturation_frac = saturation_step_fraction(result, system, active_steps=active_steps)
     cps_episode = (
         reach
@@ -426,6 +432,8 @@ def _episode_row(
         "stuck": stuck,
         "timeout": timeout,
         "infeasible_step_frac": infeasible_step_frac,
+        "empty_step_frac": empty_step_frac,
+        "singular_step_frac": singular_step_frac,
         "saturation_step_frac": saturation_frac,
         "min_window_displacement": min_window_displacement,
         "mean_proj_mag": float(projection.mean().item()) if projection.numel() else 0.0,

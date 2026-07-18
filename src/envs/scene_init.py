@@ -362,15 +362,61 @@ def _cell_tilted(scene: "Scene") -> bool:
     return abs(aw) > (np.pi / 2.0)
 
 
-def sample_scenes(scene_sampler, rng, n_episodes, *, inject_frac=0.0, system_name=None, max_tries=1000):
+def sample_cell_state_scene(sc, rng, config, max_tries=1000):
+    """v2.7.1 corridor-cell STATE injection (changes.md §4). Return a NEW Scene = the fresh scene `sc`
+    (obstacles + goal unchanged) with its IC fields overridden to a state sampled inside the failure corridor:
+      - position at surface distance d ~ U[0.02, h_scale] from a uniformly chosen ACTIVE obstacle, along a
+        uniform direction, REJECTED if it lands inside any active obstacle;
+      - attitude |theta| ~ U[pi/2, pi], random sign;
+      - speed ||v|| ~ U[0.5, 1.5], direction within +-60 deg of the bearing TOWARD that obstacle;
+      - omega from the fresh scene's standard IC.
+    Quadrotor-only; contamination-safe (operates on a FRESH sampler scene, never a pool object).
+    """
+    import dataclasses
+    h_scale = float(config["env"]["h_scale"])
+    q = config["env"]["quadrotor_planar"]
+    centers = np.asarray(sc.obstacle_centers, float)
+    radii = np.asarray(sc.obstacle_radii, float)
+    active = np.asarray(sc.obstacle_active, bool)
+    act_idx = np.nonzero(active)[0]
+    if act_idx.size == 0:                                                    # no active obstacle -> standard IC
+        return sc
+    p = None; bearing = 0.0
+    for _ in range(max_tries):
+        oi = int(act_idx[int(rng.integers(act_idx.size))])
+        c = centers[oi]; r = float(radii[oi])
+        d = float(rng.uniform(0.02, h_scale))
+        phi = float(rng.uniform(0.0, 2.0 * np.pi))
+        dirv = np.array([np.cos(phi), np.sin(phi)])
+        cand = c + (r + d) * dirv
+        if np.any(np.linalg.norm(centers[active] - cand, axis=1) - radii[active] < 0.0):
+            continue                                                         # inside another obstacle -> reject
+        p = cand; bearing = phi + np.pi                                      # bearing TOWARD the obstacle (= -dirv)
+        break
+    if p is None:
+        return sc                                                            # exhausted -> fall back to standard IC
+    theta = float(rng.choice(np.array([-1.0, 1.0])) * rng.uniform(np.pi / 2.0, np.pi))
+    spd = float(rng.uniform(0.5, 1.5))
+    va = bearing + float(rng.uniform(-np.pi / 3.0, np.pi / 3.0))             # within +-60 deg of the bearing
+    vel = np.array([spd * np.cos(va), spd * np.sin(va)], float)
+    omega = sc.initial_omega if sc.initial_omega is not None else float(
+        rng.uniform(-float(q["omega_init_max"]), float(q["omega_init_max"])))
+    return dataclasses.replace(sc, start=p.astype(float), initial_velocity=vel,
+                               initial_attitude=theta, initial_omega=float(omega))
+
+
+def sample_scenes(scene_sampler, rng, n_episodes, *, inject_frac=0.0, system_name=None, config=None, max_tries=1000):
     """Sample n_episodes FRESH scenes from scene_sampler(rng). If inject_frac > 0 (quadrotor only), the first
-    round(inject_frac*n_episodes) are REJECTION-sampled from the SAME fresh sampler to the tilted cell
-    |theta_0| > pi/2; the rest are drawn normally. inject_frac <= 0 (or a non-quadrotor system) is the
-    BIT-PARITY path — rng consumption is identical to `[scene_sampler(rng) for _ in range(n_episodes)]`.
+    round(inject_frac*n_episodes) are INJECTED:
+      - v2.7.1 (config given): corridor-cell STATE injection — a fresh scene whose IC is overridden to a
+        near-surface high-tilt inward-speed state (`sample_cell_state_scene`, changes.md §4);
+      - v2.7.0 iteration-2 (config=None): tilted-cell IC rejection to |theta_0| > pi/2 (legacy/refuted lever).
+    inject_frac <= 0 (or a non-quadrotor system) is the BIT-PARITY path — rng consumption is identical to
+    `[scene_sampler(rng) for _ in range(n_episodes)]`.
 
     CONTAMINATION BAN (v2.7.0 iteration-2): scene_sampler MUST be the fresh scene-sampler callable. Passing an
     eval pool, a pool manifest, or a list of scenes is a hard error — injected ICs come ONLY from the standard
-    scene + IC samplers with rejection, never from any eval/diagnostic artifact.
+    scene + IC samplers, never from any eval/diagnostic artifact.
     """
     if (not callable(scene_sampler)) or isinstance(scene_sampler, (list, tuple)) or hasattr(scene_sampler, "scenes"):
         raise TypeError(
@@ -385,12 +431,15 @@ def sample_scenes(scene_sampler, rng, n_episodes, *, inject_frac=0.0, system_nam
     scenes = []
     for i in range(n):
         if i < n_inject:
-            sc = scene_sampler(rng)
-            tries = 0
-            while (not _cell_tilted(sc)) and tries < max_tries:
+            if config is not None:                                          # v2.7.1 corridor-cell STATE injection
+                scenes.append(sample_cell_state_scene(scene_sampler(rng), rng, config, max_tries=max_tries))
+            else:                                                           # v2.7.0 iter-2 tilted-IC rejection
                 sc = scene_sampler(rng)
-                tries += 1
-            scenes.append(sc)
+                tries = 0
+                while (not _cell_tilted(sc)) and tries < max_tries:
+                    sc = scene_sampler(rng)
+                    tries += 1
+                scenes.append(sc)
         else:
             scenes.append(scene_sampler(rng))
     return scenes

@@ -71,7 +71,8 @@ class ContinuingState:
     @staticmethod
     def create(system, scene_sampler, rng, n_rows, config, device, dtype, inject_frac=0.0, system_name=None):
         w = int(config["collection"]["continuing"]["stationary_window"])
-        scenes = sample_scenes(scene_sampler, rng, n_rows, inject_frac=inject_frac, system_name=system_name)
+        scenes = sample_scenes(scene_sampler, rng, n_rows, inject_frac=inject_frac, system_name=system_name,
+                               config=config)
         bs = batch_scenes(scenes, device=device, dtype=dtype)
         x = system.wrap_state(initial_states_from_batch(bs).to(dtype))
         p0 = system.position(x)                                       # [B,2]
@@ -178,7 +179,7 @@ def advance_round(
             ts = _t(); st.timings["segment"] += ts - t2
             st.refill_count += int(trig_rows.size)
             new_scenes = sample_scenes(scene_sampler, rng, int(trig_rows.size),
-                                       inject_frac=inject_frac, system_name=system_name)
+                                       inject_frac=inject_frac, system_name=system_name, config=config)
             nb = batch_scenes(new_scenes, device=state.device, dtype=state.dtype)
             nx = system.wrap_state(initial_states_from_batch(nb).to(state.dtype))   # [n, D]
             np0 = system.position(nx)                                              # [n, 2]

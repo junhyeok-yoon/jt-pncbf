@@ -175,6 +175,16 @@ The episode-level **infeasibility rate** is the **mean over active steps** of th
 infeasible flag; the reported `infeasibility` is the mean over episodes. This is the
 `infeasibility` term consumed by `cps` in `03_train` / `04_eval`.
 
+**Empty-branch fallback.** `filter.empty_fallback.mode = none | kstep` (per-system deployed defaults:
+quadrotor_planar = kstep with k = 5; all other systems = none). Under kstep, ONLY on rows where the box/half-space
+intersection is empty, the returned action is the first-phase control of the argmin, over a two-phase
+piecewise-constant candidate family (per-system control grid from the box U: corners + center/zero + per-axis
+extremes; deterministic fixed-order tie-break), of V_hat at the k-step rollout endpoint under the plant model — a
+stateless receding-horizon selection recomputed every step. The infeasibility flag and metric are NOT altered by
+the fallback (flag invariance is normative and test-pinned); mode = none is bit-parity with the pre-fallback
+filter. k is a commitment horizon, not a gain: one registered value per system, never swept; both too-small
+(first-order-blind) and too-large (replanning-inconsistent) regimes degrade.
+
 ### 4.1 Saturation rate
 
 A separate per-step diagnostic, **not** part of `cps`. A step is **saturated** when any
