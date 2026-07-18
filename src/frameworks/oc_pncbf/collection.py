@@ -11,7 +11,7 @@ from src.common.quadrotor_barrier import value_target_barrier
 from src.common.signed_h import signed_h
 from src.common.system import System
 from src.envs.scene_batch import BatchedScene, batch_scenes, initial_states_from_batch
-from src.envs.scene_init import Scene
+from src.envs.scene_init import Scene, sample_scenes
 from src.eval.rollout import rollout_lqr
 
 
@@ -410,7 +410,7 @@ class OCReplayBuffer:
             self._tensor_traj_ids_unique,
             torch.as_tensor(trajectory_ids, dtype=torch.long, device=states.device),
         )
-        self._tensor_traj_h = _cat_optional(
+        self._tensor_traj_h = _cat_pad_time(
             self._tensor_traj_h,
             h[:-1].transpose(0, 1).contiguous(),
         )
@@ -561,9 +561,39 @@ def collect(
         capacity = max(1, n_episodes * max(1, max_steps))
         buffer = OCReplayBuffer(capacity=capacity)
 
-    scenes = [scene_sampler(rng) for _ in range(n_episodes)]
     dtype = storage_dtype or system.u_bounds.dtype
     device = storage_device or system.u_bounds.device
+    inject_frac = float((config or {}).get("collection", {}).get("inject_frac", 0.0))
+    if config is not None and str(config.get("collection", {}).get("collector", "legacy")) == "continuing":
+        from src.frameworks.jt_pncbf.continuing_collector import ContinuingState, advance_round   # local (no cycle)
+
+        def step_fn(x, batched_scene):                       # nominal LQR (no filter, no noise)
+            goal = torch.as_tensor(batched_scene.goal, dtype=x.dtype, device=x.device)
+            if goal.ndim == 1:
+                goal = goal.unsqueeze(0).expand(x.shape[0], -1)
+            return system.lqr_action(x, goal)
+
+        def h_batch_fn(states_g, bscene):                    # [L, G, D] -> [L, G] (same barrier as legacy)
+            if config is not None:
+                return value_target_barrier(system, states_g, bscene, config)
+            return signed_h(system.position(states_g), bscene, h_scale)
+
+        state = getattr(buffer, "_cont_state", None)
+        if state is None:
+            state = ContinuingState.create(system, scene_sampler, rng, n_episodes, config, device, dtype,
+                                           inject_frac=inject_frac, system_name=system.name)
+            buffer._cont_state = state
+        buffer._cont_last_stats = advance_round(
+            state, round_length=max_steps, step_fn=step_fn, h_batch_fn=h_batch_fn,
+            scene_sampler=scene_sampler, rng=rng, config=config, buffer=buffer, dt=dt,
+            inject_frac=inject_frac, system_name=system.name)
+        return buffer
+
+    scenes = sample_scenes(
+        scene_sampler, rng, n_episodes,
+        inject_frac=inject_frac,
+        system_name=system.name,
+    )
     batched_scene = batch_scenes(scenes, device=device, dtype=dtype)
     x0 = initial_states_from_batch(batched_scene)
     with torch.no_grad():
@@ -777,6 +807,24 @@ def _cat_optional(existing: Tensor | None, new: Tensor) -> Tensor:
     if existing is None:
         return value
     return torch.cat([existing, value], dim=0)
+
+
+def _cat_pad_time(existing: Tensor | None, new: Tensor) -> Tensor:
+    """cat per-trajectory h-sequences [n, T] along dim 0, padding the shorter time-dim (dim 1) to the running
+    max by REPEATING the last column (same semantics as _pad_record_h's global-max padding). For UNIFORM
+    trajectory lengths (the legacy path) this is a no-op equal to _cat_optional; it only pads when the
+    v2.7.0 continuing collector appends variable-length segments across calls."""
+    new = new.detach().clone()
+    if existing is None:
+        return new
+
+    def _pad_to(t: Tensor, width: int) -> Tensor:
+        if t.shape[1] >= width:
+            return t
+        return torch.cat([t, t[:, -1:].expand(t.shape[0], width - t.shape[1])], dim=1)
+
+    width = max(existing.shape[1], new.shape[1])
+    return torch.cat([_pad_to(existing, width), _pad_to(new, width)], dim=0)
 
 
 def _pad_record_h(

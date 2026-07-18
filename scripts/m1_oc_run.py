@@ -12,6 +12,8 @@ from src.frameworks.oc_pncbf.train import run_training
 ap = argparse.ArgumentParser()
 ap.add_argument("--seed", type=int, default=42)
 ap.add_argument("--epochs", type=int, default=100)   # 100 x grad_steps(500) = 50000 value steps
+ap.add_argument("--inject-frac", type=float, default=0.0)  # v2.7.0 iter-2: tilted-cell IC oversampling
+ap.add_argument("--collector", default="legacy", choices=["legacy", "continuing"])  # v2.7.0 iter-5 Track A
 a = ap.parse_args()
 
 _orig = T.load_effective_config
@@ -20,6 +22,8 @@ _orig = T.load_effective_config
 def _patched():
     c = _orig()
     c["training"]["oc_pncbf"]["epochs"] = int(a.epochs)   # ONLY budget knob; schedule untouched
+    c["collection"]["inject_frac"] = float(a.inject_frac)  # v2.7.0 iter-2 label-coverage knob
+    c["collection"]["collector"] = str(a.collector)        # v2.7.0 iter-5 continuing-batch collector
     return c
 
 
@@ -32,7 +36,7 @@ def _flat(d, p=""):
 
 
 base = _flat(_orig()); patched = _flat(_patched())
-allowed = {"training.oc_pncbf.epochs"}
+allowed = {"training.oc_pncbf.epochs", "collection.inject_frac", "collection.collector"}
 bad = []
 print("=== M1 config diff (registered exp_config -> M1 launch) ===", flush=True)
 for k in sorted(set(base) | set(patched)):

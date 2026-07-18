@@ -86,6 +86,17 @@ Triggered automatically when training terminates (completion or halt), and runna
 
 A separate evaluation against a non-default checkpoint (e.g. `final.pt` instead of `best.pt`) is invoked by `python -m src.eval.run_full --ckpt PATH`. It writes to a new run directory.
 
+**Canonical evaluation path.** Headline metrics are defined by the `run_full` `evaluate()`
+batch-2000 path. Alternate rollout implementations (manual loops, different batch sizes) may
+flip individual episode outcomes at the few-per-2000 level; their counts are never headline
+numbers.
+
+**Probe protocol (re-rolled analyses).** Mechanism probes that re-roll trajectories operate
+on the AGREED set — episodes whose outcome matches between the probe roll and the canonical
+eval; boundary episodes are excluded from the analysis and reported with their IDs. Every
+reported share cites its denominator explicitly (canonical count, probe-path count, or
+agreed count).
+
 ---
 
 ## 3. Trajectory + control plots — fixed format
@@ -200,6 +211,12 @@ This option exists so that a clearly-marked single-seed result is not categorica
 **Comparison rule.** Version B improves over Version A iff B's pooled mean `cps` is above A's pooled mean `cps` **and** the 95% CIs do not overlap. Overlapping CIs are reported as "no improvement detected"; the absence of a positive result is itself a result. The comparison rule applies once both versions have multi-seed aggregates available; a single-seed-vs-multi-seed comparison is not run under this rule.
 
 The aggregated multi-seed table lives in `data/secured_data/<version>/aggregate/multi_seed_metrics.json` and is summarized in `multi_seed_report.md`.
+
+**Seed economy.** New configurations screen on a single seed (42). Escalation to the
+canonical multi-seed set `{42, 99, 12345}` occurs only for verdict-grade results — a
+CI-separated improvement claim, or a registered multi-seed commitment — and the seed count
+is decided at registration time, never after seeing the data. Eval-only measurements
+costing minutes run all three seeds. Ad-hoc seed sets are prohibited.
 
 ---
 

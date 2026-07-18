@@ -2,7 +2,7 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.6.2"
+  version: "v2.7.0"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
   system: quadrotor_planar          # double_integrator | unicycle | quadrotor_planar  (v2.6.0: direct-input planar quadrotor)
@@ -42,7 +42,8 @@ training:
     vs_warmup_steps: 2000
     K_V: 3
     K_pi: 1
-    bptt_T: 30                      # v2.3.0 SOTA baseline horizon (reset after v2.4.0 close; bptt_T=60 collapse root-caused)
+    bptt_T: 30                      # v2.7.0 iter-5: reverted 60->30 (iter-3 bptt_T=60 refuted as unstable, training
+                                    # collapse @~28.5k; see phase_v270_report Iteration 3). 30 = v2.3.0 baseline.
     schedule_n_steps: 42000         # match v2.0.1 SOTA schedule budget (UNCHANGED for the 80k extension)
     pi_init_ckpt: null              # v2.5.1 A2(a): policy warm-start (pi_state-only init); null => fresh run
     horizon_critic:                 # v2.5.1 A2(b): horizon-summary critic W (performance channel only)
@@ -113,6 +114,19 @@ schedules:
     decay_steps: 5000
 
 collection:
+  inject_frac: 0.0                  # v2.7.0 iteration-2 (label coverage): fraction of collected episodes
+                                    # rejection-sampled to the tilted cell |theta_0|>pi/2 (QUADROTOR ONLY).
+                                    # 0.0 = OFF (bit-identical). Applies to value + JT in-loop collection.
+  collector: legacy                 # v2.7.0 iter-5 Track A: legacy | continuing. legacy = the exact current
+                                    # fresh-scene-per-round path (committed default = bit-parity). continuing =
+                                    # persistent per-row state carried across rounds; refill (fresh scene+IC,
+                                    # t_row=0) ONLY on R1 goal+k_hover / R2 stationarity / R3 timeout; NO
+                                    # collision rule; per-segment target-net-bootstrap labels (set via launcher).
+  continuing:
+    k_hover: 20                     # R1: extra steps after the goal criterion before refill
+    stationary_window: 20           # R2: W consecutive steps for the stationarity test
+    stationary_thresh: 0.05         # R2: total position displacement (m) below which -> stationary -> refill
+    episode_timeout: 200            # R3: per-episode t_row cap (= eval max_steps); refill on reach
   jt:
     collect_every: 100
     episodes_per_collect: 100

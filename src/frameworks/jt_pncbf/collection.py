@@ -15,7 +15,7 @@ from src.common.quadrotor_barrier import value_target_barrier
 from src.common.system import System
 from src.common.value_net import ValueNetEnsemble, make_h_fn
 from src.envs.scene_batch import BatchedScene, batch_scenes, initial_states_from_batch
-from src.envs.scene_init import Scene
+from src.envs.scene_init import Scene, sample_scenes
 from src.frameworks.oc_pncbf.collection import OCReplayBuffer
 
 
@@ -82,7 +82,20 @@ def collect_policy_rollouts(
     if n_episodes <= 0:
         raise ValueError(f"n_episodes must be positive, got {n_episodes}.")
 
-    scenes = [scene_sampler(rng) for _ in range(n_episodes)]
+    inject_frac = float(config.get("collection", {}).get("inject_frac", 0.0))  # type: ignore[union-attr]
+    if str(config.get("collection", {}).get("collector", "legacy")) == "continuing":  # type: ignore[union-attr]
+        return _collect_policy_rollouts_continuing(
+            system=system, policy_net=policy_net, value_net=value_net, scene_sampler=scene_sampler,
+            rng=rng, torch_generator=torch_generator, n_episodes=n_episodes, max_steps=max_steps, dt=dt,
+            buffer=buffer, config=config, sigma=sigma, storage_device=storage_device,
+            storage_dtype=storage_dtype, collection_filter=collection_filter, inject_frac=inject_frac,
+        )
+
+    scenes = sample_scenes(
+        scene_sampler, rng, n_episodes,
+        inject_frac=inject_frac,
+        system_name=system.name,
+    )
     batched_scene = batch_scenes(scenes, device=storage_device, dtype=storage_dtype)
     x0 = initial_states_from_batch(batched_scene)
     filter_layer = _make_collection_filter(
@@ -121,6 +134,50 @@ def collect_policy_rollouts(
         if infeasible.numel()
         else 0.0,
     )
+
+
+def _collect_policy_rollouts_continuing(
+    *, system, policy_net, value_net, scene_sampler, rng, torch_generator, n_episodes, max_steps, dt,
+    buffer, config, sigma, storage_device, storage_dtype, collection_filter, inject_frac,
+) -> CollectionStats:
+    """v2.7.0 iter-5: continuing-batch JT collection round (see continuing_collector). Persistent per-buffer
+    rows carried across rounds; per-segment bootstrap labels via the SAME value_target_barrier (B=1 path)."""
+    from src.frameworks.jt_pncbf.continuing_collector import ContinuingState, advance_round
+    if bool(config.get("loss", {}).get("policy", {}).get("obs_deficit_feedback", False)):  # type: ignore[union-attr]
+        raise NotImplementedError("continuing collector does not support obs_deficit_feedback (frozen off).")
+    filter_layer = _make_collection_filter(collection_filter, system, value_net, config)
+    bounds = system.u_bounds.to(device=storage_device, dtype=storage_dtype)
+
+    def step_fn(x: Tensor, batched_scene) -> Tensor:
+        obs = system.observation(x, batched_scene)
+        u_base = policy_net(obs)
+        if sigma > 0.0:
+            noise = torch.randn(u_base.shape, generator=torch_generator, device=u_base.device,
+                                dtype=u_base.dtype) * float(sigma)
+        else:
+            noise = torch.zeros_like(u_base)
+        u_tilde = torch.clamp(u_base + noise, min=bounds[:, 0], max=bounds[:, 1])
+        filtered = filter_layer(x.detach(), batched_scene, u_tilde.detach())
+        return filtered[0].detach()
+
+    def h_batch_fn(states_g: Tensor, batched_scene) -> Tensor:  # states_g [L, G, D] -> h [L, G]
+        return value_target_barrier(system, states_g, batched_scene, config)
+
+    state = getattr(buffer, "_cont_state", None)
+    if state is None:
+        state = ContinuingState.create(system, scene_sampler, rng, n_episodes, config,
+                                       storage_device, storage_dtype, inject_frac=inject_frac,
+                                       system_name=system.name)
+        buffer._cont_state = state
+    st = advance_round(state, round_length=max_steps, step_fn=step_fn, h_batch_fn=h_batch_fn,
+                       scene_sampler=scene_sampler, rng=rng, config=config, buffer=buffer, dt=dt,
+                       inject_frac=inject_frac, system_name=system.name)
+    unsafe_fraction = (st.unsafe_segments / st.segments) if st.segments else 0.0
+    sigma_after = adaptive_sigma_update(float(sigma), unsafe_fraction, config)
+    buffer._cont_last_stats = st                                # instrumentation for the caller/report
+    return CollectionStats(n_episodes=n_episodes, unsafe_fraction=unsafe_fraction,
+                           sigma_before=float(sigma), sigma_after=sigma_after,
+                           mean_projection=0.0, infeasible_fraction=0.0)
 
 
 def collect_jt(

@@ -163,6 +163,13 @@ meaning (e.g. "CI overlaps prior -> point-estimate, not a confirmed beat", "tie"
 in the build-log and `results.md`, not the ledger; a short "see <build-log>" pointer is
 allowed. Long multi-sentence verdicts are not kept in the ledger.
 
+**Within-version iterations.** When the Researcher directs further mechanism iterations
+inside an open version: each iteration registers its hypothesis and falsifier in the
+transmitted prompt (`changes.md` remains an open-once document and is not amended per
+iteration); each completed iteration appends its ledger row(s) immediately (interim
+registration — the ledger never waits for close; bold only on a CI-separated improvement
+claim); and the phase report carries one clearly-titled section per iteration.
+
 ### 2.5 Close
 
 The Researcher authors the results document `docs/versions/v<X>_results.md` (at the `docs/versions/` main level, alongside `v2.0.1_results.md` etc.; the Strategist may draft) — the document that renders the version verdict. Unlike the Executor's build-logs (`docs/versions/vX.Y.Z/<task>.md`), the results document interprets. Both live under the gitignored `docs/versions/` as the local SSOT. It covers at least:
@@ -192,26 +199,38 @@ The Executor copies the chosen final run(s) from `data/<run_id>/` into the secur
    `git add` / `commit` / `push` directly (§2.6); the Executor does NOT run git.
 
 **Close trigger — the Strategist close sequence (automated on "close").** When the Researcher
-directs a close (says "close" or equivalent), the Strategist runs the following in order,
-**without re-requesting permission at each step**, pausing only at the marked decision points:
+directs a close (says "close" or equivalent), the Strategist runs the following STRICTLY IN
+ORDER, **without re-requesting permission at each step**; each step begins only after the
+previous step's artifact exists on disk. Steps marked [PAUSE] require a Researcher decision;
+a paused step suspends only its dependents, not the other steps.
 
-1. **Fact-gather retrieve.** Author and issue a read-only retrieve collecting the final
-   metrics, artifact inventory, gate outcomes, and open `PROTOCOL FOLLOW-UP` items the
-   documents below need.
-2. **`results.md`.** Draft `docs/versions/v<X>_results.md` (the four parts above), stating the
-   seed basis explicitly (single-seed vs pooled).
-3. **Close execute.** Author and issue the Executor close prompt — checklist items 2–3 (ledger
-   row(s), secured snapshot + `ADOPTED.md`, run move) plus the `docs/index.md` dashboard update
-   and tagging of any untagged `PROTOCOL FOLLOW-UP`. **No git.**
-4. **Protocol delta.** For each `PROTOCOL FOLLOW-UP` item that describes the current system or
-   method (not a future axis), author the before→after edit as a diff (Prohibition 3: state the
-   rule on its own merits, no version narrative), then apply approved edits to `docs/protocol/`
-   directly (the Strategist edits protocol; §1).
-5. **Git commands.** Present the step-by-step `git` sequence (§2.6) for the Researcher to run.
+1. **Fact-gather retrieve** (Strategist authors, Executor runs). Read-only, with exactly two
+   write exceptions: (a) create the EMPTY results placeholder
+   `docs/versions/v<X>_results.md` containing only the single line
+   `# v<X> results — CLOSE IN PROGRESS (<date>)`, and (b) the retrieve report itself. The
+   report must cover: headline metrics recomputed from artifacts with CIs; provenance (run
+   dirs, checkpoint SHA-256 prefixes); gate/test outcomes; ledger rows verbatim with bold
+   state; version strings; git status; open `PROTOCOL FOLLOW-UP` items; and an explicit
+   discrepancy list. No results content is drafted before this report exists.
+2. **`results.md`** (Strategist authors). Drafted EXCLUSIVELY from the step-1 report — every
+   number beside its artifact path; the four parts above; the seed basis stated explicitly
+   (single-seed vs pooled). [PAUSE] only if a multi-seed escalation decision is open.
+3. **Close execute** (Strategist authors, Executor runs). Fills the placeholder with the
+   final results text verbatim, then checklist items 2–3: ledger row(s); run moves to
+   `data/previous_runs/`; [PAUSE] secured snapshot(s) + `ADOPTED.md` (the promotion scope is
+   an explicit Researcher approval carried in the transmittal, never assumed);
+   `docs/index.md` dashboard update; tagging of any untagged `PROTOCOL FOLLOW-UP`. **No git.**
+4. **Protocol delta** [PAUSE]. For each `PROTOCOL FOLLOW-UP` item that describes the current
+   system or method (not a future axis), author the before→after edit as a diff (Prohibition
+   3: state the rule on its own merits, no version narrative), then apply approved edits to
+   `docs/protocol/` directly (the Strategist edits protocol; §1).
+5. **Git commands.** Present the step-by-step `git` sequence (§2.6) for the Researcher to
+   run, only after steps 3–4 are complete, so the close commit includes the protocol edits.
 
 **Decision points (the sequence pauses and asks; nothing else is re-asked):** (a) **multi-seed
 escalation** — whether to promote a verdict-grade single-seed result to `{42, 99, 12345}` before
-the verdict; (b) **protocol-delta approval** (step 4, before applying); (c) **git execution**
+the verdict; (b) **secured promotion scope** (step 3 — which run(s) are snapshotted);
+(c) **protocol-delta approval** (step 4, before applying); (d) **git execution**
 (step 5, always the Researcher). Absent a decision-point answer, the Strategist proceeds with the
 other steps and surfaces the pending decision, rather than blocking the whole close.
 
@@ -273,6 +292,17 @@ Used to write code, modify configs, run training, or run evaluation. Format:
 - **Reference patterns.** Pointers to prior code in the repo to follow; **no boilerplate inlined in the prompt** (the Executor reads its environment).
 
 Time budgets are **not** included in execute prompts. The Researcher's mentions of time mean "proceed autonomously," not "finish within X minutes." Quality over speed.
+
+**Standing prompts.** A prompt may define work that begins on a stated trigger. Autonomy is
+session-bound: if the Executor session ends at a checkpoint, resumption requires a
+Researcher-relayed resume amendment; continuation across sessions is never assumed. Long
+autonomous chains schedule their own completion monitors and state the next check time in
+every checkpoint message. Autonomy always ends at the prompt's final milestone; no runs
+beyond the prompt.
+
+**Performance criteria.** Any performance pass/fail in a prompt is denominated end-to-end
+(stage wall-clock, or stage-share-weighted), never as a component-isolation ratio;
+micro-benchmark ratios are diagnostic evidence, not gates.
 
 ### 3.3 Prompt authoring authority
 

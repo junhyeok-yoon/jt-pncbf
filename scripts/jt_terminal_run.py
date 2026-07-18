@@ -11,18 +11,30 @@ surfaced. --smoke runs a tiny step budget to confirm value-load + fresh policy +
 import argparse
 from pathlib import Path
 
+import src.frameworks.jt_pncbf.train as T
 from src.frameworks.jt_pncbf.train import run_training, load_effective_config
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--seed", type=int, default=42)
 ap.add_argument("--steps", type=int, default=50000)
 ap.add_argument("--value-init", default="data/v2.6.0__20260715-010357__seed42/checkpoints/best.pt")
+ap.add_argument("--inject-frac", type=float, default=0.0)  # v2.7.0 iter-2: tilted-cell IC oversampling
+ap.add_argument("--collector", default="legacy", choices=["legacy", "continuing"])  # v2.7.0 iter-5 Track A
 ap.add_argument("--smoke", action="store_true", help="tiny run (300 steps) to gate wiring, not convergence")
 a = ap.parse_args()
 
 steps = 300 if a.smoke else a.steps
 
-c0 = load_effective_config()
+# v2.7.0 iter-2/5: inject_frac + collector patched into the effective config (defaults = bit-parity).
+_orig_cfg = T.load_effective_config
+def _patched_cfg():
+    c = _orig_cfg()
+    c["collection"]["inject_frac"] = float(a.inject_frac)
+    c["collection"]["collector"] = str(a.collector)
+    return c
+T.load_effective_config = _patched_cfg
+
+c0 = _patched_cfg()
 n0 = int(c0["training"]["jt"]["n_steps"])
 w_term = float(c0["loss"]["policy"]["w_terminal"])
 print("=== M5 (credit-horizon / terminal) launch config delta (registered exp_config -> run) ===", flush=True)
@@ -30,6 +42,8 @@ print(f"  [OK] run.system: {c0['run']['system']} (quadrotor_planar)", flush=True
 print(f"  [OK] training.jt.n_steps: {n0} -> {steps}  ({'SMOKE' if a.smoke else 'registered budget'}; via n_steps_override)", flush=True)
 print(f"  [OK] training.jt.value_init_ckpt: (none) -> {a.value_init}  (M1 V_hat warm-start; policy FRESH)", flush=True)
 print(f"  [OK] run.seed: {a.seed}", flush=True)
+print(f"  [OK] collection.inject_frac: {c0['collection']['inject_frac']}  (v2.7.0 iter-2 tilted-cell IC oversampling)", flush=True)
+print(f"  [OK] collection.collector: {c0['collection']['collector']}  (v2.7.0 iter-5 continuing-batch collector)", flush=True)
 print(f"  schedule_n_steps: {c0['training']['jt'].get('schedule_n_steps')} (UNCHANGED)", flush=True)
 print(f"  loss.policy.w_terminal: {w_term} (credit-horizon terminal; committed, not a launch delta)", flush=True)
 print(f"  bptt_T: {c0['training']['jt']['bptt_T']} | gamma_T: {c0['loss']['policy']['gamma_T']} "

@@ -283,6 +283,51 @@ transient bug. The mitigation is to collect the value buffer under action noise
 $\sigma > 0$ (§4.2), with $\sigma$ targeted by an adaptive rule based on the unsafe
 fraction of recent rollouts (§4.6).
 
+### 2.4 Collection rollout — the continuing-batch collector
+
+Collection rollouts (OC §3.1 and both JT buffers §4.2) are produced by one collector with
+two modes: `collector = continuing | legacy` (default `continuing`; `legacy` — fixed-horizon
+fresh-IC rounds — is retained solely for ablation and bit-parity testing). The continuing
+mode is normative:
+
+1. **Outcome-agnostic with respect to physical events.** Collision and OOB never terminate a
+   collection episode; outcome predicates remain per-step diagnostics (`01_env` §1.6).
+   Obstacles are not part of the plant dynamics, so post-contact pass-through trajectories
+   are valid trajectories of the free dynamics: interior and post-contact states are
+   retained in the buffer as unsafe-side value anchors — they carry the strongest unsafe
+   labels and pin the certificate's gradient direction at the safety boundary. Masking,
+   truncating, or relabeling them is prohibited.
+2. **Information-saturation truncation.** An episode is truncated only when continued
+   stepping adds no further label information: (R1) the eval goal criterion holds, plus
+   `k_hover` further steps (settling data is retained deliberately); (R2) stationarity —
+   total position displacement below `stationary_thresh` over `stationary_window`
+   consecutive steps (covers stuck-like dwelling without importing an outcome concept into
+   collection); (R3) per-episode timeout `episode_timeout` = the eval `max_steps`, so
+   training labels cover the same horizon evaluation scores.
+3. **Persistent rows with round carry-over.** Collection rounds are a scheduling quantity
+   only. Each batch row carries persistent episode state across rounds (state, scene,
+   per-episode step counter, exploration-noise state); an episode cut by a round boundary
+   continues in the next round from the same state. Consequence: no episode phase is
+   systematically under- or over-sampled — early- and late-episode states enter the buffer
+   at their natural visitation rates.
+4. **Refill on truncation only.** A truncated row is reinitialized with a fresh scene + IC
+   and its counter reset; the batch shape stays constant and every simulated step is a
+   useful step (no post-goal hover flooding of the buffer).
+5. **Per-segment labeling.** Buffers store variable-length episode segments (a segment ends
+   at a truncation or a round boundary). The label recursion closes every segment with the
+   target-net bootstrap at that segment's tail state and never crosses an episode boundary
+   within a row. A round-boundary segment is an ordinary truncation: the bootstrap
+   summarizes the continuation whose realized data the next round supplies.
+6. **Buffers store states, not observations.** Observations are recomputed at consumption
+   time, so buffer contents are independent of the observation definition.
+
+Keys: `continuing.k_hover = 20`, `continuing.stationary_window = 20`,
+`continuing.stationary_thresh = 0.05`, `continuing.episode_timeout = 200`. Required tests
+whenever the collector is touched: legacy bit-parity; segment isolation (a segment's labels
+invariant to the next episode sharing its row); R1/R2/R3 unit firing; round-boundary and
+mid-round-refill carry-over; a fixed-seed semantic-equivalence check against the frozen
+reference implementation.
+
 ---
 
 ## 3. Framework A — OC-PNCBF (value-only)
@@ -296,13 +341,11 @@ Roll out the fixed LQR nominal (`02_control` §2) on sampled scenes, recording t
 signed-h history. No CBF filter is applied during collection. Trajectories enter a FIFO
 buffer (`collection.oc_pncbf.buffer_capacity`).
 
-**No early termination during training rollout.** Per `01_env` §1.6, outcome predicates
-(collision, goal, OOB, stuck, timeout) are evaluated per step for diagnostic, but the
-training rollout runs the full configured horizon regardless of which outcome fires. Post-
-collision and post-OOB states remain informative for PNCBF's avoid-target backward
-recurrence (they are exactly the strongest unsafe labels), so they are kept in the
-buffer. Stuck detection during training is logged for diagnostic only and does not alter
-collection.
+**Rollout termination follows the continuing-batch collector (§2.4).** Collision and OOB
+never terminate (post-collision and post-OOB states are exactly the strongest unsafe labels
+for PNCBF's avoid-target backward recurrence and are kept in the buffer); information-
+saturated tails truncate and refill per §2.4 R1–R3 with round carry-over. Stuck detection
+during training remains diagnostic-only and does not alter collection.
 
 ### 3.2 Loop
 
@@ -372,6 +415,12 @@ $\mathcal{D}_\pi$ uses `collection.jt.policy_buffer_cap`, an independent cap; wh
 or equal to `buffer_cap`, all buffers share one capacity. Standard configuration:
 `buffer_cap` = 1,000,000 ($\mathcal{D}_V$ + precursor); `policy_buffer_cap` = 2,000
 ($\mathcal{D}_\pi$).
+
+Both buffers are fed by the continuing-batch collector (§2.4): entries are variable-length
+episode segments; the trajectory view labels each segment to its own bootstrap-closed tail
+(no recursion across an episode boundary within a row), and the transition view samples
+uniformly over transitions exactly as before. Buffer contents are states; observations are
+recomputed at consumption (§2.4 item 6).
 
 ### 4.3 Weak value supervision and minibatch composition (optional, inactive by default)
 
@@ -731,6 +780,13 @@ collected.
 
 ---
 
+**Advisory gradient watch (no auto-kill).** If the pre-clip policy gradient norm exceeds
+10x its running median on 2 consecutive logging points, the Executor sends an immediate
+notification with the values and continues training; stopping is a Researcher decision.
+This is an advisory channel, not a halt condition: clipped-gradient degradation can evade
+the NaN/leak hard halts while still destroying the policy, and the watch exists to surface
+it in time.
+
 ## 5. Algorithm — one macro step of Joint Training
 
 The following is the authoritative ordering. The OC-PNCBF loop is a subset (only the
@@ -832,6 +888,13 @@ hypothesis and a clean ablation against the baseline:
   Lipschitz loss.
 - **Additional anchors** — $\mathcal{D}_{\text{far}}$, $\mathcal{D}_{\text{brake}}$.
 - **Late-floor sigma** on $\mathcal{D}_V$ collection noise.
+- **IC injection** (`inject_frac`, default 0 = bit-parity) — collection-side oversampling of
+  a declared cell predicate using fresh standard-sampler draws only (never eval-pool states
+  or their rollouts). Any use requires a registered natural-mass pre-gate demonstrating the
+  cell is actually rare under the sampler; predicates whose natural mass is not small
+  cannot be meaningfully oversampled. The single-band tilt predicate
+  ($|\theta_0| > \pi/2$, natural mass $\approx 0.5$) is a refuted instantiation and may not
+  be reintroduced.
 - **Lateral/collinear bonus** in the policy task return, and collinear scene sampling.
 - **Policy action smoothness curriculum** (smoothness weight ramped over training).
 - **Alternative output heads** for the value network.

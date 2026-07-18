@@ -38,7 +38,8 @@ class QuadrotorPlanar:
 
     def __init__(self, config: Mapping[str, Any]) -> None:
         self.k_obs = int(config["env"]["k_obs"])
-        self.obs_dim = 2 + 1 + 2 + 3 * self.k_obs  # body v (2), omega (1), goal_body (2), K*(rel2+r1)
+        # body v (2), omega (1), goal_body (2), K*(rel2+r1), body-frame gravity dir (sin θ, cos θ) (2)
+        self.obs_dim = 2 + 1 + 2 + 3 * self.k_obs + 2  # v2.7.0: +2 attitude (01_env §3.3), dim 22
         phys = config["env"]["quadrotor_planar"]
         self.mass = float(phys["mass"])
         self.inertia = float(phys["inertia"])
@@ -85,12 +86,17 @@ class QuadrotorPlanar:
         goal_body = _rotate_world_to_body(goal - positions, theta)
         obstacle_body = _rotate_world_to_body(top_rel, theta)
         obstacle_block = torch.cat([obstacle_body, top_radii.unsqueeze(-1)], dim=-1)
+        # v2.7.0 (01_env §3.3): append the body-frame gravity direction (sin θ, cos θ) AFTER the obstacle
+        # block — the minimal restoration that de-aliases upright vs inverted (theory note sec:obs). The
+        # first (2+1+2+3*k_obs) components are byte-identical to the pre-v2.7.0 layout.
+        attitude = torch.stack([torch.sin(theta), torch.cos(theta)], dim=-1)
         return torch.cat(
             [
                 vel_body,
                 omega.unsqueeze(-1),
                 goal_body,
                 obstacle_block.reshape(x.shape[0], -1),
+                attitude,
             ],
             dim=1,
         )

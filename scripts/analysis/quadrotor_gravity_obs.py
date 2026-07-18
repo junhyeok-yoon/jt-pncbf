@@ -24,10 +24,15 @@ from src.eval.build_pools import load_pool
 from src.envs.scene_batch import batch_scenes, initial_states_from_batch
 from src.frameworks.jt_pncbf.train import make_system, _build_control_net
 
+import sys
+
 REPO = Path("/home/junhyeok/MIT/jt-pncbf")
 SP = Path("/tmp/claude-1000/-home-junhyeok-MIT-jt-pncbf/31d93785-ac11-4206-bf50-a4c3de145dff/scratchpad")
 POOL = REPO / "data/secured_data/pools/eval_full_quadrotor-planar_n2000_seed23456.pkl"
-RUN = REPO / "data/v2.6.2__20260716-182949__seed42"
+# v2.7.0: run dir from argv (default = v2.6.2 brake baseline). Cache/output are run-id-scoped so a new
+# checkpoint never reuses a stale rollout.
+RUN = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "data/v2.6.2__20260716-182949__seed42"
+RID = RUN.name
 NMAX = 12
 BANDS = [(0.0, np.pi / 6, "[0,pi/6)"), (np.pi / 6, np.pi / 2, "[pi/6,pi/2)"), (np.pi / 2, np.pi + 1e-6, "[pi/2,pi]")]
 
@@ -69,7 +74,7 @@ def geometry(scenes):
 
 def roll(dev, scenes, system, policy, h_fn, params, bounds):
     """Instrumented full-pool roll. Cache states/actions/empty/outcome to npz."""
-    cache = SP / "gravobs_roll.npz"
+    cache = SP / f"gravobs_roll_{RID}.npz"
     if cache.exists():
         z = np.load(cache)
         print(f"[cache] states{z['states'].shape} outcome n_coll={int((z['outcome']==1).sum())}", flush=True)
@@ -256,7 +261,10 @@ def d3_aliasing(dev, scenes, system, policy, h_fn, states, outcome, C, R, AC, cf
     deltas = [np.pi, np.pi / 2, -np.pi / 2, 2 * np.pi / 3, -2 * np.pi / 3]
 
     def divergence(pairs):
-        obs_gap, pi_gap, h0_gap, dh1, dcl1 = [], [], [], [], []
+        # v2.7.0: the obs now carries (sin θ, cos θ) — formerly-aliased pairs (θ'=θ+δ) NO LONGER produce
+        # identical observations. D3 semantics flip: instead of the old "obs_gap ≈ 0" sanity, assert the obs
+        # now DIFFERS (driven by the appended attitude tail) and report the π / V̂ output gaps that follow.
+        obs_gap, obs_tail_gap, pi_gap, h0_gap, dh1, dcl1 = [], [], [], [], [], []
         for (gi, t) in pairs:
             sc = scenes[gi]; x = states[gi, t].astype(np.float64); p = x[:2]
             delta = float(rng.choice(deltas))
@@ -280,6 +288,7 @@ def d3_aliasing(dev, scenes, system, policy, h_fn, states, outcome, C, R, AC, cf
                 hn = h_fn(Xn, bs).reshape(-1)
             o = o.cpu().numpy(); u = u.cpu().numpy(); Xn = Xn.cpu().numpy(); hn = hn.cpu().numpy(); h0 = h0.cpu().numpy()
             obs_gap.append(float(np.max(np.abs(o[0] - o[1]))))
+            obs_tail_gap.append(float(np.max(np.abs(o[0, -2:] - o[1, -2:]))))   # attitude (sin,cos θ) tail
             pi_gap.append(float(np.max(np.abs(u[0] - u[1]))))
             h0_gap.append(float(abs(h0[0] - h0[1])))
             dh1.append(float(abs(hn[0] - hn[1])))
@@ -291,8 +300,11 @@ def d3_aliasing(dev, scenes, system, policy, h_fn, states, outcome, C, R, AC, cf
             cl0 = closure(Xn[0], C[gi], R[gi], AC[gi])
             cl1 = closure(Xn[1], c_new, R[gi], AC[gi])
             dcl1.append(abs(cl0 - cl1))
-        return dict(obs_gap_max=round(max(obs_gap), 6), pi_gap_max=round(max(pi_gap), 6),
-                    h0_gap_max=round(max(h0_gap), 6),
+        # aliasing ELIMINATED iff the obs (and hence π / V̂) now differ on formerly-aliased pairs.
+        aliasing_eliminated = bool(np.median(obs_tail_gap) > 1e-3 and np.median(pi_gap) > 1e-4)
+        return dict(obs_gap=pct(obs_gap), obs_tail_gap=pct(obs_tail_gap),
+                    pi_gap=pct(pi_gap), h0_gap=pct(h0_gap),
+                    aliasing_eliminated=aliasing_eliminated,
                     dh1=pct(dh1), dclosure1=pct(dcl1), n=len(pairs))
     return dict(precursor=divergence(prec), benign=divergence(beni))
 
@@ -341,8 +353,8 @@ def main():
     d4 = d4_t0_profile(dev, scenes, system, h_fn, states, empty, outcome)
     print("\n[D4] t0-profile:", json.dumps(d4), flush=True)
 
-    json.dump(dict(D1=d1, D2=d2, D3=d3, D4=d4), open(SP / "quadrotor_gravity_obs.json", "w"), indent=2)
-    print("\nWROTE", SP / "quadrotor_gravity_obs.json", flush=True)
+    json.dump(dict(run=RID, D1=d1, D2=d2, D3=d3, D4=d4), open(SP / f"quadrotor_gravity_obs_{RID}.json", "w"), indent=2)
+    print("\nWROTE", SP / f"quadrotor_gravity_obs_{RID}.json", flush=True)
 
 
 if __name__ == "__main__":

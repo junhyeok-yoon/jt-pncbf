@@ -350,3 +350,47 @@ def _acceleration_bound(config: Mapping[str, Any], system: str) -> float:
         # this bound barely gates. Recorded as PROTOCOL FOLLOW-UP (approximate underactuated filter).
         return float(config["env"]["quadrotor_planar"]["gravity"])
     raise ValueError(f"Unsupported system: {system!r}")
+
+
+# ---- v2.7.0 iteration-2 (label coverage): cell-targeted IC oversampling for collection ----
+def _cell_tilted(scene: "Scene") -> bool:
+    """Injection cell: |theta_0| > pi/2 (tilted band). Uses the quadrotor body attitude; None-safe."""
+    a = scene.initial_attitude
+    if a is None:
+        return False
+    aw = (float(a) + np.pi) % (2.0 * np.pi) - np.pi
+    return abs(aw) > (np.pi / 2.0)
+
+
+def sample_scenes(scene_sampler, rng, n_episodes, *, inject_frac=0.0, system_name=None, max_tries=1000):
+    """Sample n_episodes FRESH scenes from scene_sampler(rng). If inject_frac > 0 (quadrotor only), the first
+    round(inject_frac*n_episodes) are REJECTION-sampled from the SAME fresh sampler to the tilted cell
+    |theta_0| > pi/2; the rest are drawn normally. inject_frac <= 0 (or a non-quadrotor system) is the
+    BIT-PARITY path — rng consumption is identical to `[scene_sampler(rng) for _ in range(n_episodes)]`.
+
+    CONTAMINATION BAN (v2.7.0 iteration-2): scene_sampler MUST be the fresh scene-sampler callable. Passing an
+    eval pool, a pool manifest, or a list of scenes is a hard error — injected ICs come ONLY from the standard
+    scene + IC samplers with rejection, never from any eval/diagnostic artifact.
+    """
+    if (not callable(scene_sampler)) or isinstance(scene_sampler, (list, tuple)) or hasattr(scene_sampler, "scenes"):
+        raise TypeError(
+            "sample_scenes requires the FRESH scene-sampler callable; a pool / scene-list / manifest is "
+            "forbidden on the injection path (v2.7.0 iteration-2 contamination ban)."
+        )
+    n = int(n_episodes)
+    frac = float(inject_frac)
+    if frac <= 0.0 or system_name != "quadrotor_planar":
+        return [scene_sampler(rng) for _ in range(n)]                       # bit-parity
+    n_inject = int(round(frac * n))
+    scenes = []
+    for i in range(n):
+        if i < n_inject:
+            sc = scene_sampler(rng)
+            tries = 0
+            while (not _cell_tilted(sc)) and tries < max_tries:
+                sc = scene_sampler(rng)
+                tries += 1
+            scenes.append(sc)
+        else:
+            scenes.append(scene_sampler(rng))
+    return scenes
