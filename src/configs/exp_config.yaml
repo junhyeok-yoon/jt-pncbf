@@ -2,7 +2,7 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.7.1"
+  version: "v2.7.2"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
   system: quadrotor_planar          # double_integrator | unicycle | quadrotor_planar  (v2.6.0: direct-input planar quadrotor)
@@ -20,6 +20,12 @@ env:
       tau_max: 1.0                  # v2.6.1 Axis A: plant-coherent torque box [-1.0, 1.0] (was 0.2, ~1/5 of the plant-coherent tau_bar=L_J*f_max/2~0.98 from arm L_J=sqrt(J/m)=0.1m; see torque_box_plausibility.md + changes.md §4). HardNet box reads this key. NB alpha_max=tau_max/J=100 rad/s^2; omega_max=4.0 clamp may bind (changes.md §6, watch).
       v_max: 2.5                    # A3 velocity clamp ||v||<=v_max (shared DI scale)
       omega_max: 4.0                # attitude-rate clamp for wrap_state
+    quadrotor_3d:                   # v2.7.2 §3.4: box [0,f_max] x [-tau_max,tau_max]^3; plant-coherent w/ planar
+      f_min: 0.0
+      f_max: 19.62
+      tau_max: 1.0
+      v_max: 2.5
+      omega_max: 4.0
   quadrotor_planar:                 # v2.6.0 §4: physical constants + IC set + h_star gain
     mass: 1.0
     inertia: 0.01
@@ -28,12 +34,26 @@ env:
     omega_init_max: 1.0             # IC angular velocity ~ U[-1, 1]
     c_gain: 0.3                     # h_star gain c: M6/P1 fixed final=0.3 (largest admissible with mean
                                     # distortion <=0.25; degen_frac 0, median ||L_gV||=0.3). Was 0.5 (center).
+  quadrotor_3d:                     # v2.7.2 §3.4: 13-state quaternion plant, plant-coherent w/ planar
+    mass: 1.0
+    gravity: 9.81
+    Jx: 0.01                        # J = diag(0.01, 0.01, 0.02)
+    Jy: 0.01
+    Jz: 0.02
+    v_init_max: 1.5                 # IC ||v0|| ~ planar speed dist; uniform 3D direction
+    omega_init_max: 1.0             # IC per-axis omega ~ U[-1, 1]
+    c_gain: 0.3                     # h_star gain c: h_star = phi + 0.3 (v_xy . r_hat)
 
 lqr:                                # v2.6.0 nominal cascaded PD (A1: admissible (f_thr,tau)); NOT the filter
   quadrotor_planar:
     kp_pos: 1.0                     # outer position loop: a_des = -kp_pos*(p-goal) - kd_pos*v
     kd_pos: 2.0
     kp_att: 40.0                    # inner attitude loop: tau = J*(-kp_att*wrap(theta-theta_des) - kd_att*omega)
+    kd_att: 8.0
+  quadrotor_3d:                     # v2.7.2 §3.4: cascaded hover PD (thrust-axis projection + attitude error)
+    kp_pos: 1.0                     # outer position loop: a_des = -kp_pos*(p-goal) - kd_pos*v
+    kd_pos: 2.0
+    kp_att: 40.0                    # inner attitude loop: tau = J*(kp_att*e_att_body - kd_att*omega)
     kd_att: 8.0
 
 training:

@@ -112,6 +112,18 @@ class QuadrotorPlanar:
         theta = x[..., 2]
         return torch.stack([-torch.sin(theta), torch.cos(theta)], dim=-1)
 
+    def horizontal_velocity(self, x: Tensor) -> Tensor:
+        """Obstacle-plane (horizontal) linear-velocity vector, for the situational obstacle-approach loss
+        (03_train). Planar: the full world velocity (vx, vy)."""
+        return x[..., 3:5]
+
+    def approach_barrier(self, x: Tensor, scene: Any, h_scale: float) -> Tensor:
+        """h_star approach augmentation (system interface, v2.7.2): the scalar multiplied by c_gain.
+        Planar = v^T Re (thrust-axis projection, obstacle-agnostic R4) — BIT-IDENTICAL to the module-level
+        `approach_speed(x)` so the quadrotor_planar h_star / value labels are unchanged (golden parity q5).
+        `scene`/`h_scale` are unused here (planar term is obstacle-agnostic)."""
+        return torch.sum(x[..., 3:5] * self.thrust_axis(x), dim=-1)
+
     def lqr_action(self, x: Tensor, goal: Tensor) -> Tensor:
         """Cascaded PD nominal (A1): outer position loop -> desired force -> desired attitude ->
         inner attitude PD -> (f_thr, tau). Output is clamped into the asymmetric box (admissible)."""

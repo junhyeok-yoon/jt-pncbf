@@ -129,6 +129,13 @@ The overlay of $u^{\text{nom}}$ is kept unless it makes a panel unreadable, in w
 
 **No PDF.** PNG is the universal format for both the MkDocs site and external use.
 
+**PROTOCOL FOLLOW-UP (v2.7.2, quadrotor_3d).** For 3-D systems the single-plane trajectory panel is
+insufficient — a cylinder-avoiding path with altitude change reads correctly only across **three orthogonal
+projections (xy / xz / yz)**. v2.7.2 M6 produced these ad hoc via `scripts/analysis/quadrotor_3d_xyz_plots.py`
+(infinite vertical cylinders = filled circles in xy, vertical bands in xz/yz; start = circle, goal = star).
+The fixed-format 3-D trajectory figure (folding these three projections into the §3 grid, or a dedicated
+3-panel figure) is to be specified here at the v2.7.2 close.
+
 ---
 
 ## 3b. CBF contour plots — fixed format

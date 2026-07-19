@@ -18,7 +18,8 @@ from src.envs.scene_init import sample_cell_state_scene, sample_train_scene
 from src.frameworks.jt_pncbf.train import make_system
 
 REPO = Path(__file__).resolve().parents[1]
-M5 = REPO / "data/v2.7.1__20260718-114933__seed42/checkpoints/best.pt"
+# secured iter-5 checkpoint (sha8 3b27d691); the v2.7.1 run dir was archived to previous_runs at close.
+M5 = REPO / "data/secured_data/v2.7.0/seed42_iter5/checkpoints/best.pt"
 
 
 def _load():
@@ -145,3 +146,29 @@ def test_f1f2_cross_system(sysname):
     assert torch.equal(fw_n._filter.last_empty, fw_k._filter.last_empty)
     assert torch.equal(u0[~em], uk[~em]), f"{sysname}: kstep changed a non-empty row"
     assert not torch.equal(u0[em], uk[em]), f"{sysname}: kstep changed no empty row"
+
+
+# ---- Stage-3D: quadrotor_3d f1 (mode=none bit-parity) + f2 (flag-invariance under mode=kstep) ----
+# Exercises the shared 4D grid (16 corners + center + zero + per-axis extremes, deduped -> |G|=25) and
+# kstep_select on the 4-input box. M6 JT checkpoint; skip if absent (measurement run dir, not secured).
+_M6_3D = REPO / "data/v2.7.2__20260718-212348__seed42/checkpoints/best.pt"
+_POOL_3D = REPO / "data/secured_data/pools/eval_full_quadrotor-3d_n2000_seed23456.pkl"
+
+
+def test_f1f2_quadrotor_3d():
+    fw_a, x, bs = _rolled_batch_with_empty(_M6_3D, _POOL_3D, None, n=400, roll=40)
+    un = fw_a.policy(x, bs)
+    ua, fa = fw_a.filter(x, un, bs)                           # absent-block
+    fw_n, _, _ = _rolled_batch_with_empty(_M6_3D, _POOL_3D, {"mode": "none", "k": 5}, n=400, roll=40)
+    u0, f0 = fw_n.filter(x, un, bs)                           # mode=none
+    assert torch.equal(ua, u0) and torch.equal(fa, f0)       # f1 bit-parity: none == absent-block
+    fw_k, _, _ = _rolled_batch_with_empty(_M6_3D, _POOL_3D, {"mode": "kstep", "k": 5}, n=400, roll=40)
+    uk, fk = fw_k.filter(x, un, bs)
+    em = fw_n._filter.last_empty
+    assert bool(em.any()), "quadrotor_3d: no empty rows in the rolled batch (test vacuous)"
+    # f2 flag-invariance + empty-only action change (the fallback never touches a flag; non-empty rows fixed)
+    assert torch.equal(f0, fk)
+    assert torch.equal(fw_n._filter.last_empty, fw_k._filter.last_empty)
+    assert torch.equal(fw_n._filter.last_singular, fw_k._filter.last_singular)
+    assert torch.equal(u0[~em], uk[~em]), "quadrotor_3d: kstep changed a non-empty row"
+    assert not torch.equal(u0[em], uk[em]), "quadrotor_3d: kstep changed no empty row"

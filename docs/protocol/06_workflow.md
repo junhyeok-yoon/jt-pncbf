@@ -170,6 +170,10 @@ iteration); each completed iteration appends its ledger row(s) immediately (inte
 registration — the ledger never waits for close; bold only on a CI-separated improvement
 claim); and the phase report carries one clearly-titled section per iteration.
 
+**Ledger bold convention.** Bold marks the CURRENT headline of a lineage (system): exactly
+one bold row per lineage at any time. On supersession the previous bold row is un-bolded
+and carries a standing supersession line. Historical rows never retain bold.
+
 ### 2.5 Close
 
 The Researcher authors the results document `docs/versions/v<X>_results.md` (at the `docs/versions/` main level, alongside `v2.0.1_results.md` etc.; the Strategist may draft) — the document that renders the version verdict. Unlike the Executor's build-logs (`docs/versions/vX.Y.Z/<task>.md`), the results document interprets. Both live under the gitignored `docs/versions/` as the local SSOT. It covers at least:
@@ -303,6 +307,11 @@ beyond the prompt.
 **Performance criteria.** Any performance pass/fail in a prompt is denominated end-to-end
 (stage wall-clock, or stage-share-weighted), never as a component-isolation ratio;
 micro-benchmark ratios are diagnostic evidence, not gates.
+
+**Measurement persistence.** Every number reported by a milestone, gate, or probe must be
+backed by a persisted artifact (a file); stdout-only measurements are not citable at
+close. Probe and gate scripts write their results to an artifact (scratchpad JSON at
+minimum) as part of passing.
 
 ### 3.3 Prompt authoring authority
 

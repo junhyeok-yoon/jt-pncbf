@@ -74,14 +74,17 @@ def _collided_exact(positions: Tensor, scene: Any) -> Tensor:
         dtype=torch.bool,
         device=positions.device,
     )
-    distance = torch.linalg.norm(positions.unsqueeze(-2) - centers, dim=-1)
+    # Obstacles live in the first centers.shape[-1] position coordinates (xy footprint for infinite
+    # vertical cylinders; a no-op when position dim == center dim, e.g. DI/unicycle/planar).
+    pos_o = positions[..., : centers.shape[-1]]
+    distance = torch.linalg.norm(pos_o.unsqueeze(-2) - centers, dim=-1)
     return ((distance < radii) & active).any(dim=-1)
 
 
 def window_displacement(positions: Tensor, window_steps: int) -> Tensor:
-    if positions.ndim != 3 or positions.shape[-1] != 2:
+    if positions.ndim != 3 or positions.shape[-1] < 2:
         raise ValueError(
-            "positions must have shape [T, B, 2], "
+            "positions must have shape [T, B, D] with D >= 2, "
             f"got {tuple(positions.shape)}."
         )
     if window_steps < 1:

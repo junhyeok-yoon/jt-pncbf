@@ -23,6 +23,7 @@ from src.common.system import System
 from src.common.value_net import ValueNetEnsemble, make_h_fn
 from src.common.quadrotor_barrier import lg_authority_loss
 from src.envs.double_integrator import DoubleIntegrator
+from src.envs.quadrotor_3d import QuadrotorQuad3D
 from src.envs.quadrotor_planar import QuadrotorPlanar
 from src.envs.scene_init import sample_train_scene
 from src.envs.scene_init_fixed import sample_train_fixed_scene
@@ -1663,6 +1664,8 @@ def make_system(config: Mapping[str, Any]) -> System:
         return Unicycle(config)
     if system_name == "quadrotor_planar":
         return QuadrotorPlanar(config)
+    if system_name == "quadrotor_3d":
+        return QuadrotorQuad3D(config)
     raise ValueError(f"Unsupported system: {system_name!r}")
 
 

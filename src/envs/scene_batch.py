@@ -26,6 +26,8 @@ class BatchedScene:
     initial_heading: Tensor | None = None
     initial_attitude: Tensor | None = None
     initial_omega: Tensor | None = None
+    initial_attitude_quat: Tensor | None = None   # quadrotor_3d: [B,4] body->world quaternion
+    initial_omega_vec: Tensor | None = None        # quadrotor_3d: [B,3] body rates
 
 
 def batch_scenes(
@@ -71,6 +73,8 @@ def batch_scenes(
     initial_heading = None
     initial_attitude = None
     initial_omega = None
+    initial_attitude_quat = None
+    initial_omega_vec = None
     if scenes[0].initial_velocity is not None:
         initial_velocity = torch.as_tensor(
             np.stack([scene.initial_velocity for scene in scenes]),
@@ -85,6 +89,18 @@ def batch_scenes(
             )
             initial_omega = torch.as_tensor(
                 [float(scene.initial_omega) for scene in scenes],
+                dtype=dtype,
+                device=device,
+            )
+        elif system == "quadrotor_3d":
+            # start/goal are already full 3D (stacked above); attach the full attitude quaternion + rates.
+            initial_attitude_quat = torch.as_tensor(
+                np.stack([scene.initial_attitude_quat for scene in scenes]),
+                dtype=dtype,
+                device=device,
+            )
+            initial_omega_vec = torch.as_tensor(
+                np.stack([scene.initial_omega_vec for scene in scenes]),
                 dtype=dtype,
                 device=device,
             )
@@ -114,10 +130,18 @@ def batch_scenes(
         initial_heading=initial_heading,
         initial_attitude=initial_attitude,
         initial_omega=initial_omega,
+        initial_attitude_quat=initial_attitude_quat,
+        initial_omega_vec=initial_omega_vec,
     )
 
 
 def initial_states_from_batch(scene: BatchedScene) -> Tensor:
+    if scene.system == "quadrotor_3d":
+        # [px,py,pz, qw,qx,qy,qz, vx,vy,vz, wx,wy,wz]  (13D)
+        return torch.cat(
+            [scene.start, scene.initial_attitude_quat, scene.initial_velocity, scene.initial_omega_vec],
+            dim=1,
+        )
     if scene.system == "quadrotor_planar":
         # [px, py, theta, vx, vy, omega]
         return torch.stack(

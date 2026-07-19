@@ -1,0 +1,48 @@
+{
+  "created_at": "2026-07-19T00:37:31+00:00",
+  "git_commit": "ccbc524968acd42e39af0c5a97f573d10094be23",
+  "n_scenes": 500,
+  "obstacle_distribution": "random",
+  "pool_format_version": 1,
+  "pool_sha256": "75759201780ea8cf45f6dbf0b8fe373efb87c6ffff04a4bbd8dd94bd22bfa84a",
+  "sampler_params": {
+    "env": {
+      "bounds": {
+        "f_max": 19.62,
+        "f_min": 0.0,
+        "omega_max": 4.0,
+        "tau_max": 1.0,
+        "v_max": 2.5
+      },
+      "v_init_max": 0.5,
+      "world_lim": 4.0
+    },
+    "eval_scene": {
+      "min_start_goal_dist": 1.5,
+      "start_goal_clearance": 0.15
+    },
+    "fixed_obstacle": {
+      "active_count": 1,
+      "center": [
+        0.0,
+        0.0
+      ],
+      "radius": 0.8
+    },
+    "obstacle": {
+      "corridor_along_factor": 1.5,
+      "corridor_perp_factor": 1.0,
+      "n_max": 12,
+      "n_min": 1,
+      "p_corridor": 0.6,
+      "r_max": 0.8,
+      "r_min": 0.15
+    },
+    "obstacle_distribution": "random",
+    "scene_train": {
+      "init_feasibility_margin": 0.05
+    }
+  },
+  "seed": 12345,
+  "system": "quadrotor_3d"
+}

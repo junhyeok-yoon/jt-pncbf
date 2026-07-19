@@ -245,6 +245,10 @@ def _pool_payload(pool: EvaluationPool) -> dict[str, Any]:
         payload["init_omega"] = np.array(
             [float(scene.initial_omega) for scene in pool.scenes], dtype=np.float64
         )
+    if pool.scenes[0].system == "quadrotor_3d":
+        # quadrotor_3d: start/goal already 3D (stacked above); 3D init_velocity; full attitude + rates.
+        payload["init_attitude_quat"] = np.stack([s.initial_attitude_quat for s in pool.scenes])
+        payload["init_omega_vec"] = np.stack([s.initial_omega_vec for s in pool.scenes])
     return payload
 
 
@@ -285,10 +289,19 @@ def _scenes_from_payload(payload: Mapping[str, Any]) -> list[Scene]:
             initial_heading = None
             initial_attitude = float(init_attitude[idx])
             initial_omega = float(init_omega[idx])
+        elif system == "quadrotor_3d":
+            initial_velocity = init_velocity[idx]
+            initial_speed = None
+            initial_heading = None
         else:
             initial_velocity = None
             initial_speed = float(init_velocity[idx, 0])
             initial_heading = float(init_velocity[idx, 1])
+        initial_attitude_quat = None
+        initial_omega_vec = None
+        if system == "quadrotor_3d":
+            initial_attitude_quat = np.asarray(payload["init_attitude_quat"][idx], dtype=np.float64)
+            initial_omega_vec = np.asarray(payload["init_omega_vec"][idx], dtype=np.float64)
         scenes.append(
             Scene(
                 obstacle_centers=np.asarray(payload["obstacle_centers"][idx]),
@@ -303,6 +316,8 @@ def _scenes_from_payload(payload: Mapping[str, Any]) -> list[Scene]:
                 initial_heading=initial_heading,
                 initial_attitude=initial_attitude,
                 initial_omega=initial_omega,
+                initial_attitude_quat=initial_attitude_quat,
+                initial_omega_vec=initial_omega_vec,
             )
         )
     return scenes

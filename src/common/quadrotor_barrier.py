@@ -91,14 +91,21 @@ def make_exact_value_fn(
 # --------------------------------------------------------------------------------------------------
 
 def value_target_barrier(system: Any, x: Tensor, scene: Any, config: Any) -> Tensor:
-    """The GROUND-TRUTH barrier h whose sup-over-time the value V^{h,pi} regresses. For the quadrotor
-    it is h_star = phi(p,o) + c (v^T Re) (the version's premise); for DI/unicycle it is signed_h(phi).
-    Replaces the bare `signed_h(position, ...)` at the value-labeling sites (OC + JT collection)."""
+    """The GROUND-TRUTH barrier h whose sup-over-time the value V^{h,pi} regresses. For a quadrotor it is
+    h_star = phi(p,o) + c * approach (the version's premise); for DI/unicycle it is signed_h(phi).
+    Replaces the bare `signed_h(position, ...)` at the value-labeling sites (OC + JT collection).
+
+    v2.7.2: the approach augmentation is generalized through the SYSTEM INTERFACE (`system.approach_barrier`)
+    — no branching on the system name. quadrotor_planar returns v^T Re (bit-identical to the module-level
+    `approach_speed`, golden parity q5); quadrotor_3d returns v_xy . r_hat (cylinder closing speed). phi is
+    taken on the xy footprint (`position(x)[..., :2]`); for the 2D systems position() is already xy so this
+    is a no-op and their labels are unchanged."""
     h_scale = float(config["env"]["h_scale"])
-    phi = signed_h(system.position(x), scene, h_scale)
-    if getattr(system, "name", None) == "quadrotor_planar":
-        c = float(config["env"]["quadrotor_planar"]["c_gain"])
-        return phi + c * approach_speed(x)
+    phi = signed_h(system.position(x)[..., :2], scene, h_scale)
+    approach_fn = getattr(system, "approach_barrier", None)
+    if approach_fn is not None:
+        c = float(config["env"][system.name]["c_gain"])
+        return phi + c * approach_fn(x, scene, h_scale)
     return phi
 
 

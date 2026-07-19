@@ -263,6 +263,10 @@ def write_cbf_contour_figure(
             )
         except Exception:
             return None
+    # v2.7.2: quadrotor_3d (13D) has no 2D position-plane velocity slice; the registered visualization is the
+    # M6 xy/xz/yz trajectory projections (PROTOCOL FOLLOW-UP). Skip the training-time contour (viz-only).
+    if getattr(system, "name", None) not in {"double_integrator", "unicycle"}:
+        return None
     plot_cbf_contours(
         scenes=eval_result.pool.scenes[:2],
         output_path=output_path,
@@ -413,9 +417,12 @@ def _insert_scene_obstacle(
     active = np.asarray(scene.obstacle_active, dtype=np.bool_).copy()
     positions = system.position(states).detach().cpu().numpy()
     insert_step = min(max(0, t_insert), positions.shape[0] - 1)
-    center = 0.5 * (positions[0] + positions[insert_step])
+    # Insert in the obstacle coordinate space: the first centers.shape[-1] position coords (xy footprint for
+    # infinite vertical cylinders; a no-op when position dim == center dim, e.g. DI/unicycle/planar).
+    d = centers.shape[-1]
+    center = (0.5 * (positions[0] + positions[insert_step]))[:d]
 
-    centers = np.concatenate([centers, center.reshape(1, 2)], axis=0)
+    centers = np.concatenate([centers, center.reshape(1, d)], axis=0)
     radii = np.concatenate([radii, np.asarray([radius], dtype=np.float64)], axis=0)
     active = np.concatenate([active, np.asarray([True], dtype=np.bool_)], axis=0)
     return replace(

@@ -504,7 +504,9 @@ def policy_bptt_loss(
     # or w_appr=0 -> inert, for the goal-only ablation).
     # goal DISTANCE stays quadratic ||p-g||^2 (the Huber variant was reverted per the build-log amendment);
     # the mechanism is the two gated SPEED terms below.
-    situational = getattr(system, "name", None) == "quadrotor_planar"
+    # v2.7.2: capability-based (no system-name branch). Quadrotor systems expose horizontal_velocity for the
+    # obstacle-plane approach term; DI/unicycle lack it -> legacy quadratic cost (byte-identical parity).
+    situational = hasattr(system, "horizontal_velocity")
     w_settle = float(policy_cfg.get("w_settle", 0.0))       # 0 -> no goal-gated settling term
     settle_rho = float(policy_cfg.get("settle_rho", 0.30))
     w_appr = float(policy_cfg.get("w_appr", 0.0))           # 0 -> no obstacle-approach (braking-envelope) term
@@ -638,8 +640,8 @@ def policy_bptt_loss(
                     # s_k = inward speed. Zero when receding (s=0) or outside the envelope (surf > s*tau_brake),
                     # C^1, no division, and the envelope RADIUS = s*tau_brake grows with the approach speed, so
                     # it engages EARLIER the FASTER the approach — the property the fixed gate lacked.
-                    p = system.position(x)                                 # [B,2]
-                    vel = x[:, 3:5]                                        # [B,2] quadrotor world velocity
+                    p = system.position(x)[:, : _obs_c.shape[-1]]         # [B,2] obstacle-plane position (xy)
+                    vel = system.horizontal_velocity(x)                   # [B,2] obstacle-plane velocity (xy)
                     rel = p.unsqueeze(1) - _obs_c                          # [B,K,2] obstacle-center -> body
                     dist_c = torch.linalg.norm(rel, dim=2)                 # [B,K]
                     surf = dist_c - _obs_r                                 # [B,K] surface distance

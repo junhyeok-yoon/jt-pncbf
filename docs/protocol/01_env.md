@@ -248,3 +248,48 @@ not redefine it.
 The barrier machinery that acts on this system (the analytic attitude-augmented $h_\star$ and the
 direct box-aware HardNet projection onto $(f_{\text{thr}}, \tau)$) is defined agent-side in
 `02_control`, not here.
+
+### 3.4 3D quadrotor (quadrotor_3d, underactuated)
+
+- **State** (dim 13): position $p \in \mathbb{R}^3$, unit quaternion $q$ (attitude, $\|q\| = 1$),
+  linear velocity $v \in \mathbb{R}^3$, body rates $\omega \in \mathbb{R}^3$.
+- **Control** (dim 4): $u = (f_{\text{thr}}, \tau)$ — scalar body-axis thrust and 3-vector body
+  torque, box-bounded $f_{\text{thr}} \in [0,\, 19.62]$, $\tau \in [-1.0,\, 1.0]^3$
+  (`exp_config.env.quadrotor_3d`). Plant-coherent with the planar system: $\mathsf m = 1.0$,
+  $g = 9.81$, $J = \mathrm{diag}(0.01,\, 0.01,\, 0.02)$.
+- **Dynamics** ($R(q)$ the body-to-world rotation, $e_3$ the world up-axis, $\otimes$ quaternion product):
+  - $\dot p = v$
+  - $\dot q = \tfrac{1}{2}\, q \otimes (0, \omega)$
+  - $\dot v = \tfrac{1}{\mathsf m}\, f_{\text{thr}}\, R(q)\, e_3 - g\, e_3$
+  - $\dot\omega = J^{-1}\,(\tau - \omega \times J\omega)$
+  RK4 integration with quaternion **renormalization each step** (double-cover safe).
+- **Canonical constants:** $\mathsf m = 1.0$, $J = \mathrm{diag}(0.01, 0.01, 0.02)$, $g = 9.81$; speed
+  clamp $v_{\max}$ and rate clamp $\omega_{\max}$ carried from the planar values; $dt$ and
+  $\text{max\_steps} = 200$ unchanged.
+- **Obstacles:** infinite vertical cylinders (center $c_{xy}$, radius $r$). Surface distance
+  $\phi = \|p_{xy} - c_{xy}\| - r$; radial direction $\hat r$ horizontal and globally smooth. Top-5 by
+  surface distance, active mask authoritative, tie rule identical to §3.0.
+- **Observation** (dim 32, full body frame): $[v^{b}(3),\, \omega^{b}(3),\, \text{goal}^{b}(3),\,
+  g^{b}(3)]$ followed by the Top-5 cylinders, each $(c_{\text{off}}^{b}(3),\, r_i)$; all vectors expressed
+  in the body frame $R(q)^\top$, with $g^{b} = R(q)^\top(-e_3)$ and $c_{\text{off}}^{b} =
+  R(q)^\top(\Delta c_{xy},\, 0)$ (information-complete for infinite cylinders). The state $\omega$ is
+  **already** the body-frame rate (the kinematics use $\dot q = \tfrac12 q\otimes(0,\omega)$), so
+  $\omega^{b} = \omega$ is reported directly — no $R(q)^\top$ is applied to it; only the world-frame
+  quantities ($v$, $\text{goal}-p$, $-e_3$, $\Delta c_{xy}$) are rotated. **Design rule:** the
+  closed-loop symmetry group is $G_{\text{dyn}} = \text{translations} \times \text{yaw}$, so the
+  observation quotients translations and yaw only; $g^{b}$ restores exactly the gravity-referenced tilt
+  component a full-rotation quotient would alias. Double-cover safe (all quantities pass through $R(q)$).
+- **Scene:** region $[-4, 4]^3$. Cylinder xy-centers, radii, counts, active mask, and the start/goal
+  **xy-clearance** rules inherited from the planar scene distribution verbatim (clearance in xy only —
+  cylinders are infinite). Start and goal $z$ sampled **independently** uniform in $[-4, 4]$ (altitude
+  change is generically part of the task).
+- **Initial pose** (6-DOF perturbed): position as above; attitude $q = R_a(\phi_{\text{tilt}})\, R_z(\psi)$
+  with yaw $\psi \sim U[-\pi, \pi]$, tilt axis $a$ uniform on the horizontal circle, tilt angle
+  $\phi_{\text{tilt}} \sim U[0,\, 2\pi/3]$ (past-horizontal starts included, mass beyond $\pi/2$ = 25%;
+  near-inversion excluded, SET-ONCE — full-SO(3) is a registered later stress axis). $\|v_0\|$ from the
+  planar speed distribution with uniform 3D direction; per-axis $\omega_0$ from the planar range.
+- **Barrier / nominal:** $h_\star = \phi + 0.3\,(v_{xy} \cdot \hat r)$ (horizontal radial geometry; planar
+  $c$-gain generalized), $h_{\text{scale}}$ unchanged; nominal is a hover **cascaded-PD** (thrust-axis projection + attitude error),
+  replacing a hover-linearized LQR because the IC tilt range $U[0, 2\pi/3]$ lies outside a hover
+  linearization's validity region; the box-aware HardNet projection onto $(f_{\text{thr}}, \tau) \in \mathbb{R}^4$ is defined
+  agent-side in `02_control`. Per-system rule: `filter.empty_fallback.mode = none`.

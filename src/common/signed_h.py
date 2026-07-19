@@ -16,6 +16,9 @@ def signed_h(p: Tensor, scene: Any, h_scale: float) -> Tensor:
     radii = torch.as_tensor(scene.obstacle_radii, dtype=p.dtype, device=p.device)
     active = torch.as_tensor(scene.obstacle_active, dtype=torch.bool, device=p.device)
 
+    # Obstacles live in the first centers.shape[-1] position coords (xy footprint for infinite vertical
+    # cylinders; a no-op when position dim == center dim, e.g. DI/unicycle/planar).
+    p = p[..., : centers.shape[-1]]
     rel = p.unsqueeze(-2) - centers
     distance = torch.linalg.norm(rel, dim=-1)
     clearance = distance - radii

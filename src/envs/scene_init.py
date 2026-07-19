@@ -24,6 +24,10 @@ class Scene:
     initial_heading: float | None = None
     initial_attitude: float | None = None      # quadrotor_planar: body attitude theta
     initial_omega: float | None = None         # quadrotor_planar: body angular rate omega
+    # quadrotor_3d (v2.7.2): start/goal are FULL 3D positions (single source of truth); the xy-clearance
+    # filters slice the first 2 coords (cylinders are infinite-vertical). Attitude/rates carried here.
+    initial_attitude_quat: Array | None = None  # unit quaternion [w,x,y,z], body->world (6-DOF IC)
+    initial_omega_vec: Array | None = None       # body angular rate omega (3,)
 
 
 @dataclass(frozen=True)
@@ -57,7 +61,7 @@ def _sample_scene(
     system: str,
     params: _SceneModeParams,
 ) -> Scene:
-    if system not in {"double_integrator", "unicycle", "quadrotor_planar"}:
+    if system not in {"double_integrator", "unicycle", "quadrotor_planar", "quadrotor_3d"}:
         raise ValueError(f"Unsupported system: {system!r}")
 
     for _ in range(_MAX_RETRIES):
@@ -228,6 +232,39 @@ def _make_scene(
             initial_omega=float(rng.uniform(-omega_init, omega_init)),
         )
 
+    if system == "quadrotor_3d":
+        # v2.7.2 §3.4 6-DOF IC: xy start/goal + independent altitudes; ||v0|| from the planar speed
+        # distribution with uniform-3D direction; attitude q = R_a(phi_tilt) R_z(psi); per-axis omega.
+        q = config["env"]["quadrotor_3d"]
+        v_init = float(q["v_init_max"])
+        omega_init = float(q["omega_init_max"])
+        world_lim = float(config["env"]["world_lim"])
+        start_z = float(rng.uniform(-world_lim, world_lim))
+        goal_z = float(rng.uniform(-world_lim, world_lim))
+        start3 = np.array([start[0], start[1], start_z], dtype=np.float64)   # full 3D start
+        goal3 = np.array([goal[0], goal[1], goal_z], dtype=np.float64)       # full 3D goal
+        speed = v_init * float(np.sqrt(rng.uniform()))         # planar disk-radius marginal
+        vdir = rng.normal(size=3)
+        vdir = vdir / max(float(np.linalg.norm(vdir)), _ZERO_SPEED_EPS)  # uniform on S^2
+        initial_velocity = (speed * vdir).astype(np.float64)
+        psi = float(rng.uniform(-np.pi, np.pi))                # yaw
+        alpha = float(rng.uniform(-np.pi, np.pi))              # tilt-axis azimuth (uniform horizontal)
+        phi_tilt = float(rng.uniform(0.0, 2.0 * np.pi / 3.0))  # tilt magnitude (past-horizontal, no inversion)
+        quat = _compose_ic_quat(psi, alpha, phi_tilt)
+        omega_vec = rng.uniform(-omega_init, omega_init, size=3).astype(np.float64)
+        return Scene(
+            obstacle_centers=centers,
+            obstacle_radii=radii,
+            obstacle_active=active,
+            start=start3,
+            goal=goal3,
+            system=system,
+            mode=mode,
+            initial_velocity=initial_velocity,
+            initial_attitude_quat=quat,
+            initial_omega_vec=omega_vec,
+        )
+
     initial_speed = float(rng.uniform(-v_init_max, v_init_max))
     initial_heading = float(rng.uniform(-np.pi, np.pi))
     return Scene(
@@ -241,6 +278,32 @@ def _make_scene(
         initial_speed=initial_speed,
         initial_heading=initial_heading,
     )
+
+
+def _quat_mul_np(a: Array, b: Array) -> Array:
+    """Hamilton product [w,x,y,z], matching src/envs/quadrotor_3d._quat_mul (R(a b) = R(a) R(b))."""
+    aw, ax, ay, az = a
+    bw, bx, by, bz = b
+    return np.array([
+        aw * bw - ax * bx - ay * by - az * bz,
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+    ], dtype=np.float64)
+
+
+def _compose_ic_quat(psi: float, alpha: float, phi_tilt: float) -> Array:
+    """6-DOF IC attitude q = R_a(phi_tilt) R_z(psi) (body->world, [w,x,y,z]): yaw psi about world-z, then
+    tilt phi_tilt about the horizontal axis a=(cos alpha, sin alpha, 0). Canonicalized to w>=0 (double-cover)."""
+    cy, sy = np.cos(0.5 * psi), np.sin(0.5 * psi)
+    q_yaw = np.array([cy, 0.0, 0.0, sy], dtype=np.float64)
+    ct, st = np.cos(0.5 * phi_tilt), np.sin(0.5 * phi_tilt)
+    q_tilt = np.array([ct, st * np.cos(alpha), st * np.sin(alpha), 0.0], dtype=np.float64)
+    q = _quat_mul_np(q_tilt, q_yaw)
+    q = q / max(float(np.linalg.norm(q)), _ZERO_SPEED_EPS)
+    if q[0] < 0.0:
+        q = -q
+    return q
 
 
 def _passes_recoverability_filter(scene: Scene, config: Mapping[str, Any]) -> bool:
@@ -266,11 +329,12 @@ def _passes_recoverability_filter(scene: Scene, config: Mapping[str, Any]) -> bo
 def _has_start_goal_clearance(scene: Scene, clearance: float) -> bool:
     active_centers = scene.obstacle_centers[scene.obstacle_active]
     active_radii = scene.obstacle_radii[scene.obstacle_active]
+    d = active_centers.shape[-1]                                 # obstacle coord dim (xy for cylinders)
     start_clearance = np.min(
-        np.linalg.norm(active_centers - scene.start, axis=1) - active_radii
+        np.linalg.norm(active_centers - scene.start[:d], axis=1) - active_radii
     )
     goal_clearance = np.min(
-        np.linalg.norm(active_centers - scene.goal, axis=1) - active_radii
+        np.linalg.norm(active_centers - scene.goal[:d], axis=1) - active_radii
     )
     return bool(start_clearance >= clearance and goal_clearance >= clearance)
 
@@ -283,12 +347,13 @@ def _passes_unavoidable_collision_filter(
     velocity = _initial_velocity_vector(scene)
     active_centers = scene.obstacle_centers[scene.obstacle_active]
     active_radii = scene.obstacle_radii[scene.obstacle_active]
+    start_xy = scene.start[: active_centers.shape[-1]]           # obstacle-plane start (xy for cylinders)
 
     acceleration_bound = _acceleration_bound(config, scene.system)
     feasibility_margin = float(config["scene_train"]["init_feasibility_margin"])
 
     for center, radius in zip(active_centers, active_radii):
-        center_delta = center - scene.start
+        center_delta = center - start_xy
         distance = float(np.linalg.norm(center_delta))
         if distance <= _ZERO_SPEED_EPS:
             stopping_distance = 0.0
@@ -335,6 +400,12 @@ def _initial_velocity_vector(scene: Scene) -> Array:
             raise ValueError("Quadrotor scene is missing initial_velocity.")
         return scene.initial_velocity
 
+    if scene.system == "quadrotor_3d":
+        if scene.initial_velocity is None:
+            raise ValueError("Quadrotor-3D scene is missing initial_velocity.")
+        # xy velocity only: the collision pre-filter is a horizontal-braking heuristic (cylinders are infinite).
+        return np.asarray(scene.initial_velocity, dtype=np.float64)[:2]
+
     raise ValueError(f"Unsupported system: {scene.system!r}")
 
 
@@ -349,6 +420,10 @@ def _acceleration_bound(config: Mapping[str, Any], system: str) -> float:
         # vertical authority magnitude. IC speeds <= v_init 1.5 make stopping_distance ~ 0.11 m, so
         # this bound barely gates. Recorded as PROTOCOL FOLLOW-UP (approximate underactuated filter).
         return float(config["env"]["quadrotor_planar"]["gravity"])
+    if system == "quadrotor_3d":
+        # Same approximate underactuated bound as planar: gravity is the net vertical authority magnitude
+        # (horizontal braking heuristic only; PROTOCOL FOLLOW-UP shared with planar).
+        return float(config["env"]["quadrotor_3d"]["gravity"])
     raise ValueError(f"Unsupported system: {system!r}")
 
 

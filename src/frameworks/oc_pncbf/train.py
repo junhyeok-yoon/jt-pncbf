@@ -470,6 +470,9 @@ def make_system(config: Mapping[str, Any]) -> System:
     if system_name == "quadrotor_planar":
         from src.envs.quadrotor_planar import QuadrotorPlanar
         return QuadrotorPlanar(config)
+    if system_name == "quadrotor_3d":
+        from src.envs.quadrotor_3d import QuadrotorQuad3D
+        return QuadrotorQuad3D(config)
     raise ValueError(f"Unsupported system: {system_name!r}")
 
 
