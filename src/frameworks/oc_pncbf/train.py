@@ -190,7 +190,7 @@ def run_training(
         weight_decay=float(config["optim"]["weight_decay"]),
     )
 
-    run_dir = _create_run_dir(output_root, config, run_seed)
+    run_dir = _create_run_dir(output_root, config, run_seed, stage=stage)
     _initialize_run_dir(run_dir, config)
     writer = _make_summary_writer(run_dir / "tensorboard")
     start_time = time.time()
@@ -716,14 +716,25 @@ def _save_checkpoint(
     )
 
 
-def _create_run_dir(output_root: Path, config: Mapping[str, Any], seed: int) -> Path:
+def _create_run_dir(output_root: Path, config: Mapping[str, Any], seed: int, *, stage: str = "full") -> Path:
+    # v2.7.4: framework-tagged run id under data/runs/<version>/[<set>/] (an oc value FULL run creates its
+    # own value/JT set folder; smoke runs go directly under the version folder).
+    from src.common.run_layout import make_run_id, resolve_set, run_dir_for
+
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    run_id = f"{config['run']['version']}__{timestamp}__seed{seed}"
-    run_dir = output_root / run_id
+    version = config["run"]["version"]
+    framework = config["run"].get("framework")
+    run_id = make_run_id(version, framework, timestamp, seed)
+    set_name, reason = resolve_set(output_root, framework, timestamp, seed,
+                                   value_init_run_id=config["run"].get("value_init_run_id"), version=version)
+    if reason:
+        config["run"]["set_fallback_reason"] = reason
+    run_dir = run_dir_for(output_root, version, run_id, set_name=set_name)
     suffix = 1
     while run_dir.exists():
-        run_dir = output_root / f"{run_id}_{suffix}"
+        run_dir = run_dir.parent / f"{run_id}_{suffix}"
         suffix += 1
+    run_dir.parent.mkdir(parents=True, exist_ok=True)
     return run_dir
 
 

@@ -27,8 +27,8 @@ def _patched():
     c["run"]["system"] = "quadrotor_3d"
     c["collection"]["collector"] = str(a.collector)
     c["collection"]["inject_frac"] = float(a.inject_frac)
-    # 4-channel saturation threshold for the quadrotor_3d box (planar per-channel values, tiled to 3 torques)
-    c["loss"]["policy"]["sat_excess_threshold"] = [19.62, 1.0, 1.0, 1.0]
+    # v2.7.3: per-rotor box [0, 4.905]^4 -> saturation threshold = per-rotor max on every channel.
+    c["loss"]["policy"]["sat_excess_threshold"] = [4.905, 4.905, 4.905, 4.905]
     return c
 
 

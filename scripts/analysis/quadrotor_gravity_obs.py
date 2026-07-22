@@ -31,7 +31,7 @@ SP = Path("/tmp/claude-1000/-home-junhyeok-MIT-jt-pncbf/31d93785-ac11-4206-bf50-
 POOL = REPO / "data/secured_data/pools/eval_full_quadrotor-planar_n2000_seed23456.pkl"
 # v2.7.0: run dir from argv (default = v2.6.2 brake baseline). Cache/output are run-id-scoped so a new
 # checkpoint never reuses a stale rollout.
-RUN = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "data/v2.6.2__20260716-182949__seed42"
+RUN = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "data/runs/v2.6.2/set__20260716-182949__seed42/v2.6.2__20260716-182949__seed42"
 RID = RUN.name
 NMAX = 12
 BANDS = [(0.0, np.pi / 6, "[0,pi/6)"), (np.pi / 6, np.pi / 2, "[pi/6,pi/2)"), (np.pi / 2, np.pi + 1e-6, "[pi/2,pi]")]

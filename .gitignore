@@ -37,7 +37,12 @@ events.out.tfevents.*
 # Version / development documents (kept locally, not committed)
 docs/versions/
 
-# Generated run artifacts: ignore ordinary runs, keep curated secured data.
+# Generated run artifacts: ignore everything under data/ (runs, eval, previous_runs, AND
+# secured_data). Secured snapshots and frozen pools are managed by the securing process and its
+# ADOPTED.md manifests; their SHA-256 pins are the integrity mechanism, not git. Committing large
+# .pt/.pkl binaries would bloat the repo irreversibly, so data/secured_data/ is intentionally NOT
+# re-included here (the prior !data/secured_data/ negation was removed in v2.7.4 staging).
 data/*
-!data/secured_data/
-!data/secured_data/**
+
+# Close-out tooling: the manifest + staging script that BUILD the commit, not artifacts of it.
+.close_tooling/

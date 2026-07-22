@@ -89,6 +89,7 @@ def write_pool(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     created_at: str | None = None,
     git_commit: str | None = None,
+    variant: str = "",
 ) -> PoolArtifacts:
     output_dir.mkdir(parents=True, exist_ok=True)
     obstacle_distribution = obstacle_distribution_name(config)
@@ -98,6 +99,7 @@ def write_pool(
         pool.n_scenes,
         pool.seed,
         obstacle_distribution,
+        variant,
     )
     pool_path = output_dir / f"{stem}.pkl"
     manifest_path = output_dir / f"{stem}.manifest.json"
@@ -132,9 +134,14 @@ def build_default_pools(
     config: Mapping[str, Any] | None = None,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     system: str = "double_integrator",
+    variant: str = "",
 ) -> list[PoolArtifacts]:
     if config is None:
         config = load_base_config()
+    # v2.7.3 M0c: default the naming variant from config so build and selection cannot disagree; an explicit
+    # `variant` arg (CLI) overrides for naming only. The scene spec itself is read from config (per_system).
+    if not variant:
+        variant = pool_variant(config, system)
 
     artifacts = []
     git_commit = git_head_or_unknown()
@@ -146,6 +153,7 @@ def build_default_pools(
                 config,
                 output_dir=output_dir,
                 git_commit=git_commit,
+                variant=variant,
             )
         )
     return artifacts
@@ -182,10 +190,56 @@ def pool_stem(
     n_scenes: int,
     seed: int,
     obstacle_distribution: str = "random",
+    variant: str = "",
 ) -> str:
     distribution = _normalize_obstacle_distribution(obstacle_distribution)
     suffix = "_fixed" if distribution == "fixed_centered" else ""
-    return f"eval_{pool_name}_{_system_tag(system)}{suffix}_n{n_scenes}_seed{seed}"
+    tag = _system_tag(system)
+    if variant:                                          # v2.7.3: scene-variant tag (e.g. "d2"); empty = today's name
+        tag = f"{tag}-{variant}"
+    return f"eval_{pool_name}_{tag}{suffix}_n{n_scenes}_seed{seed}"
+
+
+def pool_variant(config: Mapping[str, Any], system: str) -> str:
+    """Scene-variant tag for `system`, sourced from `obstacle.per_system[system].variant` (empty if absent).
+    Build and selection both read this so they cannot disagree (v2.7.3 M0c)."""
+    return str(
+        config.get("obstacle", {}).get("per_system", {}).get(system, {}).get("variant", "")
+    )
+
+
+EVAL_POOLS_DIR = REPO_ROOT / "data/eval_pools"
+
+
+def resolve_pool_or_raise(stem: str) -> Path:
+    """v2.7.4: resolve a pool `.pkl` by stem, preferring the secured pools dir (frozen d2 / v2.7.2 / DI pools)
+    and falling back to the writable `data/eval_pools` — the v2.7.4 `-d2r` pools live there because
+    `data/secured_data/` is write-forbidden this version. SHA-verifies whichever is found; secured is always
+    tried first so frozen-pool resolution is unchanged."""
+    for base in (DEFAULT_OUTPUT_DIR, EVAL_POOLS_DIR):
+        candidate = base / f"{stem}.pkl"
+        if candidate.exists():
+            return verify_pool_or_raise(candidate)
+    raise FileNotFoundError(
+        f"Pool {stem}.pkl not found in {DEFAULT_OUTPUT_DIR} or {EVAL_POOLS_DIR}"
+    )
+
+
+def verify_pool_or_raise(pool_path: Path) -> Path:
+    """Assert the resolved pool `.pkl` exists AND its SHA-256 matches its manifest (v2.7.3 M0c hard gate —
+    silently loading the wrong/absent pool is the failure this prevents). Returns the path on success."""
+    if not pool_path.exists():
+        raise FileNotFoundError(f"Resolved eval pool is absent: {pool_path}")
+    manifest_path = pool_path.with_suffix(".manifest.json")
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Pool manifest is absent: {manifest_path}")
+    recorded = str(json.loads(manifest_path.read_text(encoding="utf-8")).get("pool_sha256", ""))
+    actual = sha256_file(pool_path)
+    if recorded != actual:
+        raise ValueError(
+            f"Pool SHA-256 mismatch for {pool_path.name}: manifest {recorded[:12]}… vs disk {actual[:12]}…"
+        )
+    return pool_path
 
 
 def sampler_param_snapshot(
@@ -416,6 +470,12 @@ def main() -> int:
         type=Path,
         default=DEFAULT_OUTPUT_DIR,
     )
+    parser.add_argument(
+        "--variant",
+        default="",
+        help="v2.7.3 scene-variant tag for naming (e.g. d2); empty reproduces today's filenames. "
+        "The scene spec itself lives in config (obstacle.per_system); this names the output only.",
+    )
     args = parser.parse_args()
 
     config = load_base_config()
@@ -425,6 +485,7 @@ def main() -> int:
         config=config,
         output_dir=args.output_dir,
         system=args.system,
+        variant=args.variant,
     )
     for artifact in artifacts:
         print(artifact.pool_path)

@@ -28,7 +28,7 @@ from src.frameworks.jt_pncbf.train import make_system, _build_control_net
 
 REPO = Path("/home/junhyeok/MIT/jt-pncbf")
 SP = Path("/tmp/claude-1000/-home-junhyeok-MIT-jt-pncbf/31d93785-ac11-4206-bf50-a4c3de145dff/scratchpad")
-M1 = REPO / "data/v2.6.0__20260715-010357__seed42/checkpoints/best.pt"
+M1 = REPO / "data/runs/v2.6.0/set__20260715-010357__seed42/v2.6.0__20260715-010357__seed42/checkpoints/best.pt"
 BC0 = REPO / "data/bc_lqr_seed42/bc_policy.pt"
 INLOOP = REPO / "data/secured_data/pools/eval_inloop_quadrotor-planar_n500_seed12345.pkl"
 REACH_GATE = 0.55

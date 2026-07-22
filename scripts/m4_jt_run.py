@@ -12,7 +12,7 @@ from src.frameworks.jt_pncbf.train import run_training, load_effective_config
 ap = argparse.ArgumentParser()
 ap.add_argument("--seed", type=int, default=42)
 ap.add_argument("--steps", type=int, default=50000)
-ap.add_argument("--value-init", default="data/v2.6.0__20260715-010357__seed42/checkpoints/best.pt")
+ap.add_argument("--value-init", default="data/runs/v2.6.0/set__20260715-010357__seed42/v2.6.0__20260715-010357__seed42/checkpoints/best.pt")
 a = ap.parse_args()
 
 # effective config delta preview (registered -> M4 launch): only n_steps + value_init_ckpt

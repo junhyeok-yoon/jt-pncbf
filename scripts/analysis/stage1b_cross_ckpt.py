@@ -98,7 +98,7 @@ def main():
         print(f"  k5:   cps={sk['cps']:.4f}{sk['cps_ci']} coll={sk['collision']:.4f}{sk['collision_ci']} | flips={len(fl)} fixed={R[tag]['fixed']} new_coll={R[tag]['new_coll']}",flush=True)
         print(f"  chatter none->k5: {ch}",flush=True)
     # S5a: v2.7.1 k5 chattering on the M5 collision episodes
-    m5=REPO/"data/v2.7.1__20260718-114933__seed42/checkpoints/best.pt"
+    m5=REPO/"data/runs/v2.7.1/set__20260718-110403__seed42/v2.7.1__20260718-114933__seed42/checkpoints/best.pt"
     m5_coll=[int(r["episode_idx"]) for r in csv.DictReader(open(SP/"stage1_none_episodes.csv")) if r["outcome"]=="collision"]
     R["v2.7.1_k5_chatter_S5a"]=chatter(m5, m5_coll)
     print(f"\nS5a v2.7.1 none->k5 chatter: {R['v2.7.1_k5_chatter_S5a']}",flush=True)

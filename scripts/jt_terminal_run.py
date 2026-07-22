@@ -17,7 +17,7 @@ from src.frameworks.jt_pncbf.train import run_training, load_effective_config
 ap = argparse.ArgumentParser()
 ap.add_argument("--seed", type=int, default=42)
 ap.add_argument("--steps", type=int, default=50000)
-ap.add_argument("--value-init", default="data/v2.6.0__20260715-010357__seed42/checkpoints/best.pt")
+ap.add_argument("--value-init", default="data/runs/v2.6.0/set__20260715-010357__seed42/v2.6.0__20260715-010357__seed42/checkpoints/best.pt")
 ap.add_argument("--inject-frac", type=float, default=0.0)  # v2.7.0 iter-2: tilted-cell IC oversampling
 ap.add_argument("--collector", default="legacy", choices=["legacy", "continuing"])  # v2.7.0 iter-5 Track A
 ap.add_argument("--smoke", action="store_true", help="tiny run (300 steps) to gate wiring, not convergence")

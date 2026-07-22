@@ -27,6 +27,8 @@ from src.frameworks.jt_pncbf.train import load_framework_from_checkpoint
 ap = argparse.ArgumentParser()
 ap.add_argument("--ckpt", required=True)
 ap.add_argument("--n", type=int, default=2000)
+ap.add_argument("--pool", default="eval_full_quadrotor-3d-d2_n2000_seed23456.pkl")  # v2.7.3 M6: d2 variant
+ap.add_argument("--out", default=None, help="persist the probe JSON here (each probe carries its denominator n)")
 a = ap.parse_args()
 
 fw, cfg, ck = load_framework_from_checkpoint(Path(a.ckpt))
@@ -35,7 +37,9 @@ vnet = fw.value_net if hasattr(fw, "value_net") else fw._value_net
 h_fn = make_h_fn(vnet, system)
 dt = float(cfg["env"]["dt"]); max_steps = int(cfg["eval"]["max_steps"])
 
-pool = load_pool(DEFAULT_OUTPUT_DIR / "eval_full_quadrotor-3d_n2000_seed23456.pkl")
+from src.eval.build_pools import EVAL_POOLS_DIR
+_pp = EVAL_POOLS_DIR / a.pool if (EVAL_POOLS_DIR / a.pool).exists() else DEFAULT_OUTPUT_DIR / a.pool
+pool = load_pool(_pp)
 scenes = pool.scenes[: a.n]
 bs = batch_scenes(scenes, device=torch.device("cpu"), dtype=torch.float32)
 x = system.wrap_state(initial_states_from_batch(bs).float())
@@ -87,8 +91,9 @@ p5 = {"empty_branch_rate": round(empty_active_total / max(1, active_step_total),
       "singular_rate": round(singular_active_total / max(1, active_step_total), 6),
       "active_filter_steps": active_step_total}
 
-# P2 tilt strata
-bands = [(0, 30), (30, 60), (60, 90), (90, 120)]
+# P2 tilt strata — extended to 180 deg for the full-SO(3) d2r pool (v2.7.4 PROTOCOL FOLLOW-UP #6: the old
+# [0,120) bins silently dropped tilt>=120 episodes).
+bands = [(0, 30), (30, 60), (60, 90), (90, 120), (120, 150), (150, 180.001)]
 p2 = []
 for lo, hi in bands:
     m = (tilt0 >= lo) & (tilt0 < hi)
@@ -142,7 +147,12 @@ ss_res = ((g_b - pred) ** 2).sum(axis=0); ss_tot = ((g_b - g_b.mean(0)) ** 2).su
 r2 = 1.0 - ss_res / np.clip(ss_tot, 1e-12, None)
 p1 = {"gravity_decode_R2_xyz": [round(float(v), 4) for v in r2], "gravity_decode_R2_mean": round(float(r2.mean()), 4)}
 
-print(json.dumps({"ckpt": a.ckpt, "n": B,
-                  "P1_gravity_decodability": p1, "P2_tilt_strata": p2,
-                  "P3_descent_anatomy": p3, "P4_lg_at_collisions": p4,
-                  "P5_empty_branch": p5}, indent=2))
+probe_json = {"ckpt": a.ckpt, "pool": a.pool, "n": B,
+              "P1_gravity_decodability": p1, "P2_tilt_strata": p2,
+              "P3_descent_anatomy": p3, "P4_lg_at_collisions": p4,
+              "P5_empty_branch": p5}
+print(json.dumps(probe_json, indent=2))
+if a.out:
+    Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(a.out).write_text(json.dumps(probe_json, indent=2) + "\n")
+    print("saved", a.out)

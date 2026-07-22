@@ -84,10 +84,12 @@ def test_q2_hover_fixed_point():
     x = torch.zeros(n, 13, dtype=torch.float64)
     x[:, :3] = goal                                              # at goal
     x[:, 3] = 1.0                                                # identity quaternion
-    # v = omega = 0
+    # v = omega = 0. v2.7.3 per-rotor plant: hover = equal rotor forces mg/4; wrench = (mg, 0, 0, 0).
     u = s.lqr_action(x, goal)
-    assert torch.allclose(u[:, 0], torch.full((n,), s.mass * s.gravity, dtype=torch.float64), atol=1e-6)
-    assert torch.allclose(u[:, 1:4], torch.zeros(n, 3, dtype=torch.float64), atol=1e-6)
+    assert torch.allclose(u, torch.full((n, 4), s.mass * s.gravity / 4.0, dtype=torch.float64), atol=1e-5)
+    wrench = u @ s.mixer.to(u.dtype).t()
+    assert torch.allclose(wrench[:, 0], torch.full((n,), s.mass * s.gravity, dtype=torch.float64), atol=1e-5)
+    assert torch.allclose(wrench[:, 1:4], torch.zeros(n, 3, dtype=torch.float64), atol=1e-5)
     dx = s.dynamics(x, u)
     assert torch.allclose(dx, torch.zeros_like(dx), atol=1e-6)   # true fixed point
 
@@ -193,7 +195,12 @@ def test_q5_golden_bit_parity():
 
 # ---------------------------------------------------------------------------- q6
 def test_q6_ic_attitude_distribution():
+    # v2.7.4 M0d: this pins the LEGACY tilt-capped sampler (ic_so3 off), which still exists and was proven
+    # byte-identical to v2.7.3 in M0c. The v2.7.4 full-SO(3) sampler (ic_so3 on) is covered by
+    # tests/test_v274_ic.py (cos(tilt) ~ U[-1,1] KS test). Force the switch off here so this regression test
+    # continues to exercise the sampler it was written for regardless of the committed default.
     cfg = _cfg()
+    cfg["env"]["quadrotor_3d"]["ic_so3"] = False
     rng = np.random.default_rng(2026)
     n = 6000
     scenes = [sample_train_scene(rng, cfg, "quadrotor_3d") for _ in range(n)]
@@ -245,18 +252,21 @@ def test_q7_convention_cross_checks():
     ang = torch.arccos((-g_b[:, 2]).clamp(-1, 1))               # angle(world-up-in-body, body-up e3)
     assert torch.allclose(ang, torch.tensor([phi], dtype=dt), atol=1e-9)
     assert torch.allclose(torch.linalg.norm(g_b, dim=1), torch.ones(1, dtype=dt), atol=1e-12)
-    # (c) free fall (f=0): dv = -g e3 exactly
+    # v2.7.3 per-rotor plant: actions are motor forces; build them from a desired wrench via the mixer inverse.
+    def _rotor(wrench):                                          # wrench (…,4)=(f_thr,tau) -> per-rotor forces
+        return wrench.to(dt) @ s.mixer_inv.to(dt).t()
+    # (c) free fall (all motors off): dv = -g e3 exactly
     x = torch.zeros(4, 13, dtype=dt); x[:, 3] = 1.0; x[:, 7:10] = torch.randn(4, 3)
-    u = torch.zeros(4, 4, dtype=dt); u[:, 0] = 0.0
+    u = torch.zeros(4, 4, dtype=dt)                              # f_i = 0 -> f_thr = 0
     dv = s.dynamics(x, u)[:, 7:10]
     assert torch.allclose(dv, torch.tensor([0.0, 0.0, -s.gravity], dtype=dt).expand(4, 3), atol=1e-12)
-    # (d) hover at identity: f=mg -> dv = 0
-    u[:, 0] = s.mass * s.gravity
+    # (d) hover at identity: equal rotor forces mg/4 -> f_thr = mg, tau = 0 -> dv = 0
+    u = torch.full((4, 4), s.mass * s.gravity / 4.0, dtype=dt)
     dv = s.dynamics(x, u)[:, 7:10]
     assert torch.allclose(dv, torch.zeros(4, 3, dtype=dt), atol=1e-12)
-    # (e) e3 torque -> yaw only + g^b invariant
+    # (e) e3 (yaw) torque at hover thrust -> yaw only + g^b invariant
     x = torch.zeros(1, 13, dtype=dt); x[:, 3] = 1.0
-    u = torch.zeros(1, 4, dtype=dt); u[:, 0] = s.mass * s.gravity; u[:, 3] = 0.5   # tau_z only
+    u = _rotor(torch.tensor([[s.mass * s.gravity, 0.0, 0.0, 0.05]]))   # wrench (mg,0,0,tau_z)
     for _ in range(10):
         x = rk4_step(s, x, u, 0.02)
     b3 = _R(x[:, 3:7])[:, :, 2]

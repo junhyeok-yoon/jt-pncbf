@@ -140,6 +140,13 @@ The engineering disciplines that keep results attributable and the codebase main
   explicitly: (1) what the problem is, with data evidence; (2) why it occurs,
   mechanistically; (3) how the proposed fix addresses that mechanism, not just the symptom;
   (4) the trade-offs and risks.
+- **A calibration proxy is validated per axis.** When a proxy quantity (a difficulty
+  measure, a screening statistic) gates a decision through a registered band, its
+  sensitivity to the axis under test is measured and recorded before the band is trusted.
+  A proxy can be saturated or insensitive on a given axis, so that moving the axis does not
+  move the proxy; a band placed outside the proxy's reachable range on that axis is then a
+  specification error, not a result. The remedy is never to relax the band to fit the data:
+  the proxy is retired for that axis and the property it stood for is measured directly.
 - **Frozen core, swappable learner.** Environment, dynamics, evaluation, metrics, pools,
   plotting, and monitoring live once in `src/common`, `src/envs`, and `src/eval` and are
   imported, never re-implemented per framework. Only `src/frameworks/<name>` changes across

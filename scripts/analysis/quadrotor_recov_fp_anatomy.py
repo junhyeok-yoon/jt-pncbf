@@ -39,7 +39,7 @@ from src.frameworks.jt_pncbf.train import make_system, _build_control_net
 REPO = Path("/home/junhyeok/MIT/jt-pncbf")
 SP = Path("/tmp/claude-1000/-home-junhyeok-MIT-jt-pncbf/31d93785-ac11-4206-bf50-a4c3de145dff/scratchpad")
 POOL = REPO / "data/secured_data/pools/eval_full_quadrotor-planar_n2000_seed23456.pkl"
-RUN = REPO / "data/v2.6.2__20260716-182949__seed42"
+RUN = REPO / "data/runs/v2.6.2/set__20260716-182949__seed42/v2.6.2__20260716-182949__seed42"
 TAU_BRAKE = 0.6
 MARGIN = 0.0
 

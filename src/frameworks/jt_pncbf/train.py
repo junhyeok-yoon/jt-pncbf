@@ -297,6 +297,15 @@ def run_training(
         config["training"]["jt"]["pi_init_ckpt"] = str(pi_init_ckpt)
     if value_init_ckpt is not None:  # v2.6.0: value warm-start (v_s_state only; see the loader below)
         config["training"]["jt"]["value_init_ckpt"] = str(value_init_ckpt)
+        # v2.7.4: machine-readable set link — the source run_id + its checkpoint sha8 in the JT run's config.
+        import hashlib
+        _vi = Path(value_init_ckpt)
+        try:                                              # <run_id>/checkpoints/best.pt -> run_id is parent.parent
+            config["run"]["value_init_run_id"] = _vi.parent.parent.name
+            config["run"]["value_init_sha8"] = hashlib.sha256(_vi.read_bytes()).hexdigest()[:8]
+        except Exception:                                 # unreadable -> record absence, do not guess
+            config["run"]["value_init_run_id"] = None
+            config["run"]["value_init_sha8"] = None
     if seed is not None:
         config["run"]["seed"] = int(seed)
     if obstacle_distribution is not None:
@@ -522,7 +531,7 @@ def run_training(
         capacity=int(collection_cfg["buffer_cap"]),
         policy_capacity=int(policy_buffer_cap) if policy_buffer_cap is not None else None,
     )
-    run_dir = _create_run_dir(output_root, config, run_seed)
+    run_dir = _create_run_dir(output_root, config, run_seed, stage=stage)
     _initialize_run_dir(run_dir, config)
     writer = _make_summary_writer(run_dir / "tensorboard")
     scene_sampler = _train_scene_sampler(config)
@@ -755,6 +764,14 @@ def run_training(
                 system,
                 value_net,
             )
+            # v2.7.3 M5 amendment: durable guard — the CBF contour must be written at every in-loop eval.
+            # In smoke, fail hard if the first in-loop contour is missing/empty (a swallowed render error must
+            # never let a 50k run start without the figure path proven).
+            if stage == "smoke":
+                _cf = run_dir / "figures/inloop" / f"step_{step:06d}_cbf_contour.png"
+                if not (_cf.exists() and _cf.stat().st_size > 0):
+                    halt_reason = "smoke_contour_missing"
+                    break
             cps = float(eval_result.eval_row["cps"])
             if cps > best_cps + float(config["halt"]["early_stop_min_delta"]):
                 best_cps = cps
@@ -975,7 +992,7 @@ def run_value_refinement(
         capacity=int(collection_cfg["buffer_cap"]),
         policy_capacity=int(policy_buffer_cap) if policy_buffer_cap is not None else None,
     )
-    run_dir = _create_run_dir(output_root, config, run_seed)
+    run_dir = _create_run_dir(output_root, config, run_seed, stage=stage)
     _initialize_run_dir(run_dir, config)
     writer = _make_summary_writer(run_dir / "tensorboard")
     scene_sampler = _train_scene_sampler(config)
@@ -1830,14 +1847,25 @@ def _save_checkpoint(
     )
 
 
-def _create_run_dir(output_root: Path, config: Mapping[str, Any], seed: int) -> Path:
+def _create_run_dir(output_root: Path, config: Mapping[str, Any], seed: int, *, stage: str = "full") -> Path:
+    # v2.7.4: framework-tagged run id under data/runs/<version>/[<set>/] (tag from run.framework; value/JT
+    # set folder from resolve_set — value run creates its set, JT joins its value run's set, else version folder).
+    from src.common.run_layout import make_run_id, resolve_set, run_dir_for
+
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    run_id = f"{config['run']['version']}__{timestamp}__seed{seed}"
-    run_dir = output_root / run_id
+    version = config["run"]["version"]
+    framework = config["run"].get("framework")
+    run_id = make_run_id(version, framework, timestamp, seed)
+    set_name, reason = resolve_set(output_root, framework, timestamp, seed,
+                                   value_init_run_id=config["run"].get("value_init_run_id"), version=version)
+    if reason:
+        config["run"]["set_fallback_reason"] = reason
+    run_dir = run_dir_for(output_root, version, run_id, set_name=set_name)
     suffix = 1
     while run_dir.exists():
-        run_dir = output_root / f"{run_id}_{suffix}"
+        run_dir = run_dir.parent / f"{run_id}_{suffix}"
         suffix += 1
+    run_dir.parent.mkdir(parents=True, exist_ok=True)
     return run_dir
 
 
@@ -1909,7 +1937,7 @@ def _write_pool_manifest_copy(run_dir: Path, config: Mapping[str, Any]) -> None:
     system_name = str(config["run"]["system"])
     manifests: dict[str, Any] = {}
     for pool_name in ("inloop", "full"):
-        path = _pool_path(pool_name, config, system_name).with_suffix(".manifest.json")
+        path = (POOL_DIR / f"{_pool_stem_for(pool_name, config, system_name)}.pkl").with_suffix(".manifest.json")
         manifests[pool_name] = (
             json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
         )
@@ -1919,8 +1947,8 @@ def _write_pool_manifest_copy(run_dir: Path, config: Mapping[str, Any]) -> None:
     )
 
 
-def _pool_path(pool_name: str, config: Mapping[str, Any], system_name: str) -> Path:
-    from src.eval.build_pools import obstacle_distribution_name, pool_stem
+def _pool_stem_for(pool_name: str, config: Mapping[str, Any], system_name: str) -> str:
+    from src.eval.build_pools import obstacle_distribution_name, pool_stem, pool_variant
 
     if pool_name == "inloop":
         n_scenes = int(config["eval"]["in_loop"]["n"])
@@ -1930,9 +1958,18 @@ def _pool_path(pool_name: str, config: Mapping[str, Any], system_name: str) -> P
         seed = int(config["eval"]["full"]["seed"])
     else:
         raise ValueError(f"Unknown pool: {pool_name!r}")
-    return POOL_DIR / (
-        f"{pool_stem(pool_name, system_name, n_scenes, seed, obstacle_distribution_name(config))}.pkl"
+    return pool_stem(
+        pool_name, system_name, n_scenes, seed,
+        obstacle_distribution_name(config), pool_variant(config, system_name),
     )
+
+
+def _pool_path(pool_name: str, config: Mapping[str, Any], system_name: str) -> Path:
+    # v2.7.3 M0c: variant (from config) selects the scene-variant pool; hard-assert it exists + SHA-matches
+    # its manifest so a run cannot silently fall back to the wrong/absent pool.
+    from src.eval.build_pools import resolve_pool_or_raise
+
+    return resolve_pool_or_raise(_pool_stem_for(pool_name, config, system_name))  # secured then eval_pools (v2.7.4)
 
 
 def _train_scene_sampler(config: Mapping[str, Any]) -> Any:

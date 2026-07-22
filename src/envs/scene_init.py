@@ -66,7 +66,7 @@ def _sample_scene(
 
     for _ in range(_MAX_RETRIES):
         start, goal = _sample_start_goal(rng, config, params)
-        centers, radii, active = _sample_obstacles(rng, config, start, goal)
+        centers, radii, active = _sample_obstacles(rng, config, start, goal, system)
         scene = _make_scene(
             rng,
             config,
@@ -113,13 +113,27 @@ def _sample_start_goal(
     )
 
 
+def _resolve_obstacle_cfg(config: Mapping[str, Any], system: str) -> Mapping[str, Any]:
+    """Per-system obstacle spec = `obstacle.per_system[system]` merged OVER the shared `obstacle` block.
+    An ABSENT override returns the shared block unchanged (byte-identical sampling — v2.7.3 M0b invariant).
+    The reserved keys `per_system` and `variant` are never read as obstacle parameters."""
+    base = config["obstacle"]
+    override = base.get("per_system", {}).get(system, {})
+    if not override:
+        return base
+    merged = {k: v for k, v in base.items() if k != "per_system"}
+    merged.update({k: v for k, v in override.items() if k != "variant"})
+    return merged
+
+
 def _sample_obstacles(
     rng: np.random.Generator,
     config: Mapping[str, Any],
     start: Array,
     goal: Array,
+    system: str,
 ) -> tuple[Array, Array, npt.NDArray[np.bool_]]:
-    obstacle_cfg = config["obstacle"]
+    obstacle_cfg = _resolve_obstacle_cfg(config, system)
     n_min = int(obstacle_cfg["n_min"])
     n_max = int(obstacle_cfg["n_max"])
     r_min = float(obstacle_cfg["r_min"])
@@ -236,6 +250,35 @@ def _make_scene(
         # v2.7.2 §3.4 6-DOF IC: xy start/goal + independent altitudes; ||v0|| from the planar speed
         # distribution with uniform-3D direction; attitude q = R_a(phi_tilt) R_z(psi); per-axis omega.
         q = config["env"]["quadrotor_3d"]
+        if bool(q.get("ic_so3", False)):
+            # v2.7.4 M0c: full-SO(3) IC. Attitude uniform on SO(3) (Shoemake), angular + linear velocity
+            # direction-uniform on S^2 with magnitudes U[0, ic_omega_max] / U[0, ic_v_max]. The obstacle
+            # geometry (centers/radii/active) and xy start/goal are already sampled above (shared with the
+            # v2.7.3 path); only the 6-DOF IC differs here.
+            world_lim = float(config["env"]["world_lim"])
+            start_z = float(rng.uniform(-world_lim, world_lim))
+            goal_z = float(rng.uniform(-world_lim, world_lim))
+            start3 = np.array([start[0], start[1], start_z], dtype=np.float64)
+            goal3 = np.array([goal[0], goal[1], goal_z], dtype=np.float64)
+            v_speed = float(q["ic_v_max"]) * float(rng.uniform())          # |v0| ~ U[0, ic_v_max]
+            vdir = rng.normal(size=3); vdir = vdir / max(float(np.linalg.norm(vdir)), _ZERO_SPEED_EPS)
+            initial_velocity = (v_speed * vdir).astype(np.float64)
+            quat = _shoemake_quat(rng)                                     # uniform SO(3)
+            w_mag = float(q["ic_omega_max"]) * float(rng.uniform())        # |omega| ~ U[0, ic_omega_max]
+            wdir = rng.normal(size=3); wdir = wdir / max(float(np.linalg.norm(wdir)), _ZERO_SPEED_EPS)
+            omega_vec = (w_mag * wdir).astype(np.float64)
+            return Scene(
+                obstacle_centers=centers,
+                obstacle_radii=radii,
+                obstacle_active=active,
+                start=start3,
+                goal=goal3,
+                system=system,
+                mode=mode,
+                initial_velocity=initial_velocity,
+                initial_attitude_quat=quat,
+                initial_omega_vec=omega_vec,
+            )
         v_init = float(q["v_init_max"])
         omega_init = float(q["omega_init_max"])
         world_lim = float(config["env"]["world_lim"])
@@ -290,6 +333,25 @@ def _quat_mul_np(a: Array, b: Array) -> Array:
         aw * by - ax * bz + ay * bw + az * bx,
         aw * bz + ax * by - ay * bx + az * bw,
     ], dtype=np.float64)
+
+
+def _shoemake_quat(rng) -> Array:
+    """Uniform unit quaternion on SO(3) by Shoemake (1992). Three U[0,1) draws give a point uniform on S^3
+    (= Haar-uniform on SO(3) via the double cover), returned as [w,x,y,z], canonicalized to w>=0. This is
+    NOT uniform Euler angles, which is a different, non-Haar measure. Under this sampler cos(tilt)=R(q)[2,2]
+    is uniform on [-1,1] (pinned by test), the property uniform-Euler badly violates."""
+    u1, u2, u3 = (float(x) for x in rng.uniform(size=3))
+    a, b = np.sqrt(1.0 - u1), np.sqrt(u1)
+    two_pi = 2.0 * np.pi
+    q = np.array([b * np.cos(two_pi * u3),      # w
+                  a * np.sin(two_pi * u2),      # x
+                  a * np.cos(two_pi * u2),      # y
+                  b * np.sin(two_pi * u3)],     # z
+                 dtype=np.float64)
+    q = q / max(float(np.linalg.norm(q)), _ZERO_SPEED_EPS)
+    if q[0] < 0.0:
+        q = -q
+    return q
 
 
 def _compose_ic_quat(psi: float, alpha: float, phi_tilt: float) -> Array:

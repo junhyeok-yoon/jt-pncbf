@@ -22,9 +22,10 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--ckpt", required=True)
 ap.add_argument("--outdir", required=True)
 ap.add_argument("--n", type=int, default=2000)
+ap.add_argument("--pool", default="eval_full_quadrotor-3d-d2_n2000_seed23456.pkl")  # v2.7.3 M7: d2 variant
 a = ap.parse_args()
 
-POOL = DEFAULT_OUTPUT_DIR / "eval_full_quadrotor-3d_n2000_seed23456.pkl"
+POOL = DEFAULT_OUTPUT_DIR / a.pool
 outdir = Path(a.outdir); outdir.mkdir(parents=True, exist_ok=True)
 ck = torch.load(a.ckpt, map_location="cpu", weights_only=False)
 

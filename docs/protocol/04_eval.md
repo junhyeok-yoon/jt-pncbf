@@ -132,7 +132,7 @@ The overlay of $u^{\text{nom}}$ is kept unless it makes a panel unreadable, in w
 **PROTOCOL FOLLOW-UP (v2.7.2, quadrotor_3d).** For 3-D systems the single-plane trajectory panel is
 insufficient — a cylinder-avoiding path with altitude change reads correctly only across **three orthogonal
 projections (xy / xz / yz)**. v2.7.2 M6 produced these ad hoc via `scripts/analysis/quadrotor_3d_xyz_plots.py`
-(infinite vertical cylinders = filled circles in xy, vertical bands in xz/yz; start = circle, goal = star).
+(infinite vertical cylinders = filled circles in xy, vertical bands in xz/yz; start = circle, goal = star). 3-D systems are drawn as three orthogonal projections: xy, xz, yz.
 The fixed-format 3-D trajectory figure (folding these three projections into the §3 grid, or a dedicated
 3-panel figure) is to be specified here at the v2.7.2 close.
 
@@ -155,6 +155,9 @@ panels total = two scenes × three velocities.
 **Velocity columns (per system).**
 - Double Integrator $(vx, vy)$: left $(-1.5,\ 0.5)$, center $(0,\ 0)$, right $(1.5,\ -0.5)$.
 - Unicycle $(v,\ \theta)$: left $(1,\ 0)$, center $(0,\ 0)$, right $(1,\ \pi)$.
+- Quadrotor 3D: swept in the $z = 0$ plane. left = hover attitude, $v = 0$; center = hover
+  attitude, $v = (1.5, 0, 0)$; right = tilt $60^\circ$, $v = (1.5, 0, 0)$. Each panel title
+  carries the true $\hat V$ min and max so the clamped color scale never hides a scale change.
 
 **Per panel.** Fix the panel's scene and velocity. Sweep position $(px, py)$ over a regular
 grid covering the arena $[-\text{world\_lim}, \text{world\_lim}]^2$ (a resolution that
@@ -407,13 +410,12 @@ The user runs `tensorboard --logdir data/` (which surfaces every active `<run_id
 
 ### 7.5 Secured snapshot
 
-When a version is closed (`06_workflow` §2.5), the chosen runs are copied into `data/secured_data/<version>/seed<N>/`. The secured snapshot includes (no TensorBoard event files, which are large and redundant with CSVs):
+When a version is closed (`06_workflow` §2.5), the chosen runs are copied into `data/secured_data/<version>/seed<N>/`. The secured snapshot excludes TensorBoard event files (large, redundant with CSVs) and the per-step training `metrics.csv` (per-step telemetry is low value per byte to retain); the summary `eval_metrics.csv` is kept:
 
 ```text
 data/secured_data/<version>/seed<N>/
 ├── config.yaml
 ├── git_commit.txt
-├── metrics.csv
 ├── eval_metrics.csv
 ├── eval_episodes.csv
 ├── pool_manifest.json

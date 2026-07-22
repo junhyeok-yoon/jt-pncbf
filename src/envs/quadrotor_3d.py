@@ -16,6 +16,7 @@ g^b = R(q)^T(-e3), c_off^b = R(q)^T(Delta c_xy, 0).
 """
 from __future__ import annotations
 
+import math
 from typing import Any, Mapping
 
 import torch
@@ -38,12 +39,27 @@ class QuadrotorQuad3D:
         self.mass = float(phys["mass"])
         self.gravity = float(phys["gravity"])
         self.inertia = torch.tensor([float(phys["Jx"]), float(phys["Jy"]), float(phys["Jz"])], dtype=torch.float64)
+        # v2.7.3 M0b: TRUE per-rotor actuator set. Control u = (f_1..f_4), each in [0, f_rotor_max] N.
+        # X-config (rotors at 45/135/225/315 deg, alternating spin), fixed mixer wrench = M u:
+        #   f_thr = sum f_i;  tau_x = l(f1+f2-f3-f4);  tau_y = l(-f1+f2+f3-f4);  tau_z = c(f1-f2+f3-f4)
+        # with moment arm l = L/sqrt(2) and torque/force ratio c = k_M/k_F. Rows of M are orthogonal.
+        self.arm_L = float(phys["arm_L"]); self.moment_arm = self.arm_L / math.sqrt(2.0)
+        self.c_moment = float(phys["c_moment"])
         b = config["env"]["bounds"]["quadrotor_3d"]
-        self.f_min = float(b["f_min"]); self.f_max = float(b["f_max"])
-        self.tau_max = float(b["tau_max"]); self.v_max = float(b["v_max"]); self.omega_max = float(b["omega_max"])
+        self.f_rotor_min = float(b["f_rotor_min"]); self.f_rotor_max = float(b["f_rotor_max"])
+        self.v_max = float(b["v_max"]); self.omega_max = float(b["omega_max"])
+        _l = self.moment_arm; _c = self.c_moment
+        self.mixer = torch.tensor(
+            [[1.0, 1.0, 1.0, 1.0], [_l, _l, -_l, -_l], [-_l, _l, _l, -_l], [_c, -_c, _c, -_c]],
+            dtype=torch.float64,
+        )
+        # orthogonal rows -> M^{-1} = M^T diag(1/||row_j||^2); norms^2 = (4, 4l^2, 4l^2, 4c^2)
+        self.mixer_inv = self.mixer.t() @ torch.diag(
+            1.0 / torch.tensor([4.0, 4.0 * _l * _l, 4.0 * _l * _l, 4.0 * _c * _c], dtype=torch.float64)
+        )
         self.u_bounds = torch.tensor(
-            [[self.f_min, self.f_max], [-self.tau_max, self.tau_max], [-self.tau_max, self.tau_max],
-             [-self.tau_max, self.tau_max]], dtype=torch.float64)
+            [[self.f_rotor_min, self.f_rotor_max]] * 4, dtype=torch.float64
+        )
         lqr = config["lqr"]["quadrotor_3d"]
         self.kp_pos = float(lqr["kp_pos"]); self.kd_pos = float(lqr["kd_pos"])
         self.kp_att = float(lqr["kp_att"]); self.kd_att = float(lqr["kd_att"])
@@ -51,7 +67,8 @@ class QuadrotorQuad3D:
     # ---- dynamics ----
     def dynamics(self, x: Tensor, u: Tensor) -> Tensor:
         q = x[:, 3:7]; v = x[:, 7:10]; omega = x[:, 10:13]
-        f_thr = u[:, 0]; tau = u[:, 1:4]
+        wrench = u @ self.mixer.to(x.device, x.dtype).t()     # per-rotor (f1..f4) -> (f_thr, tau) (constant linear)
+        f_thr = wrench[:, 0]; tau = wrench[:, 1:4]
         R = _quat_to_R(q)                                     # [B,3,3] body->world
         e3 = R[:, :, 2]                                       # R e3 = 3rd column (body up in world)
         g_vec = torch.zeros_like(v); g_vec[:, 2] = self.gravity
@@ -115,7 +132,7 @@ class QuadrotorQuad3D:
         r_hat = toward_sel / torch.linalg.norm(toward_sel, dim=-1, keepdim=True).clamp(min=1e-9)
         return torch.sum(v_xy * r_hat, dim=-1)               # [...]
 
-    # ---- nominal: cascaded hover PD -> (f_thr, tau) ----
+    # ---- nominal: cascaded hover PD -> (f_thr, tau_des) -> mixer inverse -> per-rotor forces (clipped) ----
     def lqr_action(self, x: Tensor, goal: Tensor) -> Tensor:
         goal = _batched_goal(goal, x)
         p = x[:, :3]; q = x[:, 3:7]; v = x[:, 7:10]; omega = x[:, 10:13]
@@ -130,7 +147,9 @@ class QuadrotorQuad3D:
         e_att_body = _rot(R.transpose(1, 2), e_att_world)
         J = self.inertia.to(x.device, x.dtype)
         tau = J * (self.kp_att * e_att_body - self.kd_att * omega)
-        return self._clamp_action(torch.cat([f_thr.unsqueeze(-1), tau], dim=1))
+        wrench = torch.cat([f_thr.unsqueeze(-1), tau], dim=1)          # desired (f_thr, tau)
+        f_rotor = wrench @ self.mixer_inv.to(x.device, x.dtype).t()    # per-rotor forces (mixer inverse)
+        return self._clamp_action(f_rotor)                            # per-rotor box clip [0, f_rotor_max]
 
     def wrap_state(self, x: Tensor) -> Tensor:
         p = x[:, :3]

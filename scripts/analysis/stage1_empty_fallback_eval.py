@@ -13,7 +13,7 @@ from src.frameworks.jt_pncbf.train import load_framework_from_checkpoint
 
 REPO = Path("/home/junhyeok/MIT/jt-pncbf")
 SP = Path("/tmp/claude-1000/-home-junhyeok-MIT-jt-pncbf/31d93785-ac11-4206-bf50-a4c3de145dff/scratchpad")
-CKPT = REPO / "data/v2.7.1__20260718-114933__seed42/checkpoints/best.pt"
+CKPT = REPO / "data/runs/v2.7.1/set__20260718-110403__seed42/v2.7.1__20260718-114933__seed42/checkpoints/best.pt"
 POOL = REPO / "data/secured_data/pools/eval_full_quadrotor-planar_n2000_seed23456.pkl"
 
 

@@ -78,7 +78,7 @@ def _n_components(mask):
 
 
 def main():
-    run_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("data/v2.6.1__20260715-173808__seed42")
+    run_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("data/runs/v2.6.1/set__20260715-170907__seed42/v2.6.1__20260715-173808__seed42")
     if not run_dir.is_absolute():
         run_dir = REPO / run_dir
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")

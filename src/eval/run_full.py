@@ -89,6 +89,7 @@ def run_full_eval(
     )
     _append_csv(run_dir / "eval_metrics.csv", EVAL_METRIC_COLUMNS, [eval_result.eval_row])
     _append_csv(run_dir / "eval_episodes.csv", EVAL_EPISODE_COLUMNS, eval_result.episode_rows)
+    _persist_action_stream(run_dir, eval_result, ckpt_name=checkpoint_path.name)
 
     figure_result = write_trajectory_figures(
         run_dir=run_dir,
@@ -143,6 +144,63 @@ def run_full_eval(
     )
 
 
+def _persist_action_stream(
+    run_dir: Path,
+    eval_result: Any,
+    *,
+    ckpt_name: str,
+) -> Path | None:
+    """v2.7.3 M6 amendment: persist the per-step deployed action stream for every canonical-eval episode.
+
+    Writes the commanded action u_cmd (= filtered u_safe, all four rotor commands) and, since it is already
+    in scope from the same rollout, the pre-filter nominal u_nom — indexed by step and episode id — as a
+    single compressed array alongside eval_episodes.csv. This reuses tensors already computed by the rollout
+    (no second forward pass). It exists so the post-hoc command-swing / first-order-motor-lag misdelivery
+    number can be computed later without re-running the eval; no metric is computed here.
+
+    episode_idx / n_steps are copied from eval_result.episode_rows (the same join keys written to
+    eval_episodes.csv); trajectories align 1:1 with those rows. Actions are stored float32 (thrust in N,
+    range ~[0, 4.905]); the untrimmed length is max_steps for every episode, so n_steps gives the physical
+    horizon for trimming the zero-padded tail after episode termination.
+    """
+    trajectories = getattr(eval_result, "trajectories", None)
+    episode_rows = getattr(eval_result, "episode_rows", None)
+    if not trajectories or not episode_rows:
+        return None
+    if len(trajectories) != len(episode_rows):                    # alignment is the whole contract; refuse if broken
+        raise RuntimeError(
+            f"action-stream persistence: {len(trajectories)} trajectories vs "
+            f"{len(episode_rows)} episode rows — cannot align."
+        )
+    cmd = [traj.filtered.u_safe[:, 0, :].detach().to(dtype=torch.float32).cpu().numpy() for traj in trajectories]
+    nom = [traj.filtered.u_nom[:, 0, :].detach().to(dtype=torch.float32).cpu().numpy() for traj in trajectories]
+    u_cmd = np.stack(cmd, axis=0)                                 # [n_episodes, max_steps, action_dim]
+    u_nom = np.stack(nom, axis=0)
+    episode_idx = np.asarray([int(row["episode_idx"]) for row in episode_rows], dtype=np.int64)
+    n_steps = np.asarray([int(row["n_steps"]) for row in episode_rows], dtype=np.int64)
+    step_index = np.arange(u_cmd.shape[1], dtype=np.int64)
+    path = run_dir / "eval_action_stream.npz"
+    np.savez_compressed(
+        path,
+        u_cmd=u_cmd,
+        u_nom=u_nom,
+        episode_idx=episode_idx,
+        n_steps=n_steps,
+        step_index=step_index,
+        ckpt_name=np.asarray(ckpt_name),
+        mode=np.asarray("final"),
+        note=np.asarray("u_cmd=filtered u_safe; u_nom=pre-filter nominal; tail past n_steps is done-zeroed"),
+    )
+    n_rows = int(u_cmd.shape[0]) * int(u_cmd.shape[1])
+    print(
+        f"[action-stream] wrote {path} "
+        f"shape u_cmd/u_nom {u_cmd.shape} ({n_rows} episode-steps) "
+        f"size {path.stat().st_size / 1e6:.2f} MB",
+        flush=True,
+    )
+    return path
+
+
 def _load_framework(
     checkpoint_path: Path,
     config_overrides: Mapping[str, Any] | None = None,
@@ -179,12 +237,15 @@ def _checkpoint_path(
 
 
 def _full_pool_path(config: Mapping[str, Any]) -> Path:
+    # v2.7.3 M0c: variant (from config) selects the scene-variant pool; hard-assert existence + SHA match.
+    from src.eval.build_pools import pool_variant, resolve_pool_or_raise
+
     n_scenes = int(config["eval"]["full"]["n"])
     seed = int(config["eval"]["full"]["seed"])
     system_name = str(config["run"]["system"])
-    return POOL_DIR / (
-        f"{pool_stem('full', system_name, n_scenes, seed, obstacle_distribution_name(config))}.pkl"
-    )
+    stem = pool_stem("full", system_name, n_scenes, seed, obstacle_distribution_name(config),
+                     pool_variant(config, system_name))
+    return resolve_pool_or_raise(stem)          # secured then eval_pools (v2.7.4 -d2r lives in eval_pools)
 
 
 @dataclass(frozen=True)
@@ -263,8 +324,20 @@ def write_cbf_contour_figure(
             )
         except Exception:
             return None
-    # v2.7.2: quadrotor_3d (13D) has no 2D position-plane velocity slice; the registered visualization is the
-    # M6 xy/xz/yz trajectory projections (PROTOCOL FOLLOW-UP). Skip the training-time contour (viz-only).
+    # v2.7.3 amendment: quadrotor_3d fixed 3-panel V_hat contour (recipe registered in plotting.py). Uses the
+    # IN-LOOP d2 pool scene 0 (held for every frame, independent of the eval pool). Viz-only; wrapped.
+    if getattr(system, "name", None) == "quadrotor_3d":
+        try:
+            from src.eval.build_pools import load_pool, pool_stem, pool_variant, resolve_pool_or_raise
+            from src.eval.plotting import plot_quadrotor3d_cbf_contour
+            stem = pool_stem("inloop", "quadrotor_3d", int(config["eval"]["in_loop"]["n"]),
+                             int(config["eval"]["in_loop"]["seed"]), obstacle_distribution_name(config),
+                             pool_variant(config, "quadrotor_3d"))
+            scene0 = load_pool(resolve_pool_or_raise(stem)).scenes[0]   # secured|eval_pools (v2.7.4 -d2r)
+            return plot_quadrotor3d_cbf_contour(scene0, output_path, config, system, value_net, role)
+        except Exception:
+            return None
+    # other >2D systems have no 2D velocity slice; skip (viz-only).
     if getattr(system, "name", None) not in {"double_integrator", "unicycle"}:
         return None
     plot_cbf_contours(

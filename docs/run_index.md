@@ -1,0 +1,177 @@
+# Run index (v2.7.4 migration)
+
+Generated over 161 run directories (data/runs/ + old data/*__*seed* + data/previous_runs/).
+final_step is the max step in eval_metrics.csv (not status.json). in_ledger = run_id appears in docs/ledger.md.
+
+| old path | new path | fw | system | seed | final_step | best sha8 | value_init_run_id | in_ledger |
+|---|---|---|---|---|---|---|---|---|
+| data/runs/_unversioned/gpu_fix_smoke/v2.0.0__20260528-012840__seed123 | data/runs/v2.0.0/v2.0.0__20260528-012840__seed123 | oc_pncbf | double_integrator | 123 | 10 | b5699d2b |  | NO |
+| data/runs/_unversioned/gpu_fix_smoke/v2.0.0__20260528-012847__seed123 | data/runs/v2.0.0/v2.0.0__20260528-012847__seed123 | oc_pncbf | double_integrator | 123 | 10 | 616e0642 |  | NO |
+| data/runs/_unversioned/v2.0.1__20260529-084210__hardnet_oc_seed42 | data/runs/_unversioned/v2.0.1__20260529-084210__hardnet_oc_seed42 | oc_pncbf | double_integrator | 42 | 40000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-032519__lookahead_N0_beta0_seed42_smoke | data/runs/_unversioned/v2.1.0__20260530-032519__lookahead_N0_beta0_seed42_smoke | jt_pncbf | double_integrator | 42 | 34000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-032545__lookahead_N0_beta0_seed42 | data/runs/_unversioned/v2.1.0__20260530-032545__lookahead_N0_beta0_seed42 | jt_pncbf | double_integrator | 42 | 34000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-032742__lookahead_N0_beta0.0_seed42 | data/runs/_unversioned/v2.1.0__20260530-032742__lookahead_N0_beta0.0_seed42 | jt_pncbf | double_integrator | 42 | 34000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-032802__lookahead_N0_beta0.0_seed12345 | data/runs/_unversioned/v2.1.0__20260530-032802__lookahead_N0_beta0.0_seed12345 | jt_pncbf | double_integrator | 12345 | 36000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-032822__lookahead_N0_beta0.0_seed99 | data/runs/_unversioned/v2.1.0__20260530-032822__lookahead_N0_beta0.0_seed99 | jt_pncbf | double_integrator | 99 | 22000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-032837__lookahead_N5_beta2.0_seed42 | data/runs/_unversioned/v2.1.0__20260530-032837__lookahead_N5_beta2.0_seed42 | jt_pncbf | double_integrator | 42 | 34000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-033014__lookahead_N5_beta2.0_seed12345 | data/runs/_unversioned/v2.1.0__20260530-033014__lookahead_N5_beta2.0_seed12345 | jt_pncbf | double_integrator | 12345 | 36000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-033147__lookahead_N5_beta2.0_seed99 | data/runs/_unversioned/v2.1.0__20260530-033147__lookahead_N5_beta2.0_seed99 | jt_pncbf | double_integrator | 99 | 22000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-033326__lookahead_N15_beta2.0_seed42 | data/runs/_unversioned/v2.1.0__20260530-033326__lookahead_N15_beta2.0_seed42 | jt_pncbf | double_integrator | 42 | 34000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-033809__lookahead_N15_beta2.0_seed12345 | data/runs/_unversioned/v2.1.0__20260530-033809__lookahead_N15_beta2.0_seed12345 | jt_pncbf | double_integrator | 12345 | 36000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-034139__lookahead_N15_beta2.0_seed99 | data/runs/_unversioned/v2.1.0__20260530-034139__lookahead_N15_beta2.0_seed99 | jt_pncbf | double_integrator | 99 | 22000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-034530__lookahead_N30_beta2.0_seed42 | data/runs/_unversioned/v2.1.0__20260530-034530__lookahead_N30_beta2.0_seed42 | jt_pncbf | double_integrator | 42 | 34000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-035234__lookahead_N30_beta2.0_seed12345 | data/runs/_unversioned/v2.1.0__20260530-035234__lookahead_N30_beta2.0_seed12345 | jt_pncbf | double_integrator | 12345 | 36000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-040020__lookahead_N30_beta2.0_seed99 | data/runs/_unversioned/v2.1.0__20260530-040020__lookahead_N30_beta2.0_seed99 | jt_pncbf | double_integrator | 99 | 22000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-040823__lookahead_N15_beta0.5_seed42 | data/runs/_unversioned/v2.1.0__20260530-040823__lookahead_N15_beta0.5_seed42 | jt_pncbf | double_integrator | 42 | 34000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-041337__lookahead_N15_beta0.5_seed12345 | data/runs/_unversioned/v2.1.0__20260530-041337__lookahead_N15_beta0.5_seed12345 | jt_pncbf | double_integrator | 12345 | 36000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-041711__lookahead_N15_beta0.5_seed99 | data/runs/_unversioned/v2.1.0__20260530-041711__lookahead_N15_beta0.5_seed99 | jt_pncbf | double_integrator | 99 | 22000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-041909__lookahead_N15_beta5.0_seed42 | data/runs/_unversioned/v2.1.0__20260530-041909__lookahead_N15_beta5.0_seed42 | jt_pncbf | double_integrator | 42 | 34000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-042016__lookahead_N15_beta5.0_seed12345 | data/runs/_unversioned/v2.1.0__20260530-042016__lookahead_N15_beta5.0_seed12345 | jt_pncbf | double_integrator | 12345 | 36000 | ? |  | NO |
+| data/runs/_unversioned/v2.1.0_lookahead/v2.1.0__20260530-042107__lookahead_N15_beta5.0_seed99 | data/runs/_unversioned/v2.1.0__20260530-042107__lookahead_N15_beta5.0_seed99 | jt_pncbf | double_integrator | 99 | 22000 | ? |  | NO |
+| data/runs/_unversioned/v2.3.0_umax20__20260628-212951__seed42 | data/runs/_unversioned/v2.3.0_umax20__20260628-212951__seed42 | jt_pncbf | double_integrator | 42 | 100000 | af552d14 |  | NO |
+| data/runs/_unversioned/v2.4.2__20260708-000440__v242_best | data/runs/_unversioned/v2.4.2__20260708-000440__v242_best | jt_pncbf | double_integrator | 42 | 10500 | ? |  | NO |
+| data/runs/_unversioned/v2.4.2__20260708-041800__v242_exp2_best | data/runs/_unversioned/v2.4.2__20260708-041800__v242_exp2_best | jt_pncbf | double_integrator | 42 | 16500 | ? |  | NO |
+| data/runs/_unversioned/v2.5.1__20260711-040034__cpi_labels_seed31415 | data/runs/_unversioned/v2.5.1__20260711-040034__cpi_labels_seed31415 | jt_pncbf | double_integrator | 42 | None | ? |  | NO |
+| data/runs/_unversioned/v2.5.1__20260711-050924__cpi_labels_seed42 | data/runs/_unversioned/v2.5.1__20260711-050924__cpi_labels_seed42 | jt_pncbf | double_integrator | 42 | None | ? |  | NO |
+| data/runs/_unversioned/v2.5.1__it1vhat__seed12345 | data/runs/_unversioned/v2.5.1__it1vhat__seed12345 | jt_pncbf | double_integrator | 42 | None | 5d213147 |  | NO |
+| data/runs/_unversioned/v2.5.1__it1vhat__seed42 | data/runs/_unversioned/v2.5.1__it1vhat__seed42 | jt_pncbf | double_integrator | 42 | None | b87b97a3 |  | yes |
+| data/runs/_unversioned/v2.5.1__it1vhat__seed99 | data/runs/_unversioned/v2.5.1__it1vhat__seed99 | jt_pncbf | double_integrator | 42 | None | b53bb57f |  | NO |
+| data/runs/_unversioned/v2.5.1__it2vhatP__seed12345 | data/runs/_unversioned/v2.5.1__it2vhatP__seed12345 | jt_pncbf | double_integrator | 42 | None | 692e9a8e |  | NO |
+| data/runs/_unversioned/v2.5.1__it2vhatP__seed42 | data/runs/_unversioned/v2.5.1__it2vhatP__seed42 | jt_pncbf | double_integrator | 42 | None | 31bc37a3 |  | yes |
+| data/runs/_unversioned/v2.5.1__it2vhatP__seed99 | data/runs/_unversioned/v2.5.1__it2vhatP__seed99 | jt_pncbf | double_integrator | 42 | None | dad68e09 |  | NO |
+| data/runs/_unversioned/v2.5.1__it2vhat__seed12345 | data/runs/_unversioned/v2.5.1__it2vhat__seed12345 | jt_pncbf | double_integrator | 42 | None | a8951c20 |  | NO |
+| data/runs/_unversioned/v2.5.1__it2vhat__seed42 | data/runs/_unversioned/v2.5.1__it2vhat__seed42 | jt_pncbf | double_integrator | 42 | None | f059f2e0 |  | yes |
+| data/runs/_unversioned/v2.5.1__it2vhat__seed99 | data/runs/_unversioned/v2.5.1__it2vhat__seed99 | jt_pncbf | double_integrator | 42 | None | 4938186c |  | NO |
+| data/runs/_unversioned/v2.5.1__it3vhat__seed12345 | data/runs/_unversioned/v2.5.1__it3vhat__seed12345 | jt_pncbf | double_integrator | 42 | None | 3a17189f |  | NO |
+| data/runs/_unversioned/v2.5.1__it3vhat__seed42 | data/runs/_unversioned/v2.5.1__it3vhat__seed42 | jt_pncbf | double_integrator | 42 | None | 9fdaaede |  | NO |
+| data/runs/_unversioned/v2.5.1__it3vhat__seed99 | data/runs/_unversioned/v2.5.1__it3vhat__seed99 | jt_pncbf | double_integrator | 42 | None | 5738e046 |  | NO |
+| data/runs/_unversioned/v2.5.1__vhat2dm__seed12345 | data/runs/_unversioned/v2.5.1__vhat2dm__seed12345 | jt_pncbf | double_integrator | 42 | None | a14a4211 |  | NO |
+| data/runs/_unversioned/v2.5.1__vhat2dm__seed42 | data/runs/_unversioned/v2.5.1__vhat2dm__seed42 | jt_pncbf | double_integrator | 42 | None | b8df7b02 |  | yes |
+| data/runs/_unversioned/v2.5.1__vhat2dm__seed99 | data/runs/_unversioned/v2.5.1__vhat2dm__seed99 | jt_pncbf | double_integrator | 42 | None | 89b4a0dc |  | NO |
+| data/runs/v2.0.0/v2.0.0__20260528-005029__seed42 | data/runs/v2.0.0/v2.0.0__20260528-005029__seed42 | oc_pncbf | double_integrator | 42 | 8000 | 93462e29 |  | NO |
+| data/runs/v2.0.0/v2.0.0__20260528-132110__seed42 | data/runs/v2.0.0/v2.0.0__20260528-132110__seed42 | oc_pncbf | double_integrator | 42 | 20000 | ca7b4925 |  | NO |
+| data/runs/v2.0.0/v2.0.0__20260528-143809__seed42 | data/runs/v2.0.0/v2.0.0__20260528-143809__seed42 | oc_pncbf | double_integrator | 42 | 16000 | 7d99d000 |  | NO |
+| data/runs/v2.0.0/v2.0.0__20260528-145754__seed42 | data/runs/v2.0.0/v2.0.0__20260528-145754__seed42 | oc_pncbf | double_integrator | 42 | 26000 | 49ea2def |  | NO |
+| data/runs/v2.0.0/v2.0.0__20260528-192106__seed42 | data/runs/v2.0.0/v2.0.0__20260528-192106__seed42 | oc_pncbf | double_integrator | 42 | 6000 | 0176193e |  | NO |
+| data/runs/v2.0.0/v2.0.0__20260528-203610__seed42 | data/runs/v2.0.0/v2.0.0__20260528-203610__seed42 | oc_pncbf | double_integrator | 42 | 10000 | c473d423 |  | NO |
+| data/runs/v2.0.0/v2.0.0__20260528-224506__seed42 | data/runs/v2.0.0/v2.0.0__20260528-224506__seed42 | oc_pncbf | double_integrator | 42 | 14000 | 11188b5c |  | NO |
+| data/runs/v2.0.0/v2.0.0__20260529-001422__seed42 | data/runs/v2.0.0/v2.0.0__20260529-001422__seed42 | oc_pncbf | double_integrator | 42 | 10 | f7a13849 |  | NO |
+| data/runs/v2.0.0/v2.0.0__20260529-001441__seed42 | data/runs/v2.0.0/v2.0.0__20260529-001441__seed42 | oc_pncbf | double_integrator | 42 | 100000 | face0df6 |  | yes |
+| data/runs/v2.0.0/v2.0.0__20260529-010201__seed42 | data/runs/v2.0.0/v2.0.0__20260529-010201__seed42 | oc_pncbf | double_integrator | 42 | 40000 | 25a7e485 |  | NO |
+| data/runs/v2.0.0/v2.0.0__20260529-011530__seed42 | data/runs/v2.0.0/v2.0.0__20260529-011530__seed42 | oc_pncbf | double_integrator | 42 | 40000 | 3ab89737 |  | NO |
+| data/runs/v2.0.1/v2.0.1__20260529-091856__seed42 | data/runs/v2.0.1/v2.0.1__20260529-091856__seed42 | jt_pncbf | double_integrator | 42 | 4 | 6e4f5391 |  | NO |
+| data/runs/v2.0.1/v2.0.1__20260529-093220__seed42 | data/runs/v2.0.1/v2.0.1__20260529-093220__seed42 | jt_pncbf | double_integrator | 42 | 10000 | 2ff500c9 |  | yes |
+| data/runs/v2.0.1/v2.0.1__20260529-114934__seed42 | data/runs/v2.0.1/v2.0.1__20260529-114934__seed42 | jt_pncbf | double_integrator | 42 | 12000 | dbe622c9 |  | yes |
+| data/runs/v2.0.1/v2.0.1__20260529-120127__seed42 | data/runs/v2.0.1/v2.0.1__20260529-120127__seed42 | jt_pncbf | double_integrator | 42 | 22000 | c649b131 |  | NO |
+| data/runs/v2.0.1/v2.0.1__20260529-121439__seed42 | data/runs/v2.0.1/v2.0.1__20260529-121439__seed42 | jt_pncbf | double_integrator | 42 | 22000 | 1e05db23 |  | NO |
+| data/runs/v2.0.1/v2.0.1__20260529-124338__seed42 | data/runs/v2.0.1/v2.0.1__20260529-124338__seed42 | jt_pncbf | double_integrator | 42 | 13334 | a23b47d5 |  | NO |
+| data/runs/v2.0.1/v2.0.1__20260529-161300__seed42 | data/runs/v2.0.1/v2.0.1__20260529-161300__seed42 | jt_pncbf | double_integrator | 42 | 10000 | 0345f533 |  | NO |
+| data/runs/v2.0.1/v2.0.1__20260529-164924__seed42 | data/runs/v2.0.1/v2.0.1__20260529-164924__seed42 | jt_pncbf | double_integrator | 42 | 22000 | 25241a7a |  | NO |
+| data/runs/v2.0.1/v2.0.1__20260529-165556__seed42 | data/runs/v2.0.1/v2.0.1__20260529-165556__seed42 | jt_pncbf | double_integrator | 42 | 22000 | becedc5e |  | NO |
+| data/runs/v2.0.1/v2.0.1__20260529-171057__seed42 | data/runs/v2.0.1/v2.0.1__20260529-171057__seed42 | jt_pncbf | double_integrator | 42 | 42000 | c12517c0 |  | NO |
+| data/runs/v2.0.1/v2.0.1__20260529-222032__seed12345 | data/runs/v2.0.1/v2.0.1__20260529-222032__seed12345 | jt_pncbf | double_integrator | 12345 | 42000 | 3334c79a |  | NO |
+| data/runs/v2.0.1/v2.0.1__20260530-003059__seed99 | data/runs/v2.0.1/v2.0.1__20260530-003059__seed99 | jt_pncbf | double_integrator | 99 | 42000 | fd18e1d7 |  | NO |
+| data/runs/v2.2.1/v2.2.1__20260617-193824__seed0 | data/runs/v2.2.1/v2.2.1__20260617-193824__seed0 | jt_pncbf | double_integrator | 0 | 10000 | 3ed97f9a |  | NO |
+| data/runs/v2.2.1/v2.2.1__20260617-201656__seed0 | data/runs/v2.2.1/v2.2.1__20260617-201656__seed0 | jt_pncbf | double_integrator | 0 | 42000 | 6cf2ab15 |  | NO |
+| data/runs/v2.2.1/v2.2.1__20260618-001001__seed42 | data/runs/v2.2.1/v2.2.1__20260618-001001__seed42 | jt_pncbf | double_integrator | 42 | 40000 | c8133a3b |  | NO |
+| data/runs/v2.2.2/v2.2.2__20260618-054411__seed42 | data/runs/v2.2.2/v2.2.2__20260618-054411__seed42 | jt_pncbf | double_integrator | 42 | 42000 | 849f2517 |  | NO |
+| data/runs/v2.2.2/v2.2.2__20260618-111152__seed42 | data/runs/v2.2.2/v2.2.2__20260618-111152__seed42 | jt_pncbf | double_integrator | 42 | 7000 | 4a89929a |  | NO |
+| data/runs/v2.2.2/v2.2.2__20260618-113255__seed42 | data/runs/v2.2.2/v2.2.2__20260618-113255__seed42 | jt_pncbf | double_integrator | 42 | 7000 | d963f91d |  | NO |
+| data/runs/v2.2.2/v2.2.2__20260618-115222__seed42 | data/runs/v2.2.2/v2.2.2__20260618-115222__seed42 | jt_pncbf | double_integrator | 42 | 5000 | c4c30fc8 |  | NO |
+| data/runs/v2.2.2/v2.2.2__20260618-120639__seed42 | data/runs/v2.2.2/v2.2.2__20260618-120639__seed42 | jt_pncbf | double_integrator | 42 | 5000 | 12e72ca8 |  | NO |
+| data/runs/v2.2.2/v2.2.2__20260618-122349__seed42 | data/runs/v2.2.2/v2.2.2__20260618-122349__seed42 | jt_pncbf | double_integrator | 42 | 33000 | 3f9f96c5 |  | NO |
+| data/runs/v2.2.2/v2.2.2__20260618-141405__seed42 | data/runs/v2.2.2/v2.2.2__20260618-141405__seed42 | jt_pncbf | double_integrator | 42 | 42000 | d61826ef |  | NO |
+| data/runs/v2.2.2/v2.2.2__20260618-190835__seed42 | data/runs/v2.2.2/v2.2.2__20260618-190835__seed42 | jt_pncbf | double_integrator | 42 | 13000 | 29daa27c |  | NO |
+| data/runs/v2.2.2/v2.2.2__20260618-195202__seed42 | data/runs/v2.2.2/v2.2.2__20260618-195202__seed42 | jt_pncbf | double_integrator | 42 | 13000 | 047d3131 |  | NO |
+| data/runs/v2.2.2/v2.2.2__20260618-203340__seed42 | data/runs/v2.2.2/v2.2.2__20260618-203340__seed42 | jt_pncbf | double_integrator | 42 | 42000 | acce60d9 |  | NO |
+| data/runs/v2.2.2/v2.2.2__20260619-010242__seed42 | data/runs/v2.2.2/v2.2.2__20260619-010242__seed42 | jt_pncbf | double_integrator | 42 | 42000 | 623489e6 |  | NO |
+| data/runs/v2.2.2/v2.2.2__20260619-051204__seed42 | data/runs/v2.2.2/v2.2.2__20260619-051204__seed42 | jt_pncbf | unicycle | 42 | 42000 | fed35a88 |  | yes |
+| data/runs/v2.2.2/v2.2.2__20260619-083424__seed42 | data/runs/v2.2.2/v2.2.2__20260619-083424__seed42 | jt_pncbf | unicycle | 42 | 42000 | 3e324c1c |  | yes |
+| data/runs/v2.2.2/v2.2.2__20260619-132825__seed42 | data/runs/v2.2.2/v2.2.2__20260619-132825__seed42 | jt_pncbf | unicycle | 42 | 35000 | 2bb7a222 |  | NO |
+| data/runs/v2.2.2/v2.2.2__20260619-134914__seed42 | data/runs/v2.2.2/v2.2.2__20260619-134914__seed42 | jt_pncbf | unicycle | 42 | 80000 | 35fdb8c3 |  | NO |
+| data/runs/v2.2.2/v2.2.2__20260619-185555__seed42 | data/runs/v2.2.2/v2.2.2__20260619-185555__seed42 | jt_pncbf | double_integrator | 42 | 42000 | 3f82c62e |  | NO |
+| data/runs/v2.2.2/v2.2.2__20260619-221729__seed12345 | data/runs/v2.2.2/v2.2.2__20260619-221729__seed12345 | jt_pncbf | unicycle | 12345 | 27000 | 164e9421 |  | NO |
+| data/runs/v2.2.2/v2.2.2__20260619-222150__seed99 | data/runs/v2.2.2/v2.2.2__20260619-222150__seed99 | jt_pncbf | unicycle | 99 | 26000 | f36fc68e |  | NO |
+| data/runs/v2.3.0/v2.3.0__20260620-043656__seed42 | data/runs/v2.3.0/v2.3.0__20260620-043656__seed42 | jt_pncbf | double_integrator | 42 | 42000 | bd5dbc75 |  | NO |
+| data/runs/v2.3.0/v2.3.0__20260620-065914__seed42 | data/runs/v2.3.0/v2.3.0__20260620-065914__seed42 | jt_pncbf | double_integrator | 42 | 49500 | 8aab773b |  | NO |
+| data/runs/v2.3.0/v2.3.0__20260620-094154__seed42 | data/runs/v2.3.0/v2.3.0__20260620-094154__seed42 | jt_pncbf | double_integrator | 42 | 50000 | 1a5f764c |  | NO |
+| data/runs/v2.3.0/v2.3.0__20260620-135807__seed12345 | data/runs/v2.3.0/v2.3.0__20260620-135807__seed12345 | jt_pncbf | double_integrator | 12345 | 50000 | 4071db31 |  | NO |
+| data/runs/v2.3.0/v2.3.0__20260620-164338__seed99 | data/runs/v2.3.0/v2.3.0__20260620-164338__seed99 | jt_pncbf | double_integrator | 99 | 50000 | b084b184 |  | NO |
+| data/runs/v2.3.1/v2.3.1__20260620-204429__seed42 | data/runs/v2.3.1/v2.3.1__20260620-204429__seed42 | jt_pncbf | double_integrator | 42 | 4 | dde43ab2 |  | NO |
+| data/runs/v2.3.1/v2.3.1__20260620-204521__seed42 | data/runs/v2.3.1/v2.3.1__20260620-204521__seed42 | jt_pncbf | double_integrator | 42 | 50000 | bcd79cc2 |  | NO |
+| data/runs/v2.4.0/v2.4.0__20260702-062708__seed42 | data/runs/v2.4.0/v2.4.0__20260702-062708__seed42 | jt_pncbf | double_integrator | 42 | 4 | c297376c |  | NO |
+| data/runs/v2.4.0/v2.4.0__20260702-062924__seed42 | data/runs/v2.4.0/v2.4.0__20260702-062924__seed42 | jt_pncbf | double_integrator | 42 | 50000 | 2e6be040 |  | NO |
+| data/runs/v2.4.0/v2.4.0__20260702-132217__seed42 | data/runs/v2.4.0/v2.4.0__20260702-132217__seed42 | jt_pncbf | double_integrator | 42 | 36000 | c890b58d |  | NO |
+| data/runs/v2.4.0/v2.4.0__20260702-161523__seed42 | data/runs/v2.4.0/v2.4.0__20260702-161523__seed42 | jt_pncbf | double_integrator | 42 | 7500 | 1f80c897 |  | NO |
+| data/runs/v2.4.0/v2.4.0__20260702-171017__seed42 | data/runs/v2.4.0/v2.4.0__20260702-171017__seed42 | jt_pncbf | double_integrator | 42 | 12000 | d065d817 |  | NO |
+| data/runs/v2.4.0/v2.4.0__20260702-192824__seed42 | data/runs/v2.4.0/v2.4.0__20260702-192824__seed42 | jt_pncbf | double_integrator | 42 | 50000 | a4bb6435 |  | NO |
+| data/runs/v2.4.1/v2.4.1__20260703-015842__seed42 | data/runs/v2.4.1/v2.4.1__20260703-015842__seed42 | jt_pncbf | double_integrator | 42 | 24000 | 65260e85 |  | NO |
+| data/runs/v2.4.1/v2.4.1__20260703-040134__seed42 | data/runs/v2.4.1/v2.4.1__20260703-040134__seed42 | jt_pncbf | double_integrator | 42 | 15000 | b3bc5bde |  | NO |
+| data/runs/v2.4.1/v2.4.1__20260703-080418__seed42 | data/runs/v2.4.1/v2.4.1__20260703-080418__seed42 | jt_pncbf | double_integrator | 42 | 50000 | 7c68e7c8 |  | NO |
+| data/runs/v2.4.2/v2.4.2__20260707-153645__seed42 | data/runs/v2.4.2/v2.4.2__20260707-153645__seed42 | jt_pncbf | double_integrator | 42 | 45000 | b4092179 |  | NO |
+| data/runs/v2.4.2/v2.4.2__20260708-005653__seed42 | data/runs/v2.4.2/v2.4.2__20260708-005653__seed42 | jt_pncbf | double_integrator | 42 | 50000 | 42294659 |  | NO |
+| data/runs/v2.5.0/v2.5.0__20260708-203859__seed42 | data/runs/v2.5.0/v2.5.0__20260708-203859__seed42 | jt_pncbf | double_integrator | 42 | 4 | 3e75a47b |  | NO |
+| data/runs/v2.5.0/v2.5.0__20260708-204150__seed42 | data/runs/v2.5.0/v2.5.0__20260708-204150__seed42 | jt_pncbf | double_integrator | 42 | None | ? |  | NO |
+| data/runs/v2.5.0/v2.5.0__20260708-212214__seed42 | data/runs/v2.5.0/v2.5.0__20260708-212214__seed42 | jt_pncbf | double_integrator | 42 | 30000 | 37171e76 |  | NO |
+| data/runs/v2.5.0/v2.5.0__20260709-172440__seed42 | data/runs/v2.5.0/v2.5.0__20260709-172440__seed42 | jt_pncbf | double_integrator | 42 | 3000 | c6568a63 |  | NO |
+| data/runs/v2.5.0/v2.5.0__20260709-204711__seed42 | data/runs/v2.5.0/v2.5.0__20260709-204711__seed42 | jt_pncbf | double_integrator | 42 | 30000 | cc50253c |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260711-040034__seed42 | data/runs/v2.5.1/v2.5.1__20260711-040034__seed42 | jt_pncbf | double_integrator | 42 | None | e9dc7906 |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260711-050924__seed12345 | data/runs/v2.5.1/v2.5.1__20260711-050924__seed12345 | jt_pncbf | double_integrator | 42 | None | 9305b87f |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260711-050924__seed42 | data/runs/v2.5.1/v2.5.1__20260711-050924__seed42 | jt_pncbf | double_integrator | 42 | None | de804a22 |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260711-050924__seed99 | data/runs/v2.5.1/v2.5.1__20260711-050924__seed99 | jt_pncbf | double_integrator | 42 | None | 11c8e1fb |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260711-055538__seed42 | data/runs/v2.5.1/v2.5.1__20260711-055538__seed42 | jt_pncbf | double_integrator | 42 | 30000 | dd11055c |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260711-071852__seed42 | data/runs/v2.5.1/v2.5.1__20260711-071852__seed42 | jt_pncbf | double_integrator | 42 | 30000 | 8bd20f4b |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260711-083939__seed42 | data/runs/v2.5.1/v2.5.1__20260711-083939__seed42 | jt_pncbf | double_integrator | 42 | 30000 | 5ec1b7e8 |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260711-211958__seed42 | data/runs/v2.5.1/v2.5.1__20260711-211958__seed42 | jt_pncbf | double_integrator | 42 | 30000 | 547d3765 |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260711-212752__seed42 | data/runs/v2.5.1/v2.5.1__20260711-212752__seed42 | jt_pncbf | double_integrator | 42 | 30000 | 0a5320ca |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260712-000814__seed99 | data/runs/v2.5.1/v2.5.1__20260712-000814__seed99 | jt_pncbf | double_integrator | 99 | 30000 | cbb8329e |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260712-010911__seed12345 | data/runs/v2.5.1/v2.5.1__20260712-010911__seed12345 | jt_pncbf | double_integrator | 12345 | 30000 | 86236505 |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260712-013724__seed99 | data/runs/v2.5.1/v2.5.1__20260712-013724__seed99 | jt_pncbf | double_integrator | 99 | 30000 | 6a17c141 |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260712-035059__seed12345 | data/runs/v2.5.1/v2.5.1__20260712-035059__seed12345 | jt_pncbf | double_integrator | 12345 | 30000 | e52235e9 |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260712-051652__seed42 | data/runs/v2.5.1/v2.5.1__20260712-051652__seed42 | jt_pncbf | double_integrator | 42 | 30000 | 024620ea |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260713-040300__seed42 | data/runs/v2.5.1/v2.5.1__20260713-040300__seed42 | jt_pncbf | double_integrator | 42 | 30000 | 7252db13 |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260713-100029__seed99 | data/runs/v2.5.1/v2.5.1__20260713-100029__seed99 | jt_pncbf | double_integrator | 99 | 30000 | 8ede23f5 |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260713-100037__seed12345 | data/runs/v2.5.1/v2.5.1__20260713-100037__seed12345 | jt_pncbf | double_integrator | 12345 | 30000 | 480e34bc |  | NO |
+| data/runs/v2.5.1/v2.5.1__20260713-160511__seed42 | data/runs/v2.5.1/v2.5.1__20260713-160511__seed42 | jt_pncbf | double_integrator | 42 | 30000 | deac3748 |  | yes |
+| data/runs/v2.5.2/v2.5.2__20260714-013024__seed42 | data/runs/v2.5.2/v2.5.2__20260714-013024__seed42 | jt_pncbf | unicycle | 42 | 50000 | 1bfcb0d2 |  | NO |
+| data/runs/v2.5.2/v2.5.2__20260714-013024__seed99 | data/runs/v2.5.2/v2.5.2__20260714-013024__seed99 | jt_pncbf | unicycle | 99 | 50000 | 6fe27425 |  | NO |
+| data/runs/v2.6.0/set__20260715-010357__seed42/v2.6.0__20260715-010357__seed42 | data/runs/v2.6.0/set__20260715-010357__seed42/v2.6.0__20260715-010357__seed42 | oc_pncbf | quadrotor_planar | 42 | 50000 | c6c58380 |  | NO |
+| data/runs/v2.6.0/set__20260715-010357__seed42/v2.6.0__20260715-014348__seed42 | data/runs/v2.6.0/set__20260715-010357__seed42/v2.6.0__20260715-014348__seed42 | jt_pncbf | quadrotor_planar | 42 | 7500 | 288db32d |  | NO |
+| data/runs/v2.6.0/set__20260715-010357__seed42/v2.6.0__20260715-033610__seed42 | data/runs/v2.6.0/set__20260715-010357__seed42/v2.6.0__20260715-033610__seed42 | jt_pncbf | quadrotor_planar | 42 | 7500 | ec82a1cf |  | NO |
+| data/runs/v2.6.0/set__20260715-010357__seed42/v2.6.0__20260715-042141__seed42 | data/runs/v2.6.0/set__20260715-010357__seed42/v2.6.0__20260715-042141__seed42 | jt_pncbf | quadrotor_planar | 42 | 50000 | db795949 |  | NO |
+| data/runs/v2.6.1/set__20260715-170907__seed42/v2.6.1__20260715-170907__seed42 | data/runs/v2.6.1/set__20260715-170907__seed42/v2.6.1__20260715-170907__seed42 | oc_pncbf | quadrotor_planar | 42 | 50000 | 1099eaf3 |  | NO |
+| data/runs/v2.6.1/set__20260715-170907__seed42/v2.6.1__20260715-173808__seed42 | data/runs/v2.6.1/set__20260715-170907__seed42/v2.6.1__20260715-173808__seed42 | jt_pncbf | quadrotor_planar | 42 | 50000 | 4334d798 |  | yes |
+| data/runs/v2.6.1/set__20260715-211111__seed99/v2.6.1__20260715-211111__seed99 | data/runs/v2.6.1/set__20260715-211111__seed99/v2.6.1__20260715-211111__seed99 | oc_pncbf | quadrotor_planar | 99 | 50000 | bab9fdf1 |  | NO |
+| data/runs/v2.6.1/set__20260715-211111__seed99/v2.6.1__20260715-213730__seed99 | data/runs/v2.6.1/set__20260715-211111__seed99/v2.6.1__20260715-213730__seed99 | jt_pncbf | quadrotor_planar | 99 | 33000 | 9b8cbb65 |  | NO |
+| data/runs/v2.6.2/set__20260716-111140__seed42/v2.6.2__20260716-111140__seed42 | data/runs/v2.6.2/set__20260716-111140__seed42/v2.6.2__20260716-111140__seed42 | jt_pncbf | quadrotor_planar | 42 | 3000 | ac84351c |  | NO |
+| data/runs/v2.6.2/set__20260716-112517__seed42/v2.6.2__20260716-112517__seed42 | data/runs/v2.6.2/set__20260716-112517__seed42/v2.6.2__20260716-112517__seed42 | jt_pncbf | quadrotor_planar | 42 | 50000 | 464b55ed |  | NO |
+| data/runs/v2.6.2/set__20260716-152305__seed42/v2.6.2__20260716-152305__seed42 | data/runs/v2.6.2/set__20260716-152305__seed42/v2.6.2__20260716-152305__seed42 | jt_pncbf | quadrotor_planar | 42 | 40500 | 7525be1b |  | NO |
+| data/runs/v2.6.2/set__20260716-182949__seed42/v2.6.2__20260716-182949__seed42 | data/runs/v2.6.2/set__20260716-182949__seed42/v2.6.2__20260716-182949__seed42 | jt_pncbf | quadrotor_planar | 42 | 50000 | b33e6787 |  | NO |
+| data/runs/v2.7.0/set__20260717-021858__seed42/v2.7.0__20260717-021858__seed42 | data/runs/v2.7.0/set__20260717-021858__seed42/v2.7.0__20260717-021858__seed42 | oc_pncbf | quadrotor_planar | 42 | 50000 | 4660ca90 |  | NO |
+| data/runs/v2.7.0/set__20260717-021858__seed42/v2.7.0__20260717-025050__seed42 | data/runs/v2.7.0/set__20260717-021858__seed42/v2.7.0__20260717-025050__seed42 | jt_pncbf | quadrotor_planar | 42 | 50000 | 22b902a6 |  | NO |
+| data/runs/v2.7.0/set__20260717-021858__seed42/v2.7.0__20260717-150814__seed42 | data/runs/v2.7.0/set__20260717-021858__seed42/v2.7.0__20260717-150814__seed42 | jt_pncbf | quadrotor_planar | 42 | 45000 | d95db926 |  | yes |
+| data/runs/v2.7.0/set__20260717-084622__seed42/v2.7.0__20260717-084622__seed42 | data/runs/v2.7.0/set__20260717-084622__seed42/v2.7.0__20260717-084622__seed42 | oc_pncbf | quadrotor_planar | 42 | 50000 | 4fc023cf |  | NO |
+| data/runs/v2.7.0/set__20260717-084622__seed42/v2.7.0__20260717-091745__seed42 | data/runs/v2.7.0/set__20260717-084622__seed42/v2.7.0__20260717-091745__seed42 | jt_pncbf | quadrotor_planar | 42 | 50000 | 039617b9 |  | NO |
+| data/runs/v2.7.0/set__20260717-220848__seed42/v2.7.0__20260717-220848__seed42 | data/runs/v2.7.0/set__20260717-220848__seed42/v2.7.0__20260717-220848__seed42 | oc_pncbf | quadrotor_planar | 42 | 7500 | 6c433858 |  | NO |
+| data/runs/v2.7.0/set__20260717-232552__seed42/v2.7.0__20260717-232552__seed42 | data/runs/v2.7.0/set__20260717-232552__seed42/v2.7.0__20260717-232552__seed42 | oc_pncbf | quadrotor_planar | 42 | 50000 | bacdc3ae |  | NO |
+| data/runs/v2.7.0/set__20260717-232552__seed42/v2.7.0__20260718-000752__seed42 | data/runs/v2.7.0/set__20260717-232552__seed42/v2.7.0__20260718-000752__seed42 | jt_pncbf | quadrotor_planar | 42 | 50000 | 3b27d691 |  | NO |
+| data/runs/v2.7.1/set__20260718-110403__seed42/v2.7.1__20260718-110403__seed42 | data/runs/v2.7.1/set__20260718-110403__seed42/v2.7.1__20260718-110403__seed42 | oc_pncbf | quadrotor_planar | 42 | 50000 | 45b40f18 |  | NO |
+| data/runs/v2.7.1/set__20260718-110403__seed42/v2.7.1__20260718-114933__seed42 | data/runs/v2.7.1/set__20260718-110403__seed42/v2.7.1__20260718-114933__seed42 | jt_pncbf | quadrotor_planar | 42 | 50000 | 1d9e9b46 |  | NO |
+| data/runs/v2.7.2/set__20260718-204313__seed42/v2.7.2__20260718-204313__seed42 | data/runs/v2.7.2/set__20260718-204313__seed42/v2.7.2__20260718-204313__seed42 | oc_pncbf | quadrotor_3d | 42 | 50000 | e3ab0940 |  | NO |
+| data/runs/v2.7.2/set__20260718-204313__seed42/v2.7.2__20260718-212348__seed42 | data/runs/v2.7.2/set__20260718-204313__seed42/v2.7.2__20260718-212348__seed42 | jt_pncbf | quadrotor_3d | 42 | 50000 | 4baaf031 |  | NO |
+| data/runs/v2.7.3/set__20260719-201644__seed42/v2.7.3__20260719-201644__seed42 | data/runs/v2.7.3/set__20260719-201644__seed42/v2.7.3__20260719-201644__seed42 | oc_pncbf | quadrotor_3d | 42 | 50000 | 73c99e95 |  | yes |
+| data/runs/v2.7.3/set__20260719-201644__seed42/v2.7.3__20260719-214424__seed42 | data/runs/v2.7.3/set__20260719-201644__seed42/v2.7.3__20260719-214424__seed42 | jt_pncbf | quadrotor_3d | 42 | 50000 | 12c41d8e |  | yes |
+| data/runs/v2.7.4/set__20260720-083424__seed42/v2.7.4__20260720-083424__seed42 | data/runs/v2.7.4/set__20260720-083424__seed42/v2.7.4__20260720-083424__seed42 | oc_pncbf | quadrotor_3d | 42 | 10 | 91af7708 |  | NO |
+| data/runs/v2.7.4/set__20260720-083533__seed42/v2.7.4__20260720-083533__seed42 | data/runs/v2.7.4/set__20260720-083533__seed42/v2.7.4__20260720-083533__seed42 | oc_pncbf | quadrotor_3d | 42 | 50000 | 906e816e |  | yes |
+| data/runs/v2.7.4/set__20260720-083533__seed42/v2.7.4__20260720-091512__seed42 | data/runs/v2.7.4/set__20260720-083533__seed42/v2.7.4__20260720-091512__seed42 | jt_pncbf | quadrotor_3d | 42 | 4 | 24c3fcab |  | NO |
+| data/runs/v2.7.4/set__20260720-083533__seed42/v2.7.4__20260720-091726__seed42 | data/runs/v2.7.4/set__20260720-083533__seed42/v2.7.4__20260720-091726__seed42 | jt_pncbf | quadrotor_3d | 42 | 4 | 328165fc |  | NO |
+| data/runs/v2.7.4/set__20260720-083533__seed42/v2.7.4__20260720-091830__seed42 | data/runs/v2.7.4/set__20260720-083533__seed42/v2.7.4__20260720-091830__seed42 | jt_pncbf | quadrotor_3d | 42 | 50000 | 244f4f83 |  | NO |
+
+## Counts per framework
+- jt_pncbf: 135
+- oc_pncbf: 26
+
+## Undetermined framework (0)
+- (none)
+
+## PROTOCOL FOLLOW-UP — data/secured_data/v2.7.2/ADOPTED.md run_id mapping

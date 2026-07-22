@@ -102,7 +102,7 @@ from src.common.rk4 import rk4_step
 _SYS = {
     "double_integrator": (REPO / "data/secured_data/v2.3.0/seed42/checkpoints/best.pt",
                           REPO / "data/secured_data/pools/eval_full_di_n2000_seed23456.pkl"),
-    "unicycle": (REPO / "data/previous_runs/v2.2.2__20260619-083424__seed42/checkpoints/best.pt",
+    "unicycle": (REPO / "data/runs/v2.2.2/v2.2.2__20260619-083424__seed42/checkpoints/best.pt",   # v2.7.4 migration
                  REPO / "data/secured_data/pools/eval_full_unicycle_n2000_seed23456.pkl"),
 }
 
@@ -151,11 +151,17 @@ def test_f1f2_cross_system(sysname):
 # ---- Stage-3D: quadrotor_3d f1 (mode=none bit-parity) + f2 (flag-invariance under mode=kstep) ----
 # Exercises the shared 4D grid (16 corners + center + zero + per-axis extremes, deduped -> |G|=25) and
 # kstep_select on the 4-input box. M6 JT checkpoint; skip if absent (measurement run dir, not secured).
-_M6_3D = REPO / "data/v2.7.2__20260718-212348__seed42/checkpoints/best.pt"
+_M6_3D = REPO / "data/runs/v2.7.2/set__20260718-204313__seed42/v2.7.2__20260718-212348__seed42/checkpoints/best.pt"   # v2.7.4 migration
 _POOL_3D = REPO / "data/secured_data/pools/eval_full_quadrotor-3d_n2000_seed23456.pkl"
 
 
 def test_f1f2_quadrotor_3d():
+    # v2.7.3 M0b: the per-rotor actuator set makes the v2.7.2 (wrench-plant) checkpoint plant-incompatible
+    # (its config lacks the per-rotor bound/mixer keys). Skip until a v2.7.3 3D checkpoint exists (Stage B).
+    if _M6_3D.exists():
+        _ck = torch.load(_M6_3D, map_location="cpu", weights_only=False)
+        if "f_rotor_max" not in _ck["config"]["env"]["bounds"].get("quadrotor_3d", {}):
+            _pytest.skip("v2.7.2 quadrotor_3d checkpoint is plant-incompatible under the v2.7.3 per-rotor set")
     fw_a, x, bs = _rolled_batch_with_empty(_M6_3D, _POOL_3D, None, n=400, roll=40)
     un = fw_a.policy(x, bs)
     ua, fa = fw_a.filter(x, un, bs)                           # absent-block

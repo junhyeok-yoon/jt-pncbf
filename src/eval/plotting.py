@@ -941,3 +941,76 @@ def _unicycle_velocity_vector(velocity: torch.Tensor) -> torch.Tensor:
     speed = velocity[0]
     theta = velocity[1]
     return torch.stack([speed * torch.cos(theta), speed * torch.sin(theta)])
+
+
+# ---- v2.7.3 amendment: 3-D quadrotor CBF contour (fixed recipe; closes v2.7.2 follow-up 3) ----
+def plot_quadrotor3d_cbf_contour(
+    scene: Any,
+    output_path: "Path",
+    config: Mapping[str, Any],
+    system: Any,
+    value_net: Any,
+    role: str,
+    resolution: int = 201,
+) -> "Path":
+    """Fixed 3-panel V_hat contour for quadrotor_3d. ONE scene (pool index 0), held for every frame; xy grid
+    over [-4,4]^2 at z=0, dim-32 obs rebuilt per grid point. Panels: (a) hover v=0; (b) hover v=(1.5,0,0);
+    (c) tilt 60deg about +y, v=(1.5,0,0). Overlays active cylinder disks + the h_star=0 contour; FIXED
+    symmetric color range [-1,1]; true min/max of V_hat printed in each panel title."""
+    from types import SimpleNamespace
+    from src.common.quadrotor_barrier import value_target_barrier
+
+    world_lim = float(config["env"]["world_lim"])
+    # follow the value net's dtype/device (training runs in float64; a float32 grid would raise a swallowed
+    # dtype error and silently write no contour — v2.7.3 M5 amendment).
+    try:
+        param = next(value_net.parameters()); dt, dev = param.dtype, param.device
+    except (StopIteration, AttributeError):
+        dt, dev = torch.float32, torch.device("cpu")
+    axis = np.linspace(-world_lim, world_lim, resolution)
+    gx, gy = np.meshgrid(axis, axis, indexing="xy")
+    G = resolution * resolution
+    p = torch.tensor(np.stack([gx.reshape(-1), gy.reshape(-1), np.zeros(G)], axis=1), dtype=dt, device=dev)
+
+    centers = np.asarray(scene.obstacle_centers, np.float64)[:, :2]
+    radii = np.asarray(scene.obstacle_radii, np.float64)
+    active = np.asarray(scene.obstacle_active, bool)
+    scene_t = SimpleNamespace(
+        obstacle_centers=torch.tensor(centers, dtype=dt, device=dev),
+        obstacle_radii=torch.tensor(radii, dtype=dt, device=dev),
+        obstacle_active=torch.tensor(active, dtype=torch.bool, device=dev),
+        goal=torch.tensor(np.asarray(scene.goal, np.float64), dtype=dt, device=dev),
+    )
+    q_hover = torch.tensor([1.0, 0.0, 0.0, 0.0], dtype=dt, device=dev)
+    q_tilt = torch.tensor([float(np.cos(np.radians(30.0))), 0.0, float(np.sin(np.radians(30.0))), 0.0],
+                          dtype=dt, device=dev)  # 60deg +y
+    panels = [
+        ("(a) hover, v=0, w=0", q_hover, torch.tensor([0.0, 0.0, 0.0])),
+        ("(b) hover, v=(1.5,0,0)", q_hover, torch.tensor([1.5, 0.0, 0.0])),
+        ("(c) tilt 60 deg +y, v=(1.5,0,0)", q_tilt, torch.tensor([1.5, 0.0, 0.0])),
+    ]
+    norm = TwoSlopeNorm(vmin=-1.0, vcenter=0.0, vmax=1.0)
+    fig, axes = plt.subplots(1, 3, figsize=(16.0, 5.4), dpi=FIG_DPI)
+    fig.suptitle(f"{__version__} · {role} · quadrotor_3d V_hat (z=0)", fontsize=TITLE_FONT_SIZE)
+    for ax, (label, q, v) in zip(axes, panels):
+        x = torch.zeros(G, 13, dtype=dt, device=dev)
+        x[:, :3] = p; x[:, 3:7] = q; x[:, 7:10] = v  # omega = 0
+        with torch.no_grad():
+            vhat = value_net.deployed_h(system.observation(x, scene_t)).reshape(-1)
+            hstar = value_target_barrier(system, x, scene_t, config).reshape(-1)
+        vg = torch.clamp(vhat, -1.0, 1.0).cpu().numpy().reshape(resolution, resolution)
+        hg = hstar.cpu().numpy().reshape(resolution, resolution)
+        cf = ax.contourf(axis, axis, vg, levels=CONTOUR_LEVELS, cmap=CONTOUR_CMAP, norm=norm, extend="both")
+        if hg.min() <= 0.0 <= hg.max():
+            ax.contour(axis, axis, hg, levels=[0.0], colors="black", linewidths=CONTOUR_ZERO_LINE_WIDTH)
+        for k in np.nonzero(active)[0]:
+            ax.add_patch(Circle((centers[k, 0], centers[k, 1]), radii[k], fill=False,
+                                edgecolor="0.15", linewidth=CONTOUR_OBSTACLE_LINE_WIDTH))
+        ax.set_xlim(-world_lim, world_lim); ax.set_ylim(-world_lim, world_lim); ax.set_aspect("equal")
+        ax.set_xlabel("x"); ax.set_ylabel("y")
+        ax.set_title(f"{label}\nV_hat [{float(vhat.min()):.3f}, {float(vhat.max()):.3f}]", fontsize=9)
+    fig.colorbar(cf, ax=axes, fraction=0.025, pad=0.02)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, bbox_inches="tight")
+    plt.close(fig)
+    return output_path

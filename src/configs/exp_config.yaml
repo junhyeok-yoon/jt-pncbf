@@ -2,7 +2,7 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.7.2"
+  version: "v2.7.4"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
   system: quadrotor_planar          # double_integrator | unicycle | quadrotor_planar  (v2.6.0: direct-input planar quadrotor)
@@ -20,10 +20,9 @@ env:
       tau_max: 1.0                  # v2.6.1 Axis A: plant-coherent torque box [-1.0, 1.0] (was 0.2, ~1/5 of the plant-coherent tau_bar=L_J*f_max/2~0.98 from arm L_J=sqrt(J/m)=0.1m; see torque_box_plausibility.md + changes.md §4). HardNet box reads this key. NB alpha_max=tau_max/J=100 rad/s^2; omega_max=4.0 clamp may bind (changes.md §6, watch).
       v_max: 2.5                    # A3 velocity clamp ||v||<=v_max (shared DI scale)
       omega_max: 4.0                # attitude-rate clamp for wrap_state
-    quadrotor_3d:                   # v2.7.2 §3.4: box [0,f_max] x [-tau_max,tau_max]^3; plant-coherent w/ planar
-      f_min: 0.0
-      f_max: 19.62
-      tau_max: 1.0
+    quadrotor_3d:                   # v2.7.3 M0b: TRUE per-rotor actuator box [0, f_rotor_max]^4 N (was the
+      f_rotor_min: 0.0              # over-permissive wrench box [0,19.62]x[-1,1]^3). 4*4.905 = 19.62 = 2 m g.
+      f_rotor_max: 4.905
       v_max: 2.5
       omega_max: 4.0
   quadrotor_planar:                 # v2.6.0 §4: physical constants + IC set + h_star gain
@@ -40,9 +39,25 @@ env:
     Jx: 0.01                        # J = diag(0.01, 0.01, 0.02)
     Jy: 0.01
     Jz: 0.02
+    arm_L: 0.17                     # v2.7.3 M0b: rotor arm (m); moment arm l = L/sqrt(2) = 0.1202
+    c_moment: 0.016                 # torque/force ratio k_M/k_F (m); pure-yaw max = c * 2 f_rotor_max = 0.157
     v_init_max: 1.5                 # IC ||v0|| ~ planar speed dist; uniform 3D direction
     omega_init_max: 1.0             # IC per-axis omega ~ U[-1, 1]
     c_gain: 0.3                     # h_star gain c: h_star = phi + 0.3 (v_xy . r_hat)
+    ic_so3: true                    # v2.7.4 M0e: uniform-SO(3) attitude + direction-uniform vel/omega with
+                                    # magnitudes U[0,ic_v_max]/U[0,ic_omega_max]. (M0c verified OFF => byte-identical
+                                    # v2.7.3 -d2 SHA; now ON for the v2.7.4 -d2r pools.)
+    ic_omega_max: 5.0               # v2.7.4 M1: SELECTED menu item (d) (G1 fallback, EXPLORATORY). rad/s.
+    ic_v_max: 1.5                   # v2.7.4 M1: SELECTED menu item (d). m/s. (recov 0.914; nom coll 0.488)
+
+obstacle:                           # v2.7.3 M2: per-system scene override merged OVER base_config.obstacle.
+  per_system:                       # Absent -> byte-identical to base (M0c invariant). Selected menu item (a):
+    quadrotor_3d:                   # count x1.5 (n_min,n_max round(1.5*.)), radii unchanged. Pool tag "d2".
+      variant: d2r                  # v2.7.4 M0e: -d2r carries the full-SO(3) IC (SAME cylinder geometry as d2)
+      n_min: 2                      # round(1.5 * 1)
+      n_max: 18                     # round(1.5 * 12)
+      r_min: 0.15
+      r_max: 0.80
 
 lqr:                                # v2.6.0 nominal cascaded PD (A1: admissible (f_thr,tau)); NOT the filter
   quadrotor_planar:
