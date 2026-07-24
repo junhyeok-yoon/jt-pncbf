@@ -2,7 +2,7 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.7.4"
+  version: "v2.7.5"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
   system: quadrotor_planar          # double_integrator | unicycle | quadrotor_planar  (v2.6.0: direct-input planar quadrotor)

@@ -147,6 +147,20 @@ def rollout_eval(
     x = system.wrap_state(x0)
     _assert_finite("Initial state", x)
 
+    # v2.7.5 deploy control-rate axis: decouple the control period (dt_ctrl) from the integration step
+    # (dt_sim == `dt`). Control (policy + filter) is recomputed once per control period and HELD (ZOH) across
+    # `substeps` integration steps. EVAL PATH ONLY; `rollout()` and every training path are untouched. Default
+    # dt_ctrl = dt_sim -> substeps = 1 -> bit-identical to the pre-v2.7.5 behaviour.
+    dt_ctrl = float(config.get("eval", {}).get("dt_ctrl", dt)) if isinstance(config, Mapping) else dt
+    if dt_ctrl <= 0.0:
+        raise ValueError(f"eval.dt_ctrl must be positive, got {dt_ctrl}.")
+    substeps = int(round(dt_ctrl / dt))
+    if substeps < 1 or abs(substeps * dt - dt_ctrl) > 1e-9 * max(1.0, dt_ctrl):
+        raise ValueError(
+            f"eval.dt_ctrl ({dt_ctrl}) must be a positive integer multiple of dt_sim ({dt}); "
+            f"got ratio {dt_ctrl / dt}."
+        )
+
     states = [x]
     u_nom_steps = []
     u_safe_steps = []
@@ -156,27 +170,44 @@ def rollout_eval(
     _fobj = getattr(getattr(filter_fn, "__self__", None), "_filter", None)
     physical_done = _physical_done_mask(system, scene, torch.stack(states, dim=0), config)
 
-    for _ in range(max_steps):
-        u_nom = policy_fn(x, scene)
-        if u_nom.shape != (x.shape[0], system.action_dim):
-            raise ValueError(
-                "policy_fn returned shape "
-                f"{tuple(u_nom.shape)}, expected {(x.shape[0], system.action_dim)}."
-            )
-        _assert_finite("Nominal action", u_nom)
+    _held: tuple[Tensor, Tensor, Tensor, Tensor, Tensor] | None = None
+    for _i in range(max_steps):
+        if _i % substeps == 0:                       # recompute control at the start of each control period
+            u_nom = policy_fn(x, scene)
+            if u_nom.shape != (x.shape[0], system.action_dim):
+                raise ValueError(
+                    "policy_fn returned shape "
+                    f"{tuple(u_nom.shape)}, expected {(x.shape[0], system.action_dim)}."
+                )
+            _assert_finite("Nominal action", u_nom)
 
-        u_safe, infeasible = filter_fn(x, u_nom, scene)
-        if u_safe.shape != u_nom.shape:
-            raise ValueError(
-                f"filter_fn returned u_safe shape {tuple(u_safe.shape)}, "
-                f"expected {tuple(u_nom.shape)}."
-            )
-        if infeasible.shape != (x.shape[0],):
-            raise ValueError(
-                f"filter_fn returned infeasible shape {tuple(infeasible.shape)}, "
-                f"expected {(x.shape[0],)}."
-            )
-        _assert_finite("Executed action", u_safe)
+            u_safe, infeasible = filter_fn(x, u_nom, scene)
+            if u_safe.shape != u_nom.shape:
+                raise ValueError(
+                    f"filter_fn returned u_safe shape {tuple(u_safe.shape)}, "
+                    f"expected {tuple(u_nom.shape)}."
+                )
+            if infeasible.shape != (x.shape[0],):
+                raise ValueError(
+                    f"filter_fn returned infeasible shape {tuple(infeasible.shape)}, "
+                    f"expected {(x.shape[0],)}."
+                )
+            _assert_finite("Executed action", u_safe)
+            # capture the filter's empty/singular flags at compute time (the filter is NOT re-invoked during a
+            # hold, so these are held alongside the action).
+            _le = getattr(_fobj, "last_empty", None); _ls = getattr(_fobj, "last_singular", None)
+            _eb_c = (_le.to(device=x.device, dtype=torch.bool) if _le is not None else infeasible.clone().bool())
+            _sb_c = (_ls.to(device=x.device, dtype=torch.bool) if _ls is not None else torch.zeros_like(infeasible, dtype=torch.bool))
+            # v2.7.5 graph-retention fix: drop this control computation's autograd graph. The eval needs no
+            # gradient THROUGH the rollout; the filter builds (and frees) its own graph internally for grad-h
+            # via _cbf_terms, which re-establishes a leaf on a detached input
+            # (`x_req = x.detach().clone(); x_req.requires_grad_(True)`), so grad-h is unaffected. NOT a blanket
+            # torch.no_grad(): that would disable grad globally and silently break grad-h.
+            u_nom = u_nom.detach()
+            u_safe = u_safe.detach()
+            _held = (u_nom, u_safe, infeasible, _eb_c, _sb_c)
+        else:                                        # hold the last computed control (ZOH) across the substep
+            u_nom, u_safe, infeasible, _eb_c, _sb_c = _held
 
         done_action = physical_done.unsqueeze(1)
         u_nom = torch.where(done_action, torch.zeros_like(u_nom), u_nom)
@@ -189,15 +220,20 @@ def rollout_eval(
 
         x_next = rk4_step(system, x, u_safe, dt)
         _assert_finite("State after RK4 step", x_next)
-        x = torch.where(done_action, x, x_next)
+        # v2.7.5 graph-retention fix (the DOMINANT leak): detach the state carried into the next step.
+        # u_nom = policy(obs(x)) graphs back to x, so without this x_{t+1} = rk4(x_t, u_safe) accumulates a
+        # graph that grows every step and is retained by `states` — host RSS then scales with step count and
+        # OOMs at 1000 steps. Detaching here is numerically inert (forward values are unchanged).
+        x = torch.where(done_action, x, x_next).detach()
 
         states.append(x)
         u_nom_steps.append(u_nom)
         u_safe_steps.append(u_safe)
         infeasible_steps.append(infeasible)
-        _le = getattr(_fobj, "last_empty", None); _ls = getattr(_fobj, "last_singular", None)
-        _eb = (_le.to(device=x.device, dtype=torch.bool) if _le is not None else infeasible.clone())
-        _sb = (_ls.to(device=x.device, dtype=torch.bool) if _ls is not None else torch.zeros_like(infeasible))
+        # use the flags captured at control-compute time (held across substeps; at substeps=1 captured fresh
+        # each step, so bit-identical to reading _fobj.last_* under the pre-v2.7.5 behaviour).
+        _eb = _eb_c
+        _sb = _sb_c
         empty_steps.append(torch.where(physical_done, torch.zeros_like(_eb), _eb))
         singular_steps.append(torch.where(physical_done, torch.zeros_like(_sb), _sb))
         physical_done = physical_done | _physical_done_mask(
