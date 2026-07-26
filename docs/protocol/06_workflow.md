@@ -170,6 +170,21 @@ iteration); each completed iteration appends its ledger row(s) immediately (inte
 registration — the ledger never waits for close; bold only on a CI-separated improvement
 claim); and the phase report carries one clearly-titled section per iteration.
 
+**A prediction is registered against a measurement that can resolve it.** Before a hypothesis is
+registered, three things are checked and recorded with it: that the metric responds to the axis
+under test, that the pool it is read on exposes that axis rather than suppressing it, and that the
+threshold sits inside the range the axis can reach. Any of the three failing produces a prediction
+that scores without informing — satisfied before the run starts, saturated on the chosen pool, or
+placed where nothing can move it — and that is a specification error rather than a result
+(`00_constitution` §4). It is scored as registered, said to be uninformative and why, and the
+informative form registered before the next data. A threshold is never re-fitted after seeing the
+data it was meant to test.
+
+Where a version changes an outcome predicate, a metric definition, or an initial-condition
+distribution, the comparator is re-measured under the new conditions rather than carried over from a
+prior report: two numbers that were not produced under the same predicates and deploy settings do
+not belong in one column, whatever their names.
+
 **Ledger bold convention.** Bold marks the CURRENT headline of a lineage (system): exactly
 one bold row per lineage at any time. On supersession the previous bold row is un-bolded
 and carries a standing supersession line. Historical rows never retain bold.
@@ -296,6 +311,27 @@ Used to write code, modify configs, run training, or run evaluation. Format:
 - **Reference patterns.** Pointers to prior code in the repo to follow; **no boilerplate inlined in the prompt** (the Executor reads its environment).
 
 Time budgets are **not** included in execute prompts. The Researcher's mentions of time mean "proceed autonomously," not "finish within X minutes." Quality over speed.
+
+**Specify decisions, delegate methods.** What the prompt fixes exactly is what was decided in
+discussion and cannot be re-derived from the repository: the coordinate frame, the coefficient, the
+comparator, which quantity is compared against which, the pass/fail band. What it delegates is how
+to achieve that: implementation structure, tooling, the shape of the code. The Executor reasons and
+reads its own environment, so a delegated item is stated as the property the result must have plus
+what must be reported about it — not as a procedure. Prescribing a procedure invites two failures at
+once: the prompt specifies something already in place, and it forecloses the better implementation
+the Executor would have found. When a prompt is about to say *how*, it should be saying *what must
+be true* and *what must be reported*.
+
+**Cost is part of the design.** Before a prompt is sent, its cells are multiplied out and the known
+per-cell cost applied. A battery that a prior version measured at a large wall-clock multiple does
+not become cheaper by being requested in more cells. Cells that are genuinely optional are marked
+optional and are not simultaneously required by a pass/fail clause elsewhere in the same prompt.
+
+**Amend only for new facts.** Before an amendment is sent, it is checked against a single question:
+does this exist because something new was learned, or because something that should have been
+decided up front was not? The second case is not amended — it is folded into the next natural
+request. A stream of corrective amendments is a symptom of thin design, and each one costs the
+Executor a context switch mid-task.
 
 **Standing prompts.** A prompt may define work that begins on a stated trigger. Autonomy is
 session-bound: if the Executor session ends at a checkpoint, resumption requires a

@@ -31,6 +31,7 @@ class _HardNetParams:
     dt: float
     empty_fallback_mode: str = "none"       # v2.7.1 Stage-1: none | kstep (eval-only; none = bit-parity)
     empty_fallback_k: int = 10
+    empty_fallback_phases: int = 2          # v2.7.6 M8.1: 2 = two-phase (default, unchanged) | 1 = single-phase
 
 
 class HardNetFilter:
@@ -132,7 +133,8 @@ class HardNetFilter:
             m = empty_intersection
             G = grid_controls(self.system, x.device, x.dtype)
             u1_star, _ = kstep_select(x[m], slice_scene(scene, m), self.h_fn, self.system, G,
-                                      self.params.empty_fallback_k, self.params.dt)
+                                      self.params.empty_fallback_k, self.params.dt,
+                                      phases=self.params.empty_fallback_phases)
             box_projected = box_projected.clone()
             box_projected[m] = u1_star.to(box_projected.dtype)
         self.last_empty = empty_intersection.detach()          # split logging (S1d); additive, not the flag
@@ -323,6 +325,7 @@ def _hardnet_params(config: Mapping[str, Any]) -> _HardNetParams:
         dt=float(config.get("env", {}).get("dt", 0.05)),
         empty_fallback_mode=str(config["filter"].get("empty_fallback", {}).get("mode", "none")),
         empty_fallback_k=int(config["filter"].get("empty_fallback", {}).get("k", 10)),
+        empty_fallback_phases=int(config["filter"].get("empty_fallback", {}).get("phases", 2)),
     )
 
 

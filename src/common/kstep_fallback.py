@@ -44,28 +44,50 @@ def grid_controls(system: Any, device: Any, dtype: Any = torch.float32) -> Tenso
     return torch.tensor(sorted(set(cand)), dtype=dtype, device=device)    # [k, adim]
 
 
-def kstep_select(x: Tensor, scene: Any, h_fn, system: Any, G: Tensor, k: int, dt: float):
-    """Return (u1_star [n, adim], margin [n]) — the first-phase control of the argmin two-phase sequence and its
-    V_hat(x_k)-V_hat(x0) margin. Deterministic (a-outer/b-inner fixed order, strict-less update keeps the first)."""
-    ng = G.shape[0]; k1 = (k + 1) // 2; k2 = k - k1; n = x.shape[0]
+def _tile_scene(scene: Any, reps: int, n: int) -> Any:
+    """Repeat every batched field (first dim == n) reps times, row i -> rows [i*reps : (i+1)*reps]
+    (repeat_interleave), matching the candidate-major state tiling below."""
+    import dataclasses
+    upd = {}
+    for f in dataclasses.fields(scene):
+        v = getattr(scene, f.name)
+        if isinstance(v, torch.Tensor) and v.ndim >= 1 and v.shape[0] == n:
+            upd[f.name] = v.repeat_interleave(reps, dim=0)
+    return dataclasses.replace(scene, **upd)
+
+
+def kstep_select(x: Tensor, scene: Any, h_fn, system: Any, G: Tensor, k: int, dt: float, phases: int = 2):
+    """Return (u1_star [n, adim], margin [n]) — the first-phase control of the argmin candidate sequence and its
+    V_hat(x_k)-V_hat(x0) margin. VECTORIZED (v2.7.6 M8.0): one batched k-step rollout over all candidates instead
+    of a Python double loop; the deterministic tie-break is preserved exactly (candidates are laid out in the same
+    a-outer/b-inner row-major order the loop used, and torch.argmin returns the first minimiser = the strict-less
+    'keep first' rule). phases=2 (default, unchanged): two-phase (u1 for ceil(k/2), u2 for floor(k/2)) over G x G
+    (ng^2 candidates). phases=1 (M8.1): one control over all k steps (ng candidates)."""
+    ng = int(G.shape[0]); n = int(x.shape[0]); adim = int(G.shape[1])
     with torch.no_grad():
-        v0 = h_fn(x, scene).reshape(-1)
-        best_m = torch.full((n,), float("inf"), device=x.device, dtype=v0.dtype)
-        best_a = torch.zeros(n, dtype=torch.long, device=x.device)
-        for a in range(ng):
-            u1 = G[a].unsqueeze(0).expand(n, -1)
-            for b in range(ng):
-                u2 = G[b].unsqueeze(0).expand(n, -1)
-                xx = x
-                for _ in range(k1):
-                    xx = rk4_step(system, xx, u1, dt)
-                for _ in range(k2):
-                    xx = rk4_step(system, xx, u2, dt)
-                m = h_fn(xx, scene).reshape(-1) - v0
-                upd = m < best_m                                          # strict => first (a,b) wins ties
-                best_m = torch.where(upd, m, best_m)
-                best_a = torch.where(upd, torch.full_like(best_a, a), best_a)
-        return G[best_a], best_m
+        v0 = h_fn(x, scene).reshape(-1)                                   # [n]
+        if phases == 1:
+            ncand = ng; k1, k2 = k, 0
+            U1 = G                                                        # [ncand, adim]
+            U2 = None
+        else:
+            ncand = ng * ng; k1 = (k + 1) // 2; k2 = k - k1
+            cc = torch.arange(ncand, device=x.device)
+            U1 = G[cc // ng]; U2 = G[cc % ng]                            # a-outer / b-inner, c = a*ng + b
+        X = x.unsqueeze(1).expand(n, ncand, x.shape[1]).reshape(n * ncand, x.shape[1])
+        U1f = U1.unsqueeze(0).expand(n, ncand, adim).reshape(n * ncand, adim)
+        sc = _tile_scene(scene, ncand, n)
+        for _ in range(k1):
+            X = rk4_step(system, X, U1f, dt)
+        if phases == 2 and k2 > 0:
+            U2f = U2.unsqueeze(0).expand(n, ncand, adim).reshape(n * ncand, adim)
+            for _ in range(k2):
+                X = rk4_step(system, X, U2f, dt)
+        m = (h_fn(X, sc).reshape(-1) - v0.repeat_interleave(ncand)).reshape(n, ncand)
+        best_c = torch.argmin(m, dim=1)                                   # first minimiser = 'keep first' tie-break
+        best_m = m.gather(1, best_c.unsqueeze(1)).reshape(-1)
+        u1_star = G[best_c] if phases == 1 else G[best_c // ng]           # phase-1 control of the argmin
+        return u1_star, best_m
 
 
 def slice_scene(scene: Any, mask: Tensor) -> Any:

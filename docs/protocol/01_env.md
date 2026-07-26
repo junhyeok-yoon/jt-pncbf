@@ -99,7 +99,12 @@ the exact contact predicate, never the $h$ sign.
 
 Outcomes are detected per step in this fixed priority order; the **episode outcome** is the first predicate that fires at any step, and is locked once detected (later events of the same or lower priority do not change it):
 
-1. **Collision** — at least one active obstacle has $\text{dist} < r$.
+1. **Collision** — at least one active obstacle has $\text{dist} < r$, or the agent has met a
+   **domain surface** that its system declares physical: for `quadrotor_3d`, the arena floor and
+   ceiling $|p_z| \ge \text{world\_lim}$ (§3.4). A domain surface is a collision, not an
+   out-of-bounds: the obstacle set is infinite vertical cylinders, so the volume those cylinders
+   span is closed below and above by physical surfaces, and meeting one ends the episode exactly as
+   meeting a cylinder does. Systems that declare no domain surface are unaffected.
 2. **Goal reached** — position and speed predicates of §1.5, only if not collided.
 3. **Out of bounds** — §1.2, only if neither collided nor reached.
 4. **Stuck** — the agent has barely moved over a fixed time window. Concretely, for each step $t \ge W_{\text{stuck}}$, define the window-displacement
@@ -152,7 +157,9 @@ the two. It is therefore defined in `03_train` §1 (training) and `04_eval` §6 
 
 ### 3.0 Observation model (common principles)
 
-The agent never sees absolute position $(px, py)$; observations are translation-invariant.
+The agent never sees absolute horizontal position $(px, py)$; observations are invariant to
+horizontal translation. A coordinate along which the system declares a domain surface (§1.6) is
+**not** a symmetry direction and is carried explicitly — see the design rule in §3.4.
 Both systems use **Top-K obstacle conditioning** with $k_{\text{obs}} = 5$
 (`base_config.env.k_obs`):
 
@@ -253,10 +260,25 @@ direct box-aware HardNet projection onto $(f_{\text{thr}}, \tau)$) is defined ag
 
 - **State** (dim 13): position $p \in \mathbb{R}^3$, unit quaternion $q$ (attitude, $\|q\| = 1$),
   linear velocity $v \in \mathbb{R}^3$, body rates $\omega \in \mathbb{R}^3$.
-- **Control** (dim 4): $u = (f_{\text{thr}}, \tau)$ — scalar body-axis thrust and 3-vector body
-  torque, box-bounded $f_{\text{thr}} \in [0,\, 19.62]$, $\tau \in [-1.0,\, 1.0]^3$
-  (`exp_config.env.quadrotor_3d`). Plant-coherent with the planar system: $\mathsf m = 1.0$,
-  $g = 9.81$, $J = \mathrm{diag}(0.01,\, 0.01,\, 0.02)$.
+- **Control** (dim 4): $u = (f_1, f_2, f_3, f_4)$ — **per-rotor thrusts**, box-bounded
+  $f_i \in [0,\, \overline f_{\text{rotor}}]$ with $\overline f_{\text{rotor}} = 4.905$
+  (`exp_config.env.bounds.quadrotor_3d`). Total thrust and body torque are **derived** through the
+  X-mixer, not independently bounded: with arm $L = 0.17$, moment arm $l = L/\sqrt2$, and drag
+  coefficient $c_{\text{m}} = 0.016$,
+  $$
+  f_{\text{thr}} = \textstyle\sum_i f_i,\quad
+  \tau_x = l\,(f_1 + f_2 - f_3 - f_4),\quad
+  \tau_y = l\,(-f_1 + f_2 + f_3 - f_4),\quad
+  \tau_z = c_{\text{m}}\,(f_1 - f_2 + f_3 - f_4).
+  $$
+  The achievable set in $(f_{\text{thr}}, \tau)$ is therefore a **polytope, not a box**, and the two
+  channels contend for the same actuator budget: the maximum roll/pitch torque
+  $\tau_{\max} = 2 l \overline f_{\text{rotor}} = 1.179$ requires two rotors at zero, leaving
+  $f_{\text{thr}} = \mathsf m g$, so the thrust-to-weight ratio available at torque magnitude $|\tau|$ is
+  $\mathrm{TWR}_{\text{eff}}(\tau) = \mathrm{TWR}\,(1 - |\tau| / \tau_{\max}) + |\tau| / \tau_{\max}$,
+  falling from $\mathrm{TWR} = 2$ at zero torque to $1$ at full torque. Any recovery or reachability
+  argument that grants full thrust while commanding full torque is unsound. Plant-coherent with the
+  planar system: $\mathsf m = 1.0$, $g = 9.81$, $J = \mathrm{diag}(0.01,\, 0.01,\, 0.02)$.
 - **Dynamics** ($R(q)$ the body-to-world rotation, $e_3$ the world up-axis, $\otimes$ quaternion product):
   - $\dot p = v$
   - $\dot q = \tfrac{1}{2}\, q \otimes (0, \omega)$
@@ -269,27 +291,61 @@ direct box-aware HardNet projection onto $(f_{\text{thr}}, \tau)$) is defined ag
 - **Obstacles:** infinite vertical cylinders (center $c_{xy}$, radius $r$). Surface distance
   $\phi = \|p_{xy} - c_{xy}\| - r$; radial direction $\hat r$ horizontal and globally smooth. Top-5 by
   surface distance, active mask authoritative, tie rule identical to §3.0.
-- **Observation** (dim 32, full body frame): $[v^{b}(3),\, \omega^{b}(3),\, \text{goal}^{b}(3),\,
-  g^{b}(3)]$ followed by the Top-5 cylinders, each $(c_{\text{off}}^{b}(3),\, r_i)$; all vectors expressed
+- **Observation** (dim 34, full body frame): $[v^{b}(3),\, \omega^{b}(3),\, \text{goal}^{b}(3),\,
+  g^{b}(3),\, p_z,\, v_z]$ followed by the Top-5 cylinders, each $(c_{\text{off}}^{b}(3),\, r_i)$; the
+  two scalars $p_z$ (absolute altitude) and $v_z$ (world vertical velocity) are appended in world
+  coordinates. All remaining vectors are expressed
   in the body frame $R(q)^\top$, with $g^{b} = R(q)^\top(-e_3)$ and $c_{\text{off}}^{b} =
   R(q)^\top(\Delta c_{xy},\, 0)$ (information-complete for infinite cylinders). The state $\omega$ is
   **already** the body-frame rate (the kinematics use $\dot q = \tfrac12 q\otimes(0,\omega)$), so
   $\omega^{b} = \omega$ is reported directly — no $R(q)^\top$ is applied to it; only the world-frame
-  quantities ($v$, $\text{goal}-p$, $-e_3$, $\Delta c_{xy}$) are rotated. **Design rule:** the
-  closed-loop symmetry group is $G_{\text{dyn}} = \text{translations} \times \text{yaw}$, so the
-  observation quotients translations and yaw only; $g^{b}$ restores exactly the gravity-referenced tilt
-  component a full-rotation quotient would alias. Double-cover safe (all quantities pass through $R(q)$).
+  quantities ($v$, $\text{goal}-p$, $-e_3$, $\Delta c_{xy}$) are rotated. The closed-loop symmetry
+  group is $G_{\text{dyn}} = \text{horizontal translations} \times \text{yaw}$; $g^{b}$ restores exactly
+  the gravity-referenced tilt component a full-rotation quotient would alias, and $(p_z, v_z)$ carry the
+  vertical coordinate that the floor/ceiling surfaces (§1.6) and the vertical hazard term make
+  observable. Both added scalars are invariant under horizontal translation and yaw, so the retained
+  quotient is exactly preserved. Double-cover safe (all quantities pass through $R(q)$).
+
+  **Design rule (observation vs hazard).** The observation may quotient only symmetries that the
+  hazard *also* has. Equivalently: every argument of $h_\star$ must be determined by the observation,
+  modulo the retained group. Adding a hazard term that reads a coordinate the observation has
+  quotiented away does not make that term hard to learn — it makes it **unlearnable**, since states
+  with different hazard map to one observation and the value cannot represent its own target. The
+  check is performed when the hazard changes, not when the run is deployed: for each new term, name
+  the coordinates it reads and point to where each is recoverable from the observation. Vertical
+  translation left $G_{\text{dyn}}$ the moment $|p_z| = \text{world\_lim}$ became a physical surface,
+  which is why $p_z$ is carried; $v_z$ is recoverable as $-(v^{b} \cdot g^{b})$ and is carried anyway,
+  so that a lead term linear in descent rate is an affine function of the input rather than a bilinear
+  one the network must synthesize.
 - **Scene:** region $[-4, 4]^3$. Cylinder xy-centers, radii, counts, active mask, and the start/goal
   **xy-clearance** rules inherited from the planar scene distribution verbatim (clearance in xy only —
   cylinders are infinite). Start and goal $z$ sampled **independently** uniform in $[-4, 4]$ (altitude
   change is generically part of the task).
-- **Initial pose** (6-DOF perturbed): position as above; attitude $q = R_a(\phi_{\text{tilt}})\, R_z(\psi)$
-  with yaw $\psi \sim U[-\pi, \pi]$, tilt axis $a$ uniform on the horizontal circle, tilt angle
-  $\phi_{\text{tilt}} \sim U[0,\, 2\pi/3]$ (past-horizontal starts included, mass beyond $\pi/2$ = 25%;
-  near-inversion excluded, SET-ONCE — full-SO(3) is a registered later stress axis). $\|v_0\|$ from the
-  planar speed distribution with uniform 3D direction; per-axis $\omega_0$ from the planar range.
-- **Barrier / nominal:** $h_\star = \phi + 0.3\,(v_{xy} \cdot \hat r)$ (horizontal radial geometry; planar
-  $c$-gain generalized), $h_{\text{scale}}$ unchanged; nominal is a hover **cascaded-PD** (thrust-axis projection + attitude error),
-  replacing a hover-linearized LQR because the IC tilt range $U[0, 2\pi/3]$ lies outside a hover
-  linearization's validity region; the box-aware HardNet projection onto $(f_{\text{thr}}, \tau) \in \mathbb{R}^4$ is defined
-  agent-side in `02_control`. Per-system rule: `filter.empty_fallback.mode = none`.
+- **Initial pose** (6-DOF perturbed): position as above; attitude **Haar-uniform on $SO(3)$**, drawn
+  by Shoemake's method, so $\cos\theta \sim U[-1, 1]$ for the thrust-axis tilt $\theta$ and inversions are
+  included. Three quarters of the draws therefore start past the altitude-holding limit
+  $\theta_{\text{hold}} = \arccos(\mathrm{TWR}^{-1}) = 60^\circ$, beyond which no admissible thrust
+  arrests a descent; this is a deliberate stress on the vertical channel, not an accident of sampling.
+  $\|v_0\|$ from the planar speed distribution with uniform 3D direction; per-axis $\omega_0$ from the
+  planar range.
+- **Barrier / nominal:** the hazard carries a horizontal branch per cylinder and two vertical branches
+  for the domain surfaces of §1.6,
+  $$
+  h_\star = \max\Big\{\ \max_i\big[\phi_i + 0.3\,(v_{xy}\cdot\hat r_i)\big],\quad
+  \min(\psi_{\text{lo}}, \overline\psi) - c_z v_z,\quad
+  \min(\psi_{\text{up}}, \overline\psi) + c_z v_z\ \Big\},
+  $$
+  with vertical margins $\psi_{\text{lo}} = -p_z - \text{world\_lim}$,
+  $\psi_{\text{up}} = p_z - \text{world\_lim}$. Both vertical branches take the $\psi + c\,\dot\psi$ form of
+  the horizontal one: the margin alone has $\partial\psi/\partial v_z = 0$ and so relative degree 2, and the
+  lead term restores relative degree 1 with $L_g$ supported on the thrust channel. The **cap**
+  $\overline\psi = r_{\max}$ is required because there is no ground-contact model, so $\psi$ is unbounded
+  below the floor; capping it at the largest contribution a cylinder can make keeps both surfaces on one
+  scale in the $\max$. The lead gain $c_z = 0.8$ is the flip time at the plant's own rate limit,
+  $\pi/\omega_{\max}$; a shorter lookahead turns the branch positive only after the descent can no longer be
+  arrested, and the horizontal $0.3$ does not transfer because the binding vertical timescale is attitude
+  recovery, not closure. $h_{\text{scale}}$ unchanged. Nominal is a hover **cascaded-PD** (thrust-axis
+  projection + attitude error), replacing a hover-linearized LQR because the Haar attitude distribution
+  lies far outside a hover linearization's validity region; the box-aware HardNet projection onto the
+  per-rotor box is defined agent-side in `02_control`. Per-system rule:
+  `filter.empty_fallback = {mode: kstep, phases: 1, k: 3}` (`02_control` §4).

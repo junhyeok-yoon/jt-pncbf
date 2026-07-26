@@ -128,14 +128,33 @@ The engineering disciplines that keep results attributable and the codebase main
   Analysis that does neither is backlog, not work product: it is not expanded into
   documents, prompts, or experiments. The working loop is knob → prediction → run →
   recovered performance or guarantee.
+- **Theory serves the implementation.** A derivation is undertaken only when it settles
+  something the implementation faces: fixing a coefficient that would otherwise be argued,
+  producing a prediction registrable before data, or showing that a design cannot work in
+  principle. A derivation reaching none of these three is backlog and is not carried into
+  the theory document, however sound it is.
 - **Reproduce before innovating.** When a reference implementation exists, reproduce it
   faithfully first. Original design choices usually have reasons. Add novelty only on top of
   a reproduced baseline.
+- **Re-derive closed-form components when the plant changes.** A closed-form component whose
+  derivation used a specific state or action dimension can silently cease to be correct at
+  another dimension — a box-projection enumeration exact only for action dimension $\le 2$,
+  an observation encoding correct only in the absence of gravity. When a lineage changes the
+  plant, such components must be re-derived, not re-run. Re-running a dimension-specific
+  derivation after a dimension change is a correctness failure, not reuse.
 - **One axis per version (recommended, not mandatory).** A version should ideally introduce
   one new mechanism, since stacking independent changes makes results unattributable. This
   is a recommendation, not a hard rule: minor parameter changes may legitimately accompany a
   main change. When a version would change more than one substantive axis, the Executor
   flags it and requests the Researcher's re-confirmation before proceeding.
+- **Version bumps are deliberately conservative.** A version is a unit of committed,
+  attributable change — not a label for every experiment or training run. Multiple
+  experiments, screens, and re-runs accumulate **within** one open version through its
+  build-logs and `results.md`; they do not each warrant an open/close cycle. Bumping the
+  version per experiment drains the meaning of a version and wastes the open/close overhead.
+  The Strategist proposes a version bump only when a version has accumulated enough
+  substantive, closeable change that keeping it open harms attribution or navigability —
+  otherwise experiments stay within the current version. When in doubt, do not propose a bump.
 - **Analyze before fixing.** No incremental tuning or cosmetic patch without first stating,
   explicitly: (1) what the problem is, with data evidence; (2) why it occurs,
   mechanistically; (3) how the proposed fix addresses that mechanism, not just the symptom;
@@ -155,6 +174,12 @@ The engineering disciplines that keep results attributable and the codebase main
   `ledger.md`. A result whose lineage is unknown is treated as unverified.
 - **Trust the data.** See Section 2. Verify against recorded metrics before reporting a
   number.
+- **No unregistered numeric prediction.** A numeric expectation for `cps` or any of its
+  components is stated only as a registered prediction, with its falsifier, before the data
+  exists. An estimate offered in discussion has nothing to separate it from a guess, and it
+  anchors later judgement whether or not it was meant to. Where the quantity is genuinely
+  derivable, the derivation is given and the result registered; where it is not, the answer
+  is that it is not known.
 - **Protocol hygiene is actively maintained.** The protocol documents (`00`–`06`) are
   meant to stay lean, navigable, and free of accumulated rationale. The Strategist
   watches for three drift patterns: (a) **rationale creep** — "why we chose X" prose

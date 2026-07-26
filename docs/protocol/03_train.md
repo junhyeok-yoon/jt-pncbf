@@ -55,7 +55,18 @@ bit-reproducible. Inactive slots beyond $n$ are zero-padded per `01_env` §1.3.
   $L = \|g - s\|$); otherwise uniform in the arena. All parameters in
   `base_config.obstacle.*`.
 - **Start and goal:** drawn uniformly in
-  $[-(\text{world\_lim} - 0.3),\ \text{world\_lim} - 0.3]^2$.
+  $[-(\text{world\_lim} - 0.3),\ \text{world\_lim} - 0.3]^2$. For systems whose scene region is 3-D,
+  the vertical coordinate follows the same rule: start and goal $z$ drawn independently uniform in
+  $[-(\text{world\_lim} - \delta),\ \text{world\_lim} - \delta]$, with $\delta$ the same clearance the
+  horizontal coordinates carry. The floor and ceiling are physical surfaces (`01_env` §1.6), so a
+  start or goal placed on one is a start or goal inside an obstacle; the clearance that already
+  applies to every other hazard surface applies here for the same reason.
+- **Attitude and body rates (3-D systems):** attitude Haar-uniform on $SO(3)$, per-axis $\omega_0$
+  from the configured range (`01_env` §3.4). The vertical span is **not** narrowed for tilted draws.
+  Evaluation restricts it — a start that no admissible control can hold is a measurement artefact
+  there (`04_eval` §6.1) — but training must experience the region the value is meant to score, and
+  a doomed start yields a correct $\sup_t h$ target. Excluding it would leave the value untrained
+  exactly where the certificate is later asked to speak.
 - **Initial velocity (not zero):** each component (Double Integrator) or the scalar speed
   (Unicycle) drawn $v_0 \sim \text{Uniform}(-v_{\text{init,max}}, v_{\text{init,max}})$,
   $v_{\text{init,max}} = \texttt{env.v\_init\_max}$. For the Unicycle the heading
@@ -768,7 +779,12 @@ runtime effect.
    $\sigma_{\max}$ for `halt.sigma_max_cycles` consecutive collection cycles, halt:
    exploration is failing to find unsafe signal even at the noise ceiling.
 4. **`cps` floor.** Once warmup is past, if the in-loop `cps` drops below
-   `halt.cps_floor` (default $-0.5$), halt: training has collapsed.
+   `halt.cps_floor` (default $-0.5$), halt: training has collapsed. The floor is a threshold on a
+   metric, so it is only meaningful against that metric's reachable range: a change to the outcome
+   predicates or to `cps` shifts the whole range and the floor is re-derived from the new one, never
+   carried across or relaxed to fit. A floor placed outside the reachable range on a given stage is a
+   specification error (`00_constitution` §4), and a stage whose policy is fixed cannot move `cps` at
+   all, so the floor carries no information there and is not applied.
 5. **Early stop on no improvement.** If the best in-loop `cps` has not improved by
    `halt.early_stop_min_delta` within `halt.early_stop_patience` macro steps, halt.
 
@@ -918,7 +934,9 @@ hypothesis and a clean ablation against the baseline:
   coefficient-gradient tail otherwise dominates the BPTT update and clips the task-credit away
   (forward is byte-identical either way, so this changes only the backward path).
 - **Reserved halts (§4.7-3..5) activation** — wire the sigma-pin, cps-floor, and
-  early-stop halts into the trainer's halt path.
+  early-stop halts into the trainer's halt path. Partially outstanding: the cps-floor halt is wired
+  in the OC trainer and not in the JT trainer, so the spec and the code disagree on its status;
+  reconciling the two is part of this item.
 - **Saturation and catastrophic-failure halt detectors** with thresholds set once baseline
   statistics are available.
 - **Collision-precursor injection** — a third (precursor) buffer of synthetic near-obstacle

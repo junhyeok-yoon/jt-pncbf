@@ -38,6 +38,13 @@ Defined per scenario; the reported value is the mean across the scenarios in a p
 - **`infeasibility`** — defined in `02_control` §4: a filtered step is infeasible iff the half-space–box intersection is **empty**, or the row is **singular and violated** ($\|L_g h\| < 5 \times 10^{-4}$ and $L_f h + \alpha\, h_{\text{eff}} > 0$, a $u$-independent test). A singular row that is satisfied is feasible — every $u$ satisfies it and the filter is simply inactive. Aggregation: mean over active filtered steps of the per-step flag, then mean over episodes; episodes with no active filtered steps contribute zero.
 
   **History note — recorded by explicit Researcher decision as a one-time exception to `00_constitution` §3 Prohibition 3, to prevent mis-scoring across the definition transition; not a precedent for narrative in protocol documents.** Through v2.4.x the per-step flag was `singular OR empty` (legacy). v2.5.0 introduced an exact analytic maneuver-family barrier (`02_control` §8) that by design saturates at the clip floor across the safe interior; its zero gradient raised the legacy flag on nearly every active step (raw infeasibility 0.87–0.91) even though those rows are automatically satisfied and the filter is inactive — a benign state, not a failure. The legacy flag therefore penalized exactness, while the genuinely pathological states — empty intersections, and singular-**and**-violated rows (the authority-loss failure of hazard-blind conditioning) — are exactly what the current definition counts. The current definition was introduced as the `cps_v2` field during the v2.5.0 Stage-B-2 closeout and adopted here. **Application is prospective**: ledger rows written before the adoption were scored with the legacy flag and are annotated as such when cited; verdict-grade comparisons across the boundary use re-scored comparators or dual reporting (`legacy cps | cps_v2`) until the standing comparators are re-scored, after which the v2 flag is the single canonical definition and the `_v2` suffix is retired.
+  **History note — vertical domain surfaces.** `01_env` §1.6 declares the arena floor and ceiling
+  physical for 3-D systems, so `collision` counts them alongside cylinders and the episode terminates
+  there. Scores written before that predicate did not count them and are not comparable to scores
+  written after: an episode that left the arena vertically and still reached its goal was previously
+  a full `reach`. The same transition device as above applies — dual reporting (`legacy | banded`)
+  while standing comparators are re-scored, after which the banded predicate is the single canonical
+  one and the qualifier is retired. Comparisons that cross the boundary state which scoring they use.
 - **`saturation_rate`** — defined in `02_control` §4.1: mean over active filtered steps of the per-step saturation flag (any $u^{\text{safe}}$ component within $10^{-3}$ of its bound), then mean over episodes. A recorded diagnostic only — **not** a term in `cps`.
 - Outcomes are mutually exclusive via the `01_env` §1.6 priority (collision → goal → OOB → stuck → timeout). All five outcome fractions sum to 1; all five are reported alongside `cps`.
 
@@ -159,6 +166,28 @@ panels total = two scenes × three velocities.
   attitude, $v = (1.5, 0, 0)$; right = tilt $60^\circ$, $v = (1.5, 0, 0)$. Each panel title
   carries the true $\hat V$ min and max so the clamped color scale never hides a scale change.
 
+**Vertical section (3-D systems).** A horizontal sweep at fixed $z$ cannot show a hazard term that
+reads altitude — at $z = 0$ the vertical margin sits far from its zero level and never enters the
+figure — so 3-D systems render a **second, `yz` section** beside the `xy` one, under the same
+conventions and at the same cadence. Sweep $(p_y, p_z)$ over $[-\text{world\_lim},
+\text{world\_lim}]^2$ at $p_x = 0$; rows are the same two scenes; columns are two attitude blocks —
+hover and a tilt past $\theta_{\text{hold}}$ — each carrying $v_z \in \{-1.5,\ 0,\ +1.5\}$.
+Infinite vertical cylinders read as vertical bands in this section. Overlay the domain surfaces
+$|p_z| = \text{world\_lim}$, and, as a distinct dashed line, the analytic $h_\star = 0$ location for
+that column; the vertical gap between it and the $\hat V = 0$ contour is the anticipation the value
+adds over the instantaneous hazard, which is the quantity the section exists to show.
+
+Record that gap as a scalar every eval, not only as an image: **`band_zero_offset`** = ($\hat V = 0$
+crossing in $p_z$) $-$ ($h_\star = 0$ in $p_z$), positive when the value turns positive further from
+the surface than the hazard asks. Report it per row and per attitude block, with the grid spacing
+beside it — the crossing is located by interpolation between the bracketing nodes, and an offset
+smaller than one cell is not resolved. The readout column lies inside the sampled support
+(`03_train` §1.2); outside it the value is extrapolating and the number means nothing. Report `NaN`,
+not zero, when the panel contains no crossing, so that no structure learned stays distinguishable
+from perfect alignment. A hover column is the uninformative case by construction — where the lead
+term already dominates the achievable stopping distance the supremum is attained at $t = 0$ and the
+offset should sit near zero; the tilted block is where the value must carry the anticipation alone.
+
 **Per panel.** Fix the panel's scene and velocity. Sweep position $(px, py)$ over a regular
 grid covering the arena $[-\text{world\_lim}, \text{world\_lim}]^2$ (a resolution that
 renders cleanly, e.g. 100–200 per axis). At each grid point build the full state (swept
@@ -244,8 +273,13 @@ The eval sampler reuses the training mechanism (`03_train` §1) with these overr
 - $\delta^{\text{eval}} = \texttt{eval.scene.start\_goal\_clearance}$ — strictly larger than the train value (looser).
 - Obstacle-field parameters identical to training (`base_config.obstacle.*`).
 - Initial velocity: same uniform $[-v_{\text{init,max}}, v_{\text{init,max}}]$ as training (per `03_train` §1.2). The unavoidable-collision rejection (`03_train` §1.3) is applied identically.
+- Initial position and attitude: on dimensions where recoverability is **not** monotone in looseness, the eval pool is the recoverable restriction, not a loosening. Concretely for the vertical axis under full-$\mathrm{SO}(3)$ attitude — training draws $z$ over the full arena band (including unrecoverable low starts, which the value function must learn), while eval restricts $z$ to a recoverable range conditioned on initial tilt. Recoverability of such a bound is established by an **attitude-aware** feasibility screen: a purely ballistic screen that ignores initial attitude is insufficient, since attitude determines whether thrust can arrest a descent. The bound is chosen as the widest one that keeps the flagged fraction at zero under that screen, not by argument.
 
-Eval scenes are **looser** than training (larger clearance, larger min start-goal distance) so we never evaluate on scenes that training would have rejected.
+  **Canonical vertical bound.** The bound carries no fitted coefficient. Attitude, body rates and velocity are drawn first; the screen then returns, for that draw, the altitude $D_{\text{down}}$ lost while righting to upright and the overshoot $D_{\text{up}} = \max(0, v_z)^2 / (2g)$, and the start is drawn $z_0 \sim U\big(-\text{world\_lim} + D_{\text{down}} + \delta^{\text{eval}},\ \text{world\_lim} - \max(D_{\text{up}}, \delta^{\text{eval}})\big)$. Goal $z$ carries $\delta^{\text{eval}}$ from each surface, as it does from every other hazard surface. Only $z$ is redrawn — the attitude draw is never rejected — so the Haar marginal is preserved exactly; rejecting whole scenes would quietly bias the pool toward upright starts and weaken the very axis the $SO(3)$ distribution exists to stress. The screen grants the plant no more authority than it has: thrust and torque contend through the mixer (`01_env` §3.4), one ZOH step elapses before any corrective thrust acts, the gyroscopic term takes its worst sign, and the initial spin is adverse. Its reference surface is the **domain surface** $|p_z| = \text{world\_lim}$, not the out-of-bounds box; referencing the outer box makes the screen return no restriction at all, since the arena is wide enough to absorb the fall.
+
+  **The restriction removes the axis it conditions on.** A pool built this way carries almost no vertical failures by construction, so it cannot resolve a change to the vertical channel — it measures competence with initial-condition infeasibility already subtracted. The unrestricted pool is retained beside it and carries the headline for any vertical claim; the restricted pool answers the separate question of what remains after infeasible starts are removed. Reporting one without the other states neither question clearly.
+
+Eval scenes are **looser** than training (larger clearance, larger min start-goal distance) so we never evaluate on scenes that training would have rejected — on clearance-type dimensions. On dimensions where looseness would admit **unrecoverable** initial conditions (notably the vertical axis under full-$\mathrm{SO}(3)$ attitude), the eval pool is instead the recoverable restriction, so the measure reflects policy competence and not initial-condition infeasibility.
 
 ### 6.2 Pools (committed)
 
@@ -256,7 +290,7 @@ Two pools are pre-generated, serialized, and committed to git under `data/secure
 | in-loop | 500 | 12345 | selection (best.pt by `cps`) | `data/secured_data/pools/eval_inloop_<system>_n500_seed12345.{pkl,manifest.json}` |
 | full | 2000 | 23456 | final eval / headline reporting | `data/secured_data/pools/eval_full_<system>_n2000_seed23456.{pkl,manifest.json}` |
 
-`<system>` is a short tag (`di` for Double Integrator, `uni` for Unicycle). The tag is part of the filename because the project has multiple systems and pools are not interchangeable across them; e.g. `eval_inloop_di_n500_seed12345.pkl`. The in-loop and full pools are **disjoint** (different seeds, different sizes), separating selection (in-loop) from reporting (full), analogous to validation vs test in standard ML.
+`<system>` is a short tag (`di` for Double Integrator, `uni` for Unicycle, `quadrotor-planar`, `quadrotor-3d-d2r`). The tag is part of the filename because the project has multiple systems and pools are not interchangeable across them; e.g. `eval_inloop_di_n500_seed12345.pkl`. The in-loop and full pools are **disjoint** (different seeds, different sizes), separating selection (in-loop) from reporting (full), analogous to validation vs test in standard ML.
 
 The in-loop pool selects `best.pt` during training; the full pool is what the trainer's automated final eval runs and is the headline-reporting standard. Because pool scenes are drawn by a single seeded RNG in a fixed order (§6.3, `03_train` §1.1), any smaller-$N$ pool at a given seed is a byte-identical prefix of a larger one at the same seed — so checkpoint **re-selection** (re-evaluating a run's saved checkpoints on the full $N=2000$ pool to pick the true best, since the in-loop pool is smaller and noisier) is well-defined and reproducible.
 

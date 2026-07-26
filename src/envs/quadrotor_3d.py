@@ -34,7 +34,12 @@ class QuadrotorQuad3D:
     def __init__(self, config: Mapping[str, Any]) -> None:
         self.k_obs = int(config["env"]["k_obs"])
         # v^b(3), omega^b(3), goal^b(3), g^b(3), K*(c_off^b 3 + r 1) = 12 + 4K ; K=5 -> 32
-        self.obs_dim = 3 + 3 + 3 + 3 + 4 * self.k_obs
+        # v2.7.6: obs_band_z appends absolute p_z, v_z so the band branch psi=|p_z|-4 is observable (32 -> 34).
+        # Both are xy-translation- and yaw-invariant (the reduced symmetry group is preserved). Code default
+        # False so a checkpoint whose config predates the flag (e.g. v2.7.4, dim-32) loads at its own dim;
+        # obs_dim is thus determined by the checkpoint's own config (05_code, checkpoint compatibility).
+        self.obs_band_z = bool(config.get("env", {}).get("obs_band_z", False))
+        self.obs_dim = 3 + 3 + 3 + 3 + 4 * self.k_obs + (2 if self.obs_band_z else 0)
         phys = config["env"]["quadrotor_3d"]
         self.mass = float(phys["mass"])
         self.gravity = float(phys["gravity"])
@@ -96,7 +101,13 @@ class QuadrotorQuad3D:
         g_b = _rot(Rt, g_world)                              # R(q)^T(-e3)
         c_off_b = _rot_k(Rt, c_off_world)                    # [B,K,3]
         obstacle_block = torch.cat([c_off_b, top_radii.unsqueeze(-1)], dim=-1).reshape(x.shape[0], -1)
-        return torch.cat([v_b, omega_b, goal_b, g_b, obstacle_block], dim=1)
+        base = torch.cat([v_b, omega_b, goal_b, g_b, obstacle_block], dim=1)
+        if not self.obs_band_z:
+            return base
+        # v2.7.6: absolute altitude p_z and vertical velocity v_z (world; v is world linear velocity), appended
+        # so the band branch psi=|p_z|-4 (+ c_z v_z) is an affine function of the input. Both invariant under
+        # xy-translation and yaw. v_z equals -(v_b . g_b) but is added raw so the net need not synthesize it.
+        return torch.cat([base, p[:, 2:3], v[:, 2:3]], dim=1)
 
     def position(self, x: Tensor) -> Tensor:
         return x[..., :3]

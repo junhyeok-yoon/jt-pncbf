@@ -71,10 +71,10 @@ def test_ii_no_tilt_termination_or_collision_far_from_cylinder():
 
 
 def test_iii_obs_dim_still_32():
-    """obs_dim is unchanged (32) and the observation builder is not touched by the IC axis."""
+    """obs_dim is 34 under v2.7.6 obs_band_z (the IC axis itself still does not touch the builder; the
+    observation axis appended p_z, v_z, 32 -> 34)."""
     s = _sys()
-    assert s.obs_dim == 32, f"obs_dim changed to {s.obs_dim}"
-    # a forward pass produces a dim-32 observation
+    assert s.obs_dim == 34, f"obs_dim = {s.obs_dim}"
     from types import SimpleNamespace
     x = torch.zeros(4, 13, dtype=torch.float64); x[:, 3] = 1.0     # identity quat
     scene = SimpleNamespace(
@@ -84,4 +84,4 @@ def test_iii_obs_dim_still_32():
         obstacle_active=torch.zeros(4, 5, dtype=torch.bool),
     )
     obs = s.observation(x, scene)
-    assert obs.shape[-1] == 32, f"observation dim {obs.shape[-1]} != 32"
+    assert obs.shape[-1] == 34, f"observation dim {obs.shape[-1]} != 34"

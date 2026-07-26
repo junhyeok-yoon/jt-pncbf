@@ -235,7 +235,7 @@ The RK4 step matches an analytic solution for: linear dynamics (Double Integrato
 
 ### 5.4 Observation invariance
 
-For both systems: translating start, goal, and obstacles by a random vector leaves the observation unchanged (Double Integrator: translation-invariant; Unicycle: translation- and rotation-invariant under matching rotation of $\theta$).
+Translating start, goal, and obstacles by a random vector **drawn from the system's retained symmetry group** leaves the observation unchanged (Double Integrator: translation-invariant; Unicycle: translation- and rotation-invariant under matching rotation of $\theta$; 3-D quadrotor: horizontal translation and yaw only, since the vertical coordinate is carried explicitly — `01_env` §3.4). The group the test quantifies over is read from the system spec rather than assumed: narrowing it when a hazard term breaks a symmetry is a correction, not a weakening, and a test that keeps quantifying over a lost symmetry passes only because the observation is still discarding something the hazard needs. A companion assertion pins the positive direction — two states differing only in a carried coordinate must produce different observations.
 
 ### 5.5 BPTT detach
 
@@ -281,6 +281,7 @@ Concrete requirements:
 
 - **One-shot RK4 over the batch.** RK4 advances `[B, state_dim]` per step; never a Python loop over `B`.
 - **Filter is batched.** HardNet projection operates on `[B, action_dim]`. CBF-QP is batched at the call site by stacking $(h, L_f h, L_g h, u_{\text{nom}})$ rows into one solver call where the solver supports it; where it does not, the per-row solve is parallelized over at most `base_config.filter.cbf_qp.max_workers` CPU threads (default 32) and the host transfer happens once per macro step, not per row.
+- **Deploy-time paths run on the same device as training.** A checkpoint loaded for evaluation is moved to the run device before any rollout; loading with `map_location="cpu"` and never moving leaves every downstream path — the filter, its fallback, any lookahead — on the CPU with the accelerator idle, and the cost is then read as the algorithm's rather than the loading path's. Candidate families inside a filter fallback are one batched forward, never a Python loop over candidates: at deployment the scene batch is 1, so a loop that vanished behind batching during evaluation reappears at full length in the per-step latency that decides deployability.
 - **No `.item()` inside the hot loop.** Scalars for logging are deferred to a single tensor-to-host transfer at the end of each macro step.
 - **One device transfer per macro step.** Collection and the V minibatch live on the GPU; the only host transfer per macro step is the logging payload.
 - **`torch.compile` — channel-scoped.** The analytic maneuver barrier ships a compiled fast path as the production default (`VM_FAST=1`), adopted under the `02_control` §8 equivalence standard (function parity $|V| \le 10^{-6}$ / $|\nabla V| \le 10^{-5}$ plus safety equivalence; trajectory bit-parity is unattainable for the branch-discrete projection and is not a gate). The uncompiled reference path is retained for tests/audit (`VM_FAST=0`), and the function-parity suite (`tests/test_vm_fastpath.py`) must be re-run and reported at every PyTorch/compiler version change (current pin: `torch 2.12.0.dev20260404+cu128`). Outside this channel `torch.compile` remains an opt-in, one-axis future addition.
@@ -312,6 +313,8 @@ The checkpoint contains `step`, `pi_state`, `v_s_state`, `v_s_target_state`, `ar
 - **Determinism flag** `torch.use_deterministic_algorithms(True)` is **not** set by default (it disables some fast paths). Determinism is recovered via seed control; bit-exact determinism is reserved as a future need.
 - **Naming.** `cps` everywhere for the headline metric. `V_S` for the value network, `pi` for the policy network, `u_nom` for pre-projection action, `u_safe` for post-projection action.
 - **Lint and format.** `ruff` for lint; `black` for format. Both are run by `scripts/format.sh`.
+- **Plain text in reports.** No emoji or decorative glyphs in any report, table, log line, commit-adjacent file, or figure. Status is carried by words.
+- **Registrations live in markdown.** Hypotheses, falsifiers, and adjudication records are written in the version's markdown documents, which are the record (`00_constitution` §6). A machine-readable copy may be derived from them for scripts to consume, kept with the run artifacts and never under `docs/`; two files that both claim to hold a registration will disagree eventually, and the markdown wins by construction.
 
 ---
 

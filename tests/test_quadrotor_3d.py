@@ -150,7 +150,7 @@ def test_q3_yaw_symmetry_and_tilt_observability():
 # ---------------------------------------------------------------------------- q4
 def test_q4_obs_layout_indices():
     s = _sys()
-    assert s.obs_dim == 32
+    assert s.obs_dim == 34                                       # v2.7.6: + p_z, v_z (obs_band_z)
     dt = torch.float64
     n, K = 3, 5
     p = torch.tensor([[0.2, -0.1, 0.5]], dtype=dt).repeat(n, 1)
@@ -165,7 +165,7 @@ def test_q4_obs_layout_indices():
     radii = torch.zeros(n, K, dtype=dt); radii[:, 0] = 0.4; radii[:, 1] = 0.5
     active = torch.zeros(n, K, dtype=torch.bool); active[:, 0] = True; active[:, 1] = True
     obs = s.observation(x, _ns_scene(goal, centers, radii, active))
-    assert obs.shape == (n, 32)
+    assert obs.shape == (n, 34)
     assert torch.allclose(obs[:, 0:3], v, atol=1e-9)             # v^b == v (identity attitude)
     assert torch.allclose(obs[:, 3:6], om, atol=1e-9)            # omega^b
     assert torch.allclose(obs[:, 6:9], goal - p, atol=1e-9)      # goal^b
@@ -174,6 +174,9 @@ def test_q4_obs_layout_indices():
     dc = torch.tensor([1.2 - 0.2, 0.3 - (-0.1), 0.0], dtype=dt).expand(n, 3)
     assert torch.allclose(obs[:, 12:15], dc, atol=1e-9)
     assert torch.allclose(obs[:, 15], torch.full((n,), 0.4, dtype=dt), atol=1e-9)
+    # v2.7.6 obs_band_z: last two slots are absolute p_z, v_z
+    assert torch.allclose(obs[:, 32], torch.full((n,), 0.5, dtype=dt), atol=1e-9)   # p_z
+    assert torch.allclose(obs[:, 33], torch.full((n,), 0.9, dtype=dt), atol=1e-9)   # v_z
 
 
 # ---------------------------------------------------------------------------- q5

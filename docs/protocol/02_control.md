@@ -175,15 +175,24 @@ The episode-level **infeasibility rate** is the **mean over active steps** of th
 infeasible flag; the reported `infeasibility` is the mean over episodes. This is the
 `infeasibility` term consumed by `cps` in `03_train` / `04_eval`.
 
-**Empty-branch fallback.** `filter.empty_fallback.mode = none | kstep` (per-system deployed defaults:
-quadrotor_planar = kstep with k = 5; all other systems = none). Under kstep, ONLY on rows where the box/half-space
-intersection is empty, the returned action is the first-phase control of the argmin, over a two-phase
+**Empty-branch fallback.** `filter.empty_fallback = {mode: none | kstep, phases: 1 | 2, k: int}`.
+Per-system deployed defaults: quadrotor_planar = `{kstep, phases 2, k 5}`; quadrotor_3d =
+`{kstep, phases 1, k 3}`; all other systems = `{none}`. Under kstep, ONLY on rows where the box/half-space
+intersection is empty, the returned action is the first-phase control of the argmin, over a
 piecewise-constant candidate family (per-system control grid from the box U: corners + center/zero + per-axis
 extremes; deterministic fixed-order tie-break), of V_hat at the k-step rollout endpoint under the plant model — a
-stateless receding-horizon selection recomputed every step. The infeasibility flag and metric are NOT altered by
-the fallback (flag invariance is normative and test-pinned); mode = none is bit-parity with the pre-fallback
-filter. k is a commitment horizon, not a gain: one registered value per system, never swept; both too-small
+stateless receding-horizon selection recomputed every step. `phases` is the number of piecewise-constant
+segments the horizon is split into; the candidate count is `phases` powers of the grid size, so it is the
+dominant cost term and is registered per system alongside k. mode = none is bit-parity with the pre-fallback
+filter. k is a commitment horizon, not a gain: one registered value per system; both too-small
 (first-order-blind) and too-large (replanning-inconsistent) regimes degrade.
+
+The fallback's effect on infeasibility is **pointwise, not closed-loop**. Evaluated at a given state the
+per-step infeasible flag is unchanged — flag invariance is normative and test-pinned. The episode-level
+infeasibility *rate* is not invariant: the fallback returns a different action, the trajectory diverges, and the
+downstream population of empty rows changes with it. A statement that the fallback cannot move `infeasibility`
+is therefore true of the flag and false of the metric, and any budget derived from the latter must be measured
+rather than assumed.
 
 ### 4.1 Saturation rate
 
@@ -309,11 +318,21 @@ only box-aware degenerate case is the empty half-space–box intersection (§4),
 singularity of the base projection. Candidate
 selection is non-differentiable, but gradients flow through the selected candidate.
 Numerical tolerances ($10^{-9}$ for feasibility, $10^{-12}$ for degenerate edges) are
-local constants. **Scope:** this enumerator is defined only for 2-D action spaces; before
-adding a higher-action system (e.g. a 6-D quadrotor) it must be replaced by a
-dimension-general exact box/half-space projection, or its finite-candidate rule and
-approximation status must be re-specified. This is a one-axis prerequisite for any new
-high-dimensional system.
+local constants.
+
+**Scope, and its current status.** The enumeration above is exhaustive — and therefore exact —
+only for 2-D action spaces. At action dimension $m$ the closest point of the half-space–box
+intersection generically has between $1$ and $m-1$ box faces active, while the family enumerated
+carries only the cardinality-$1$ class (fix one coordinate at a bound, solve one on the
+half-space) and the cardinality-$m$ class (the $2^m$ corners; four of them at $m = 2$, where the
+two classes together happen to cover every case). For $m > 2$ the intermediate cardinalities are
+absent, so the selection is a finite argmin over a family that need not contain the optimum, not
+a projection. `quadrotor_3d` runs at $m = 4$ with this enumerator, so the exactness claim above
+does **not** hold for it; the deployed behaviour is an approximation whose gap is unmeasured and
+whose gradient vanishes wherever a corner wins. Replacing it with a dimension-general exact
+box/half-space projection — an active-set or multiplier-root solve — is a standing one-axis
+prerequisite, outstanding for `quadrotor_3d` and required before any further high-dimensional
+system.
 
 ### 6.2 Main control network (learned policy)
 

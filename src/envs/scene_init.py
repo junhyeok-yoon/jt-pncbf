@@ -41,6 +41,19 @@ _MAX_RETRIES = 1000
 _START_GOAL_ARENA_MARGIN = 0.3
 _ZERO_SPEED_EPS = 1.0e-12
 
+# v2.7.6 Stage-1 M2: band-feasible eval-IC redraw diagnostics (eval-only, quadrotor_3d floor_mode=="band").
+# Incremented only inside that branch; read/reset by the pool builder. Training path never touches this.
+_BAND_STATS = {"scenes": 0, "attempts": 0, "empty_interval_redraws": 0, "obstacle_scene_rejects": 0}
+
+
+def band_stats() -> dict:
+    return dict(_BAND_STATS)
+
+
+def reset_band_stats() -> None:
+    for _k in _BAND_STATS:
+        _BAND_STATS[_k] = 0
+
 
 def sample_train_scene(
     rng: np.random.Generator,
@@ -84,6 +97,9 @@ def _sample_scene(
         if not _passes_unavoidable_collision_filter(scene, config, params):
             continue
         if not _passes_recoverability_filter(scene, config):   # v2.6.2 amendment 3 (quadrotor only, additive)
+            continue
+        if not _passes_band_obstacle_screen(scene, config, params):   # v2.7.6 Stage-1 (eval band mode only)
+            _BAND_STATS["obstacle_scene_rejects"] += 1
             continue
         return scene
 
@@ -256,13 +272,117 @@ def _make_scene(
             # geometry (centers/radii/active) and xy start/goal are already sampled above (shared with the
             # v2.7.3 path); only the 6-DOF IC differs here.
             world_lim = float(config["env"]["world_lim"])
-            start_z = float(rng.uniform(-world_lim, world_lim))
-            goal_z = float(rng.uniform(-world_lim, world_lim))
+            # v2.7.6: eval-only recoverable-set z-bounds conditioned on v_z (prop:hold; changes.md).
+            # Gated on mode=='eval' AND an ic_eval_z config block (opt-in) — NOT on ic_so3. The TRAINING
+            # path (mode!='eval') and the DEFAULT eval path (no ic_eval_z block) keep the exact v2.7.5 draw
+            # order (start_z, goal_z, v_speed, vdir, quat, w_mag, wdir) and stay byte-identical, so the
+            # canonical seed23456 full-range pool still reproduces. The eval-IC path REORDERS: velocity
+            # first to obtain v_z, then start_z conditioned on it.
+            ic_eval_z = q.get("ic_eval_z") if mode == "eval" else None
+            if ic_eval_z is not None and str(ic_eval_z.get("floor_mode", "vz")) == "band":
+                # v2.7.6 Stage-1 M2: BAND-feasible eval IC. Draw attitude, omega_0, v_0 FIRST; admit start_z
+                # only within [-4 + D_down, +4 - D_up], so no IC is charged for a band exit it cannot avoid.
+                # Resample z ONLY (Haar SO(3) preserved exactly); redraw the whole IC ONLY when the z-interval
+                # is empty or the R6.2 obstacle screen dooms it. goal_z ~ U(-4,+4) unchanged. Eval-only — the
+                # training path (mode!="eval") never reaches here. D_down instrument lazily imported.
+                from scripts.analysis.v276_attitude_feasibility import D_down_single, D_up as _D_up
+                floor_b = float(ic_eval_z.get("band_floor", -world_lim))
+                ceil_b = float(ic_eval_z.get("band_ceiling", world_lim))
+                # v2.7.6 Stage-1c: apply the existing start-goal clearance to the band surfaces |z|=4 (Stage 2
+                # makes them hazard surfaces in h_star). delta_eval is READ from config, never chosen here:
+                # goal_z clears the band by delta_eval, and the start clears the ceiling by delta_eval too.
+                delta_eval = float(config["eval"]["scene"]["start_goal_clearance"])
+                # The R6.2 obstacle screen is applied at scene level (_passes_band_obstacle_screen), AFTER the
+                # start-goal clearance filter, so it never sees a raw start-inside-obstacle scene; the inner
+                # loop here handles only the z-interval (resample z; redraw the IC only if the interval is empty).
+                for _ in range(_MAX_RETRIES):
+                    _BAND_STATS["attempts"] += 1
+                    quat = _shoemake_quat(rng)                                      # attitude first (Haar law)
+                    w_mag = float(q["ic_omega_max"]) * float(rng.uniform())
+                    wdir = rng.normal(size=3); wdir = wdir / max(float(np.linalg.norm(wdir)), _ZERO_SPEED_EPS)
+                    omega_vec = (w_mag * wdir).astype(np.float64)
+                    v_speed = float(q["ic_v_max"]) * float(rng.uniform())
+                    vdir = rng.normal(size=3); vdir = vdir / max(float(np.linalg.norm(vdir)), _ZERO_SPEED_EPS)
+                    initial_velocity = (v_speed * vdir).astype(np.float64)
+                    cos_theta = float(quat[0] ** 2 - quat[1] ** 2 - quat[2] ** 2 + quat[3] ** 2)  # R(q)[2,2]
+                    theta = float(np.arccos(min(1.0, max(-1.0, cos_theta))))
+                    vz = float(initial_velocity[2]); omega_mag = float(np.linalg.norm(omega_vec))
+                    z_lo = floor_b + D_down_single(theta, vz, omega_mag)           # floor unchanged (D_down > delta)
+                    z_hi = min(ceil_b - delta_eval, ceil_b - _D_up(vz))            # start clears the ceiling too
+                    if z_lo > z_hi:                                                 # empty interval -> redraw IC
+                        _BAND_STATS["empty_interval_redraws"] += 1
+                        continue
+                    start_z = float(rng.uniform(z_lo, z_hi))                        # resample z ONLY
+                    goal_z = float(rng.uniform(floor_b + delta_eval, ceil_b - delta_eval))  # goal clears the band
+                    _BAND_STATS["scenes"] += 1
+                    return Scene(
+                        obstacle_centers=centers, obstacle_radii=radii, obstacle_active=active,
+                        start=np.array([start[0], start[1], start_z], dtype=np.float64),
+                        goal=np.array([goal[0], goal[1], goal_z], dtype=np.float64),
+                        system=system, mode=mode, initial_velocity=initial_velocity,
+                        initial_attitude_quat=quat, initial_omega_vec=omega_vec,
+                    )
+                raise RuntimeError("band-feasible eval IC: exceeded redraw cap")
+            if ic_eval_z is not None and str(ic_eval_z.get("floor_mode", "vz")) == "tilt":
+                # v2.7.6 R6.3: TILT-conditioned floor (replaces the R6.1 v_z floor, which was falsified).
+                # Attitude drawn BEFORE position (reorder); attitude law (Haar SO(3)) unchanged.
+                # deficit(theta) = max(0, 1/TWR - cos theta); z_init_min = tilt_floor_base + k*deficit, so the
+                # floor never goes below tilt_floor_base (-4) — it only RISES for tilted ICs. Ceiling and goal
+                # per changes.md. Self-contained early return.
+                quat = _shoemake_quat(rng)                                 # attitude first (law unchanged)
+                w_mag = float(q["ic_omega_max"]) * float(rng.uniform())
+                wdir = rng.normal(size=3); wdir = wdir / max(float(np.linalg.norm(wdir)), _ZERO_SPEED_EPS)
+                omega_vec = (w_mag * wdir).astype(np.float64)
+                v_speed = float(q["ic_v_max"]) * float(rng.uniform())
+                vdir = rng.normal(size=3); vdir = vdir / max(float(np.linalg.norm(vdir)), _ZERO_SPEED_EPS)
+                initial_velocity = (v_speed * vdir).astype(np.float64)
+                v_z_up = max(0.0, float(initial_velocity[2]))
+                cos_theta = float(quat[0] ** 2 - quat[1] ** 2 - quat[2] ** 2 + quat[3] ** 2)   # R(q)[2,2]
+                twr = float(ic_eval_z.get("twr", 2.0))
+                deficit = max(0.0, 1.0 / twr - cos_theta)
+                z_ceiling_base = float(ic_eval_z["z_ceiling_base"])
+                z_init_max = min(z_ceiling_base, z_ceiling_base - float(ic_eval_z["z_ceiling_v_up_slope"]) * v_z_up)
+                z_init_min = float(ic_eval_z["tilt_floor_base"]) + float(ic_eval_z["tilt_floor_k"]) * deficit
+                start_z = float(rng.uniform(z_init_min, z_init_max))
+                goal_half = float(ic_eval_z["goal_z_half"])
+                goal_z = float(rng.uniform(-goal_half, goal_half))
+                return Scene(
+                    obstacle_centers=centers, obstacle_radii=radii, obstacle_active=active,
+                    start=np.array([start[0], start[1], start_z], dtype=np.float64),
+                    goal=np.array([goal[0], goal[1], goal_z], dtype=np.float64),
+                    system=system, mode=mode, initial_velocity=initial_velocity,
+                    initial_attitude_quat=quat, initial_omega_vec=omega_vec,
+                )
+            if ic_eval_z is not None:
+                v_speed = float(q["ic_v_max"]) * float(rng.uniform())      # |v0| ~ U[0, ic_v_max]
+                vdir = rng.normal(size=3); vdir = vdir / max(float(np.linalg.norm(vdir)), _ZERO_SPEED_EPS)
+                initial_velocity = (v_speed * vdir).astype(np.float64)
+                v_z = float(initial_velocity[2])
+                v_z_down = max(0.0, -v_z); v_z_up = max(0.0, v_z)
+                z_ceiling_base = float(ic_eval_z["z_ceiling_base"])
+                z_init_max = min(z_ceiling_base,                            # ceiling: lowered only when ascending
+                                 z_ceiling_base - float(ic_eval_z["z_ceiling_v_up_slope"]) * v_z_up)
+                z_init_min = (float(ic_eval_z["z_floor_base"])             # floor: recovery budget vs oob at -8
+                              + float(ic_eval_z["z_floor_v_down_slope"]) * v_z_down)
+                start_z = float(rng.uniform(z_init_min, z_init_max))
+                goal_half = float(ic_eval_z["goal_z_half"])
+                goal_z = float(rng.uniform(-goal_half, goal_half))          # settling => low speed at goal
+            else:
+                if mode == "train" and config["env"].get("band_hazard", {}).get("enabled", False):
+                    # v2.7.6 Stage-2: training clears the band surfaces |z|=4 by delta_train — the same
+                    # start-goal clearance every other hazard gets. Rollouts still continue through the surface
+                    # (M0a), so this only removes born-on-surface starts, not doomed descents (valid V_hat data).
+                    d_tr = float(config["scene_train"]["start_goal_clearance"])
+                    start_z = float(rng.uniform(-world_lim + d_tr, world_lim - d_tr))
+                    goal_z = float(rng.uniform(-world_lim + d_tr, world_lim - d_tr))
+                else:                                                        # eval default / band off -> unchanged
+                    start_z = float(rng.uniform(-world_lim, world_lim))
+                    goal_z = float(rng.uniform(-world_lim, world_lim))
+                v_speed = float(q["ic_v_max"]) * float(rng.uniform())      # |v0| ~ U[0, ic_v_max]
+                vdir = rng.normal(size=3); vdir = vdir / max(float(np.linalg.norm(vdir)), _ZERO_SPEED_EPS)
+                initial_velocity = (v_speed * vdir).astype(np.float64)
             start3 = np.array([start[0], start[1], start_z], dtype=np.float64)
             goal3 = np.array([goal[0], goal[1], goal_z], dtype=np.float64)
-            v_speed = float(q["ic_v_max"]) * float(rng.uniform())          # |v0| ~ U[0, ic_v_max]
-            vdir = rng.normal(size=3); vdir = vdir / max(float(np.linalg.norm(vdir)), _ZERO_SPEED_EPS)
-            initial_velocity = (v_speed * vdir).astype(np.float64)
             quat = _shoemake_quat(rng)                                     # uniform SO(3)
             w_mag = float(q["ic_omega_max"]) * float(rng.uniform())        # |omega| ~ U[0, ic_omega_max]
             wdir = rng.normal(size=3); wdir = wdir / max(float(np.linalg.norm(wdir)), _ZERO_SPEED_EPS)
@@ -386,6 +506,25 @@ def _passes_recoverability_filter(scene: Scene, config: Mapping[str, Any]) -> bo
         omega0=float(scene.initial_omega if scene.initial_omega is not None else 0.0),
         centers=scene.obstacle_centers, radii=scene.obstacle_radii, active=scene.obstacle_active,
         plant=plant_params(config), margin=float(q["recov_margin"]))
+
+
+def _passes_band_obstacle_screen(scene: Scene, config: Mapping[str, Any], params: _SceneModeParams) -> bool:
+    """v2.7.6 Stage-1: R6.2 3g-relaxed obstacle-doom screen as a joint admission condition, applied ONLY to
+    eval band-mode quadrotor_3d scenes. No-op (True) for every other system / mode / config, so the training
+    path and the canonical / full-range / non-band eval paths are untouched (inertness). Runs AFTER the
+    start-goal clearance filter, so the start is already >= clearance outside every obstacle (never the raw
+    start-in-obstacle case)."""
+    if params.mode != "eval" or scene.system != "quadrotor_3d":
+        return True
+    q = config.get("env", {}).get("quadrotor_3d", {})
+    ic_eval_z = q.get("ic_eval_z")
+    if not ic_eval_z or str(ic_eval_z.get("floor_mode", "vz")) != "band":
+        return True
+    from src.common.quadrotor_ballistic_doom import is_doomed_ballistic
+    accel_a = 4.0 * float(config["env"]["bounds"]["quadrotor_3d"]["f_rotor_max"]) / float(q["mass"]) + float(q["gravity"])
+    v0 = np.asarray(scene.initial_velocity, dtype=np.float64)
+    return not is_doomed_ballistic(scene.start[:2], v0[:2], scene.obstacle_centers,
+                                   scene.obstacle_radii, scene.obstacle_active, accel_a)
 
 
 def _has_start_goal_clearance(scene: Scene, clearance: float) -> bool:

@@ -105,8 +105,26 @@ def value_target_barrier(system: Any, x: Tensor, scene: Any, config: Any) -> Ten
     approach_fn = getattr(system, "approach_barrier", None)
     if approach_fn is not None:
         c = float(config["env"][system.name]["c_gain"])
-        return phi + c * approach_fn(x, scene, h_scale)
-    return phi
+        h = phi + c * approach_fn(x, scene, h_scale)
+    else:
+        h = phi
+    # v2.7.6 Stage-2: vertical band-hazard branches added to the max (quadrotor_3d only, config-gated).
+    #   psi_up = min(z - L, psi_cap),  psi_lo = min(-z - L, psi_cap);  h_z = psi +/- c_z v_z.
+    # psi_cap = obstacle r_max (same scale a cylinder contributes; else psi is unbounded and dominates).
+    # c_z = pi / omega_max (the flip time at the plant rate limit). Both READ from config, never chosen.
+    # d h_z / d v_z = +/- c_z != 0 including inside the cap (the clamp is on z, not v_z) -> relative degree 1
+    # on the vertical channel, L_g supported on the thrust channel c_z (Re)_z / m.
+    band = config["env"].get("band_hazard")
+    if band and bool(band.get("enabled", False)) and getattr(system, "name", None) == "quadrotor_3d":
+        limit = float(band["limit"])
+        psi_cap = float(config["obstacle"]["per_system"]["quadrotor_3d"]["r_max"])
+        c_z = math.pi / float(config["env"]["bounds"]["quadrotor_3d"]["omega_max"])
+        z = system.position(x)[..., 2]
+        v_z = x[..., 9]                                            # state [x,y,z,q(4),vx,vy,vz,w(3)]
+        psi_up = torch.clamp(z - limit, max=psi_cap)
+        psi_lo = torch.clamp(-z - limit, max=psi_cap)
+        h = torch.maximum(h, torch.maximum(psi_up + c_z * v_z, psi_lo - c_z * v_z))
+    return h
 
 
 def sample_near_B0_states(system: Any, config: Any, n: int, device, dtype,

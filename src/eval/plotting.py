@@ -1014,3 +1014,118 @@ def plot_quadrotor3d_cbf_contour(
     fig.savefig(output_path, bbox_inches="tight")
     plt.close(fig)
     return output_path
+
+
+def plot_quadrotor3d_yz_contour(system, value_net, config, scenes, output_path, role="CBF contour yz",
+                                resolution=61, source=""):
+    """v2.7.6 (04_eval s3b extension) — yz section: sweep (py, pz) at px=0; TWO attitude blocks (hover | tilt120)
+    x columns v_z in {-1.5,0,+1.5}; scenes as rows (2 rows x 6 cols). Overlays band |z|=4 and the analytic
+    band-branch h_star=0 (dashed, attitude-free so identical in both blocks). Returns {"path", "band_zero_offset":
+    {row_col: (V_hat=0 crossing pz) - (analytic h_star=0 pz) in the free-space column; hover keys row{i}_vz{v},
+    tilt keys row{i}_tilt120_vz{v}; NaN if no crossing and the column is all-safe, +(world-analytic) lower bound
+    if all-unsafe}, "grid_spacing": dz, "resolution": res}. The tilt120 descending offset measures the PNCBF
+    anticipation (V_hat turning positive above the attitude-free hazard line); hover ~0 is correct but
+    uninformative. The crossing is located by LINEAR
+    interpolation of the UNCLAMPED V_hat between the two nodes bracketing the sign change, so its precision is
+    sub-cell, not the grid node; the returned grid_spacing dz is the uncertainty band to report beside it.
+    Resolution is held at 61 across OC and JT so the two runs' offsets are directly comparable (an offset read at
+    a different resolution must NOT be compared to these without stating the spacing). `source` (pool stem) is
+    stamped in the title so figures from different pools are not mistaken for the same scenes. Batched forward on
+    the value net's own device/dtype (same as the xy contour)."""
+    import math as _m
+    from types import SimpleNamespace
+    from src.common.quadrotor_barrier import value_target_barrier
+    world = float(config["env"]["world_lim"])
+    dz = 2.0 * world / (resolution - 1)                  # grid spacing = offset uncertainty band
+    band = config.get("env", {}).get("band_hazard", {})
+    limit = float(band.get("limit", world))
+    c_z = _m.pi / float(config["env"]["bounds"]["quadrotor_3d"]["omega_max"])
+    try:
+        param = next(value_net.parameters()); dt, dev = param.dtype, param.device
+    except (StopIteration, AttributeError):
+        dt, dev = torch.float32, torch.device("cpu")
+    axis = np.linspace(-world, world, resolution); gy, gz = np.meshgrid(axis, axis, indexing="xy")
+    G = resolution * resolution
+    cols = [(-1.5, "v_z=-1.5"), (0.0, "v_z=0"), (1.5, "v_z=+1.5")]
+    # Two attitude blocks. hover (identity quat): the band branch of h_star is attained at t=0 (the vehicle
+    # arrests a 1.5 m/s descent in 0.15 s / 0.12 m, far inside the c_z|v_z|=1.2 m the lead term reserves), so
+    # V_hat SHOULD equal h_star and the offset ~0 is correct but uninformative. tilt120 (120 deg about body-x,
+    # past theta_hold=60 deg): the vehicle cannot arrest at any thrust and loses ~3.2 m. h_star's band branch is
+    # attitude-FREE, so its 0-line sits in the SAME place in both blocks; the gap to the V_hat=0 line in the tilt
+    # block is the PNCBF anticipation (V_hat as sup over the rolled-forward trajectory) -- the mechanism this
+    # version tests. Descending tilt offset materially POSITIVE = anticipating; ~0 = not anticipating (falsifier).
+    _tilt_q = [0.5, _m.sqrt(3.0) / 2.0, 0.0, 0.0]        # 120 deg about body-x: R[2,2]=cos120=-0.5 -> tilt 120 deg
+    blocks = [("hover", [1.0, 0.0, 0.0, 0.0]), ("tilt120", _tilt_q)]
+    ncol = len(blocks) * len(cols)
+    scenes = list(scenes)[:2] or list(scenes)
+    norm = TwoSlopeNorm(vmin=-1.0, vcenter=0.0, vmax=1.0)
+    fig, axes = plt.subplots(len(scenes), ncol, figsize=(5.0 * ncol, 5.2 * len(scenes)), dpi=FIG_DPI, squeeze=False)
+    fig.suptitle(f"{__version__} · {role} · quadrotor_3d V_hat yz (px=0) · pool={source or 'n/a'} · "
+                 f"res {resolution} (dz={dz:.3f} m) · blocks: hover | tilt120", fontsize=TITLE_FONT_SIZE)
+    offsets = {}; readout_py = {}; cf = None
+    support = world - 0.3            # 03_train 1.2 / _START_GOAL_ARENA_MARGIN: start/goal drawn in [-3.7, 3.7]
+    for ri, scene in enumerate(scenes):
+        C = np.asarray(scene.obstacle_centers, np.float64)[:, :2]; R = np.asarray(scene.obstacle_radii, np.float64)
+        Aa = np.asarray(scene.obstacle_active, bool)
+        scene_t = SimpleNamespace(obstacle_centers=torch.tensor(C, dtype=dt, device=dev),
+            obstacle_radii=torch.tensor(R, dtype=dt, device=dev), obstacle_active=torch.tensor(Aa, dtype=torch.bool, device=dev),
+            goal=torch.tensor(np.asarray(scene.goal, np.float64), dtype=dt, device=dev))
+        clr = np.full(resolution, np.inf)
+        for j in np.nonzero(Aa)[0]:
+            clr = np.minimum(clr, np.abs(axis - C[j, 1]) - (_m.sqrt(max(R[j]**2 - C[j, 0]**2, 0.0)) if abs(C[j, 0]) < R[j] else -abs(C[j, 0])))
+        # The readout column MUST lie inside the sampled support (|p_y| <= world-0.3); a column at the arena
+        # edge reads V_hat as extrapolation. Pick the max-clearance column among in-support p_y only; if even
+        # that is not genuine free space (does not clear every obstacle chord at px=0) there is no valid column.
+        insup = np.where(np.abs(axis) <= support)[0]
+        fp = int(insup[np.argmax(clr[insup])])
+        free_valid = bool(clr[fp] > 0.0)
+        readout_py[f"row{ri}"] = float(axis[fp]) if free_valid else float("nan")
+        for bi, (bname, quat) in enumerate(blocks):
+            for ci, (vz, lab) in enumerate(cols):
+                axp = axes[ri][bi * len(cols) + ci]
+                x = torch.zeros(G, 13, dtype=dt, device=dev)
+                x[:, 1] = torch.tensor(gy.reshape(-1), dtype=dt, device=dev); x[:, 2] = torch.tensor(gz.reshape(-1), dtype=dt, device=dev)
+                x[:, 3] = quat[0]; x[:, 4] = quat[1]; x[:, 5] = quat[2]; x[:, 6] = quat[3]; x[:, 9] = vz
+                with torch.no_grad():
+                    vhat = value_net.deployed_h(system.observation(x, scene_t)).reshape(-1)
+                    hstar = value_target_barrier(system, x, scene_t, config).reshape(-1)
+                vg = torch.clamp(vhat, -1, 1).cpu().numpy().reshape(resolution, resolution)   # clamped: color only
+                vhat_g = vhat.cpu().numpy().reshape(resolution, resolution)                   # UNCLAMPED: crossing
+                hg = hstar.cpu().numpy().reshape(resolution, resolution)
+                cf = axp.contourf(axis, axis, vg, levels=CONTOUR_LEVELS, cmap=CONTOUR_CMAP, norm=norm, extend="both")
+                if hg.min() <= 0.0 <= hg.max():
+                    axp.contour(axis, axis, hg, levels=[0.0], colors="black", linewidths=1.4)
+                for j in np.nonzero(Aa)[0]:
+                    if abs(C[j, 0]) < R[j]:
+                        h = _m.sqrt(R[j]**2 - C[j, 0]**2); axp.axvspan(C[j, 1] - h, C[j, 1] + h, color="0.4", alpha=0.16)
+                axp.axhline(limit, color="0.2", lw=0.8); axp.axhline(-limit, color="0.2", lw=0.8)
+                for pz0 in (-limit - c_z * vz, limit - c_z * vz):   # analytic h_star=0 (attitude-free: same in both blocks)
+                    if -world <= pz0 <= world:
+                        axp.axhline(pz0, color="magenta", ls="--", lw=1.2)
+                col_v = vhat_g[:, fp]                    # UNCLAMPED column: interpolate crossing on the true V_hat
+                zc = [float(axis[k] + (axis[k+1]-axis[k]) * (0-col_v[k]) / (col_v[k+1]-col_v[k]))
+                      for k in range(resolution-1) if (col_v[k] <= 0 <= col_v[k+1]) or (col_v[k] >= 0 >= col_v[k+1])]
+                if vz != 0.0:                                    # non-hover column -> record offset (+ = anticipating)
+                    analytic = (-limit - c_z * vz) if vz < 0 else (limit - c_z * vz)
+                    if not free_valid:                           # no in-support free-space column -> uninformative
+                        off_val = float("nan")
+                    elif zc:
+                        off_val = float(min(zc, key=lambda z: abs(z - analytic)) - analytic)
+                    elif float(col_v.min()) > 0.0:               # whole free-space column unsafe -> crossing above panel top
+                        off_val = float(world - analytic)        # positive LOWER bound (extreme anticipation)
+                    else:                                        # whole column safe -> no floor-unsafe region (no anticipation)
+                        off_val = float("nan")
+                    tag = f"row{ri}_vz{vz:+.1f}" if bname == "hover" else f"row{ri}_{bname}_vz{vz:+.1f}"
+                    offsets[tag] = off_val
+                if free_valid:
+                    axp.axvline(axis[fp], color="lime", ls=":", lw=0.7)
+                axp.set_xlim(-world, world); axp.set_ylim(-world, world); axp.set_aspect("equal")
+                axp.set_xlabel("p_y"); axp.set_ylabel("p_z")
+                _pytxt = f"py={axis[fp]:.2f}" if free_valid else "no in-support free col"
+                axp.set_title(f"row{ri} {bname} {lab} ({_pytxt})\nV_hat [{float(vhat.min()):.3f},{float(vhat.max()):.3f}]", fontsize=8)
+    if cf is not None:
+        fig.colorbar(cf, ax=axes, fraction=0.02, pad=0.02)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, bbox_inches="tight"); plt.close(fig)
+    return {"path": output_path, "band_zero_offset": offsets, "grid_spacing": dz, "resolution": resolution,
+            "readout_py": readout_py}

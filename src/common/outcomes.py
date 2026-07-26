@@ -34,6 +34,13 @@ def step_outcomes(
 ) -> StepOutcomeMasks:
     positions = system.position(states)
     collided = _collided_exact(positions, scene)
+    # v2.7.6 Stage-2: the arena band |p_z| >= band_collision_limit is a collision surface (01_env s1.6
+    # priority; collision outranks goal/oob in resolve_outcome). Config-gated: 0.0 = OFF (legacy, pre-Stage-2
+    # scoring, keeps the oob predicate as the only z outcome). 3D systems only. xy collision unchanged; the
+    # oob predicate (|z|>8) is UNCHANGED (collision at |z|>=4 simply preempts it in z, still live in xy).
+    band_z = float(config["env"].get("band_collision_limit", 0.0))
+    if band_z > 0.0 and positions.shape[-1] >= 3:
+        collided = collided | (torch.abs(positions[..., 2]) >= band_z)
 
     goal = torch.as_tensor(scene.goal, dtype=states.dtype, device=states.device)
     goal_distance = torch.linalg.norm(positions - goal, dim=-1)

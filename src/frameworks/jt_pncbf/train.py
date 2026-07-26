@@ -1930,6 +1930,48 @@ def _record_eval(
             contour_path,
             step,
         )
+    # v2.7.6 STANDING (04_eval s3b extension): for 3-D systems also emit the yz section and log the
+    # band_zero_offset scalar (V_hat=0 crossing - analytic h_star=0, per row x non-hover column, in the
+    # free-space column; negative = fires later than the hazard asks, NaN = no crossing) to TensorBoard and a
+    # band_offset_inloop.csv joinable to eval_metrics by step. Wrapped: a viz error never fails training.
+    if getattr(system, "name", None) == "quadrotor_3d":
+        try:
+            import csv as _csv
+            import numpy as _np
+            from src.eval.plotting import plot_quadrotor3d_yz_contour
+            # PIN the contour to the inloop pool's first two scenes (NOT eval_result.trajectories[:2], whose
+            # order differs from pool order and made the free-space column land on scenes without a band crossing
+            # -> spurious NaN). Fixed scenes also make the offset curve comparable across evals and OC vs JT.
+            _inloop_path = _pool_path("inloop", config, system.name)
+            scenes_yz = load_pool(_inloop_path).scenes[:2]
+            _src = _inloop_path.stem
+            yz = plot_quadrotor3d_yz_contour(system, value_net, config, scenes_yz,
+                run_dir / "figures/inloop" / f"step_{step:06d}_cbf_contour_yz.png", role="JT in-loop yz", source=_src)
+            log_png_to_tensorboard(writer, f"eval/in_loop/step_{step:06d}_cbf_contour_yz", yz["path"], step)
+            off = yz["band_zero_offset"]; _dz = yz["grid_spacing"]; _rpy = yz["readout_py"]
+            # Per-row descending offsets are the gate signal; means are only trend lines. hover ~0 is the easy
+            # (no-anticipation) case; the tilt120 descending offset is the PNCBF-anticipation curve to watch.
+            # readout_py is the in-support column each offset was read at (NaN if none inside |p_y|<=world-0.3).
+            _hov = [v for k, v in off.items() if k.endswith("vz-1.5") and "tilt" not in k]
+            _tlt = [v for k, v in off.items() if k.endswith("vz-1.5") and "tilt120" in k]
+            hov_rep = float(_np.nanmean(_hov)) if _hov and not all(_np.isnan(x) for x in _hov) else float("nan")
+            tlt_rep = float(_np.nanmean(_tlt)) if _tlt and not all(_np.isnan(x) for x in _tlt) else float("nan")
+            for k, v in off.items():
+                writer.add_scalar(f"eval/in_loop/band_zero_offset/{k}", v, step)
+            for k, v in _rpy.items():
+                writer.add_scalar(f"eval/in_loop/readout_py/{k}", v, step)
+            writer.add_scalar("eval/in_loop/band_zero_offset_hover_desc_mean", hov_rep, step)
+            writer.add_scalar("eval/in_loop/band_zero_offset_tilt120_desc_mean", tlt_rep, step)
+            writer.add_scalar("eval/in_loop/band_zero_offset_grid_spacing", _dz, step)
+            _p = run_dir / "band_offset_inloop.csv"; _new = not _p.exists()
+            with _p.open("a", newline="") as _fh:
+                _w = _csv.writer(_fh)
+                if _new:
+                    _w.writerow(["step", "grid_spacing", "hover_desc_mean", "tilt120_desc_mean"]
+                                + [f"readout_py_{k}" for k in _rpy] + list(off.keys()))
+                _w.writerow([step, _dz, hov_rep, tlt_rep] + [_rpy[k] for k in _rpy] + [off[k] for k in off])
+        except Exception as _e:  # noqa: BLE001 — diagnostic only
+            print(f"[yz-contour] step {step}: {_e}", flush=True)
     _write_tb_scalars(writer, f"eval/{eval_result.eval_row['mode']}", eval_result.eval_row, step)
 
 
