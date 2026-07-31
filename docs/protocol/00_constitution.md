@@ -239,12 +239,16 @@ The engineering disciplines that keep results attributable and the codebase main
 - **What git tracks vs. what stays local.**
   - **Tracked in git:** all `src/` (including `src/configs/`), `scripts/`, `docs/protocol/`,
     `docs/index.md`, `docs/ledger.md`, top-level files (`README.md`, `LICENSE`,
-    `pyproject.toml`, `mkdocs.yml`), and the **`data/secured_data/`** subtree. Code history
-    is recovered from commits and tags — code is never copied anywhere else to "save" it.
-  - **Local only (git-ignored):** `docs/versions/` (per-version `changes.md`, build-logs,
-    and `results.md` are working artifacts kept on disk), and every `data/<run_id>/`
-    directory except for entries inside `data/secured_data/`. In-flight run outputs are not
-    pushed; only the secured snapshot is.
+    `pyproject.toml`, `mkdocs.yml`), the **`data/secured_data/`** subtree, and
+    **`docs/versions/*_results.md`** — the per-version results documents at the
+    `docs/versions/` main level. Code history is recovered from commits and tags — code is
+    never copied anywhere else to "save" it.
+  - **Local only (git-ignored):** `docs/versions/vX.Y.Z/` (per-version `changes.md` and
+    build-logs are working artifacts kept on disk), and every `data/<run_id>/` directory
+    except for entries inside `data/secured_data/`. In-flight run outputs are not pushed;
+    only the secured snapshot is. The results documents are the exception: a new Strategist
+    instance is brought up to speed from the repository, and a verdict that is not in the
+    repository cannot be read.
 - **Run output convention.** Every run writes to `data/<run_id>/`, where
   `<run_id> = vX.Y.Z__YYYYMMDD-HHMMSS__seedNN`. There is no extra `data/logs/` indirection.
   At the close of a version, the chosen final runs are copied into
@@ -274,9 +278,14 @@ The engineering disciplines that keep results attributable and the codebase main
   performance requirements, logging, verification harness.
 - `docs/protocol/06_workflow.md` — three-actor workflow, version lifecycle, prompt format,
   decision-brief format.
+- `docs/protocol/07_tex_deck.md` — `.tex` and `.pptx` deliverables: the plan-then-build
+  workflow, deck build structure and layout constants, slide writing style, figure rules,
+  build and text-layer gates, and maintenance of the single theory document.
 - `docs/versions/vX.Y.Z/` (local-only) — per-active-version folder containing `changes.md`,
   Executor build-logs `<task>.md` (including any audit), and `results.md`.
 - `docs/ledger.md` — one row per run, with lineage and metrics.
+- `docs/tex/` — the single maintained theory document (`07_tex_deck` §10). One `.tex`; not
+  branched per version or per topic.
 
 **Configs (`src/configs/`):**
 

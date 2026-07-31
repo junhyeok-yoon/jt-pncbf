@@ -47,6 +47,13 @@ The Researcher decides to start a new version (`vX.Y.Z`). The Strategist drafts 
 
 `docs/versions/` is local-only (§6); `changes.md` is the Strategist's working spec for the version, not a tracked git artifact. It must exist on disk before code changes begin, and the Executor's first action is to read it.
 
+**When the bump happens.** The bump to the next version string is performed immediately after
+the preceding version's push, not at the next version's close. The close of `vX.Y.Z` therefore
+asserts that `src/_version.py`, `pyproject.toml`, and `exp_config.yaml` `run.version` all read
+`vX.Y.Z`; a mismatch is reported as a discrepancy and resolved before the close commit, because
+an artifact produced under a stale string is indistinguishable at run level from the previous
+version's.
+
 **Version-string bump checklist.** When the version number itself changes, the version
 string is encoded in several places and must be updated together so that new run-ids,
 package metadata, and config all agree. `src/_version.py` is the single source of truth;
@@ -124,11 +131,22 @@ an arm that did not exist for a given run is recorded `n/a`, which is not a regr
 warm-started row. The ledger is a docs file the Executor may edit; protocol files are never
 edited by the Executor.
 
+**A run trained under a defective configuration is not ledger material.** When a model was
+trained with a plant or observation configuration since found to be wrong — a missing state
+component, a mis-specified action space — its numbers describe a system that is not the one
+under study. Such a run may be deleted outright; it is not registered, and an already-registered
+row for it is removed rather than annotated.
+
 **`cps` is not commensurable across systems.** Systems differ in dynamics, control bounds, and
 evaluation pools, so a `cps` measured on one system is never compared with, ranked against, or
 substituted for a `cps` measured on another. The comparison rule of `04_eval` §5 and the SOTA
 rule below are both scoped to a single `system`. A cross-system comparison is reported as
 "comparison unavailable" (§5), never as a caveated number.
+
+**SOTA eligibility is a pool-size condition, not a row-type condition.** A row qualifies for
+the bold marking below whenever its evaluation used `n >= 2000` episodes. Whether the row was
+produced by a full-pool final, an in-loop best, or an eval-only re-evaluation does not enter the
+question; the pool size does.
 
 **Per-version, per-system SOTA marking (bold).** Within each version block in
 `docs/ledger.md`, and separately for each `system` appearing in that block, the single row with
@@ -226,7 +244,11 @@ a paused step suspends only its dependents, not the other steps.
 1. **Fact-gather retrieve** (Strategist authors, Executor runs). Read-only, with exactly two
    write exceptions: (a) create the EMPTY results placeholder
    `docs/versions/v<X>_results.md` containing only the single line
-   `# v<X> results — CLOSE IN PROGRESS (<date>)`, and (b) the retrieve report itself. The
+   `# v<X> results — CLOSE IN PROGRESS (<date>)`, and (b) the retrieve report itself.
+   **Work that is already done is not done again.** Before each step of this sequence begins,
+   its artifact is checked for existence; where the artifact already exists it is updated, not
+   rewritten, and existing content is never overwritten. Write exception (a) is therefore
+   performed only when `v<X>_results.md` is absent or empty. The
    report must cover: headline metrics recomputed from artifacts with CIs; provenance (run
    dirs, checkpoint SHA-256 prefixes); gate/test outcomes; ledger rows verbatim with bold
    state; version strings; git status; open `PROTOCOL FOLLOW-UP` items; and an explicit
@@ -239,6 +261,9 @@ a paused step suspends only its dependents, not the other steps.
    `data/previous_runs/`; [PAUSE] secured snapshot(s) + `ADOPTED.md` (the promotion scope is
    an explicit Researcher approval carried in the transmittal, never assumed);
    `docs/index.md` dashboard update; tagging of any untagged `PROTOCOL FOLLOW-UP`. **No git.**
+   The STATUS update is the last write of the close, performed after the secured promotion so
+   that it describes the finished state, and it is carried out by the Executor from the close
+   prompt rather than left to a separate hand edit.
 4. **Protocol delta** [PAUSE]. For each `PROTOCOL FOLLOW-UP` item that describes the current
    system or method (not a future axis), author the before→after edit as a diff (Prohibition
    3: state the rule on its own merits, no version narrative), then apply approved edits to
@@ -262,13 +287,15 @@ prepares the close (checklist items 2–3) but does NOT run git and does NOT dra
 git commands or commit messages (`00_constitution` §1, §3 Prohibition 4). The Executor's only
 git-adjacent contribution is the grouped file list from its action log. The Researcher performs
 `git add` / `commit` / `push` / `tag` directly via bash once close preparation is complete.
-Since `docs/versions/` is local-only (§6.2), the version's `changes.md`, build-logs, and
-results are not staged; what is committed is the code/config change, the updated dashboard
-and ledger, and the secured snapshot:
+The version's `changes.md` and build-logs stay local (§6.2) and are not staged; the results
+document is tracked (`00_constitution` §6) and is staged with the close. What is committed is
+the code/config change, the updated dashboard and ledger, the results document, and the secured
+snapshot:
 
 ```bash
 git add src/ tests/ \
         docs/protocol/ docs/index.md docs/ledger.md \
+        docs/versions/*_results.md docs/tex/ \
         src/configs/exp_config.yaml \
         data/secured_data/
 git commit -m "vX.Y.Z: <one-line summary>"
@@ -276,7 +303,7 @@ git tag vX.Y.Z
 git push && git push --tags
 ```
 
-`docs/index.md` (the state dashboard) and `docs/ledger.md` (one row per run, with lineage and `cps`) are updated as part of the same commit. Protocol edits, if any, are committed in the same step. The commit message is **one line, prose, no metrics or data** (`vX.Y.Z: <one-line summary>`) — the version's *what*, not its numbers; results, deltas, and CIs live in `results.md` and the ledger, never in the commit message. The tag `vX.Y.Z` is the authoritative reference to this version's code state; secured artifacts in `data/secured_data/` are the authoritative reference to its results. The version's process documents remain in the local-only `docs/versions/` and are not part of the tagged commit.
+`docs/index.md` (the state dashboard) and `docs/ledger.md` (one row per run, with lineage and `cps`) are updated as part of the same commit. Protocol edits, if any, are committed in the same step. The commit message is **one line, prose, no metrics or data** (`vX.Y.Z: <one-line summary>`) — the version's *what*, not its numbers; results, deltas, and CIs live in `results.md` and the ledger, never in the commit message. The tag `vX.Y.Z` is the authoritative reference to this version's code state; secured artifacts in `data/secured_data/` are the authoritative reference to its results. The version's working documents — `changes.md` and the build-logs — remain in the local-only `docs/versions/vX.Y.Z/` and are not part of the tagged commit; the results document is.
 
 Between version pushes, the Strategist reads the **last pushed state** (commits, secured data); in-flight, unsecured work is not the Strategist's source of truth.
 
@@ -295,7 +322,15 @@ Used to extract facts from the repository without altering it. Format:
 - **Hard constraints (safety).** Read-only on every file. No installs, no network, no state-changing commands. Output exactly one file; do not edit anything else.
 - **Scope.** Which subtrees to inspect, ordered by priority.
 - **Headings.** The exact section structure of the report (so multiple retrieves are comparable).
+- **Downstream artifact.** The document this retrieve feeds, and that document's required
+  fields, so completeness can be checked mechanically rather than by judgement.
 - **Done when.** A precise termination condition, ending with "print the report path and its line count, and nothing else."
+
+A retrieve aims to be a single pass: where a further pass is genuinely required it is run, but
+repeated or oversized dispatch for facts an earlier report already contains is waste and is not
+issued. The Strategist likewise does not ask the Researcher for a fact a retrieve can return.
+None of this narrows the Executor: it is a research actor, and observations, warnings,
+disagreements, and proposals outside the prompt's scope are reported rather than suppressed.
 
 Quotes from code must be ≤ ~25 lines and always carry a source path. Anything the retrieve cannot determine is reported as an explicit uncertainty, not guessed.
 
@@ -376,6 +411,11 @@ When sources disagree, follow `00_constitution` §2. Specifically:
 - **Strategist memory vs. code or recorded data.** The code and the data win. The Strategist verifies before reporting a number.
 - **Two retrieve reports conflict.** The more recent source wins; if uncertainty remains, a new retrieve is dispatched.
 - **Eval result vs. hypothesis.** The hypothesis is rejected. A prompt does **not** re-interpret the result to preserve the hypothesis; the result is reported as-is and the next version's hypothesis is revised accordingly.
+- **A number is quoted with its pool.** Two figures measured on different pools are not
+  compared, averaged, or substituted for one another, and a figure from a non-canonical pool
+  should name that pool where it is quoted. Pools do change over a lineage, so this is a
+  labelling obligation rather than a prohibition: the requirement is that the reader can tell
+  which pool a number came from, not that the pool never moves.
 - **Across-version comparison ambiguity.** If a comparison cannot be made on bit-identical pools, it is reported as "comparison unavailable" rather than reported with a caveat. The fix is to re-evaluate on the shared pool, not to caveat.
 
 ---

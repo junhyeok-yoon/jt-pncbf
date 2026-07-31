@@ -35,7 +35,8 @@ ENV/
 events.out.tfevents.*
 
 # Version / development documents (kept locally, not committed)
-docs/versions/
+docs/versions/*
+!docs/versions/*_results.md
 
 # Generated run artifacts: ignore everything under data/ (runs, eval, previous_runs, AND
 # secured_data). Secured snapshots and frozen pools are managed by the securing process and its

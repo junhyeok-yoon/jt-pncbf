@@ -14,4 +14,4 @@ if [[ -z "${PYTHON_BIN}" ]]; then
 fi
 
 cd "${ROOT_DIR}"
-PYTHONPATH="${ROOT_DIR}:${PYTHONPATH:-}" "${PYTHON_BIN}" -m pytest -q tests/
+PYTHONPATH="${ROOT_DIR}:${PYTHONPATH:-}" "${PYTHON_BIN}" -m pytest -q -rs tests/

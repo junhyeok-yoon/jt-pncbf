@@ -215,7 +215,7 @@ Large secured artifacts (checkpoint `.pt` files) are committed plain (no LFS). I
 
 ## 5. Verification harness (required before any framework code is allowed to run)
 
-The harness lives in `tests/` and must pass before any training. The Executor refuses to start training if any test in §5.1–§5.6 fails. This is a lightweight pre-commit gate implemented as a pytest invocation in `scripts/verify.sh`.
+The harness lives in `tests/` and must pass before any training. The Executor refuses to start training if any test in §5.1–§5.6 fails. This is a lightweight pre-commit gate implemented as a pytest invocation in `scripts/verify.sh`, which runs `pytest -q -rs` so that the identity of any skipped test is captured and not only its count.
 
 ### 5.1 QP correctness (CBF-QP)
 
