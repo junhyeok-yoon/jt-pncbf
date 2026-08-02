@@ -32,7 +32,8 @@ framework relationships.
 
 - **Researcher (PI).** Sets strategy and makes every decision. Sole authority over scope,
   version increments, convention changes, and whether or when to pursue publication.
-- **Strategist (chat model).** Analysis, framework proposals, prompt authorship, and
+- **Strategist (chat model).** Analysis, framework proposals, prompt authorship, the
+  theory document (`docs/tex/theory.tex`) as its own research output, and
   independent review of results. Persistent across sessions through this repository. Does
   not execute code and does not decide strategy unilaterally.
   Answers and authored prompts are concise: lead with the answer, elaborate only as much as
@@ -244,17 +245,19 @@ The engineering disciplines that keep results attributable and the codebase main
     `docs/versions/` main level. Code history is recovered from commits and tags — code is
     never copied anywhere else to "save" it.
   - **Local only (git-ignored):** `docs/versions/vX.Y.Z/` (per-version `changes.md` and
-    build-logs are working artifacts kept on disk), and every `data/<run_id>/` directory
-    except for entries inside `data/secured_data/`. In-flight run outputs are not pushed;
-    only the secured snapshot is. The results documents are the exception: a new Strategist
-    instance is brought up to speed from the repository, and a verdict that is not in the
-    repository cannot be read.
-- **Run output convention.** Every run writes to `data/<run_id>/`, where
-  `<run_id> = vX.Y.Z__YYYYMMDD-HHMMSS__seedNN`. There is no extra `data/logs/` indirection.
-  At the close of a version, the chosen final runs are copied into
-  `data/secured_data/<version>/seed<N>/` and committed. The shared evaluation pools live at
-  `data/secured_data/pools/` and are also committed, so that every version is evaluated
-  on bit-identical pools.
+    build-logs are working artifacts kept on disk), and the whole `data/runs/` subtree.
+    In-flight run outputs are not pushed; only the secured snapshot is. The results
+    documents are the exception: a new Strategist instance is brought up to speed from the
+    repository, and a verdict that is not in the repository cannot be read.
+- **Run output convention.** Every run writes to `data/runs/vX.Y.Z/<run_id>/`, where
+  `<run_id> = vX.Y.Z__YYYYMMDD-HHMMSS__seedNN`; a launch that produces several runs in
+  sequence groups them under `data/runs/vX.Y.Z/set__YYYYMMDD-HHMMSS__seedNN/`. The version
+  directory is chosen at creation time and artifacts are never relocated afterwards, so a
+  path is stable from the moment it is written. There is no extra `data/logs/` indirection
+  and no archive tier. At the close of a version, the chosen final runs are **copied** into
+  `data/secured_data/<version>/seed<N>/` and committed; the originals stay where they are.
+  The shared evaluation pools live at `data/secured_data/pools/` and are also committed, so
+  that every version is evaluated on bit-identical pools. Full layout: `05_code` §3.
 - **Update cadence.** `index.md` (the state dashboard) and `ledger.md` are updated and pushed
   at version boundaries. Between pushes, the Strategist reads the last-pushed state;
   in-flight results are shared through TensorBoard, not the site.
@@ -300,5 +303,5 @@ The engineering disciplines that keep results attributable and the codebase main
 
 **Code (`src/`):** the directory layout (`src/common`, `src/envs`, `src/eval`,
 `src/frameworks/{jt_pncbf,oc_pncbf}`, `src/configs`) and module boundaries are defined in
-`05_code`. The `data/` output layout (`data/<run_id>/` and `data/secured_data/`) is also
+`05_code`. The `data/` output layout (`data/runs/vX.Y.Z/` and `data/secured_data/`) is also
 defined there.

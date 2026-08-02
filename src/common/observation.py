@@ -34,6 +34,7 @@ def top_k_obstacles(
     radii: Tensor,
     active: Tensor,
     k: int,
+    return_indices: bool = False,
 ) -> tuple[Tensor, Tensor]:
     batch_size = positions.shape[0]
     if centers.ndim == 2:
@@ -68,7 +69,15 @@ def top_k_obstacles(
     top_rel = top_rel.masked_fill(~valid.unsqueeze(-1), 0.0)
     top_radii = top_radii.masked_fill(~valid, 0.0)
 
+    # v2.8.0 Phase-2 C1/D3 instrumentation (additive, opt-in): the selected obstacle indices per step, in
+    # rank order, with invalid (inactive/inf-distance) slots set to -1. Does not affect existing callers.
+    ind_out = None
+    if return_indices:
+        ind_out = indices.masked_fill(~valid, -1)
+
     if k_select == k:
+        if return_indices:
+            return top_rel, top_radii, ind_out
         return top_rel, top_radii
 
     pad_count = k - k_select
@@ -85,7 +94,9 @@ def top_k_obstacles(
         dtype=positions.dtype,
         device=positions.device,
     )
-    return torch.cat([top_rel, rel_pad], dim=1), torch.cat(
-        [top_radii, radii_pad],
-        dim=1,
-    )
+    top_rel_out = torch.cat([top_rel, rel_pad], dim=1)
+    top_radii_out = torch.cat([top_radii, radii_pad], dim=1)
+    if return_indices:
+        idx_pad = torch.full((positions.shape[0], pad_count), -1, dtype=ind_out.dtype, device=ind_out.device)
+        return top_rel_out, top_radii_out, torch.cat([ind_out, idx_pad], dim=1)
+    return top_rel_out, top_radii_out

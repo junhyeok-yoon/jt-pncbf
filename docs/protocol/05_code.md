@@ -139,52 +139,68 @@ class Framework(Protocol):
 
 ## 3. Output layout: data/
 
-The `data/` tree has only **two** layers: in-flight `<run_id>/` directories at the top, and a `secured_data/` subtree that is committed to git.
+The `data/` tree has exactly **two** subtrees: `runs/`, holding every artifact any run produces, git-ignored; and `secured_data/`, holding the frozen evaluation pools and the per-version snapshots, committed to git. Anything else appearing directly under `data/` is non-conforming and is reported rather than adopted.
+
+Every produced artifact is filed under the version that produced it, at creation time. Artifacts are never relocated afterwards — not at close, not at a version bump — so a path is stable from the moment it is written and the version that owns an artifact is readable from its path alone.
 
 ```text
 data/
-├── <run_id>/                              # in-flight, git-ignored (see §4)
-│   ├── config.yaml
-│   ├── git_commit.txt
-│   ├── tensorboard/
-│   ├── metrics.csv
-│   ├── eval_metrics.csv
-│   ├── eval_episodes.csv
-│   ├── status.json
-│   ├── pool_manifest.json
-│   ├── checkpoints/{step_NNNNNN.pt, best.pt, final.pt}
-│   ├── figures/{trajectory_grid_A.png, trajectory_grid_B.png, cbf_contour.png, inloop/step_*_{grid_*,cbf_contour}.png}
-│   └── report.md
-└── secured_data/                           # committed to git
+├── runs/                                       # git-ignored (see §4)
+│   └── vX.Y.Z/                                 # every artifact this version produced
+│       ├── <run_id>/                           # one execution
+│       ├── set__YYYYMMDD-HHMMSS__seed<N>/      # one multi-phase execution; holds <run_id>/ subdirectories
+│       └── <group>/                            # named artifact collection
+└── secured_data/                               # committed to git
     ├── pools/
     │   ├── eval_inloop_di_n200_seed12345.pkl
     │   ├── eval_inloop_di_n200_seed12345.manifest.json
     │   ├── eval_full_di_n500_seed23456.pkl
     │   └── eval_full_di_n500_seed23456.manifest.json
     └── <version>/
-        ├── seed<N>/                        # final snapshot per seed (see 04_eval §7.5)
-        ├── experiments/<name>/             # optional secured diagnostic, Researcher-gated (06_workflow §6.3)
+        ├── seed<N>/                            # final snapshot per seed (see 04_eval §7.5)
+        ├── experiments/<name>/                 # optional secured diagnostic, Researcher-gated (06_workflow §6.3)
         └── aggregate/
             ├── multi_seed_metrics.json
             └── multi_seed_report.md
 ```
 
-**`<run_id>` formats.** Every artifact directory under `data/` — without exception — carries the version and a timestamp:
+A `<run_id>/` directory holds:
 
-- **Training runs:** `vX.Y.Z__YYYYMMDD-HHMMSS__seed<N>` (e.g., `v2.0.1__20260529-171057__seed42`). This is the canonical form.
-- **Eval-only diagnostic runs** (a run that does no training, only re-evaluates an existing checkpoint under an ablation): `vX.Y.Z__YYYYMMDD-HHMMSS__<descriptive>_seed<N>`, where `<descriptive>` is a short snake_case tag (e.g. `hardnet_oc`, `cbfqp_oc`, `slowmpc`). The descriptive form must never collide with a training run id (see `04_eval` §7.1).
-- **Non-training artifact runs** — dataset or label generation, supervised regression, demonstration collection, registries, and any other produced artifact set: `vX.Y.Z__YYYYMMDD-HHMMSS__<descriptive>[_seed<N>]`, under the same rules; `_seed<N>` is appended only when a seed identifies the artifact.
+```text
+<run_id>/
+├── config.yaml
+├── git_commit.txt
+├── tensorboard/
+├── metrics.csv
+├── eval_metrics.csv
+├── eval_episodes.csv
+├── status.json
+├── pool_manifest.json
+├── checkpoints/{step_NNNNNN.pt, best.pt, final.pt}
+├── figures/{trajectory_grid_A.png, trajectory_grid_B.png, cbf_contour.png, inloop/step_*_{grid_*,cbf_contour}.png}
+└── report.md
+```
 
-Two rules follow, and they admit no exception:
+**Three kinds of entry under `data/runs/vX.Y.Z/`, and only three.**
 
-- **The timestamp is never omitted.** A directory named `vX.Y.Z__<descriptive>` is malformed regardless of what it holds.
-- **No loose files at the top of `data/`.** Every produced file lives inside a `<run_id>/` directory; a registry or manifest that spans several runs gets its own `<run_id>/` directory.
+- **`<run_id>/` — one execution.** Three formats:
+  - **Training runs:** `vX.Y.Z__YYYYMMDD-HHMMSS__seed<N>` (e.g. `v2.0.1__20260529-171057__seed42`). This is the canonical form.
+  - **Eval-only diagnostic runs** (a run that does no training, only re-evaluates an existing checkpoint under an ablation): `vX.Y.Z__YYYYMMDD-HHMMSS__<descriptive>_seed<N>`, where `<descriptive>` is a short snake_case tag (e.g. `hardnet_oc`, `cbfqp_oc`, `slowmpc`). The descriptive form must never collide with a training run id (see `04_eval` §7.1).
+  - **Non-training artifact runs** — dataset or label generation, supervised regression, demonstration collection, registries, and any other produced artifact set: `vX.Y.Z__YYYYMMDD-HHMMSS__<descriptive>[_seed<N>]`, under the same rules; `_seed<N>` is appended only when a seed identifies the artifact.
 
-The Researcher / Strategist sees the `<run_id>` format consistently across `metrics.csv`, `ledger.md`, and TensorBoard.
+  **The timestamp is never omitted.** A directory named `vX.Y.Z__<descriptive>` is malformed regardless of what it holds. The version literal is retained even though the parent path already carries it, because the run-id is the provenance key that appears in `metrics.csv`, `ledger.md`, and TensorBoard, and must identify the run without its path.
 
-**`data/<run_id>/config.yaml`** — the **effective** configuration: deep-merge of `base_config.yaml`, `exp_config.yaml`, and any CLI overrides. Written **once** at run start; never re-read at runtime (the trainer reads the merged in-memory config). This file is the audit record.
+- **`set__YYYYMMDD-HHMMSS__seed<N>/` — one multi-phase execution.** Used when a single launch produces several runs in sequence, for example a value-learning phase followed by a policy phase. It holds `<run_id>/` subdirectories and nothing else. It carries no version literal: it is not itself a run, and the parent path supplies the version.
 
-**`data/<run_id>/git_commit.txt`** — full hash and a dirty flag (e.g. `5f3a9e... DIRTY` if the working tree is unclean at run start). A dirty start emits a warning to stdout but does not block the run.
+- **`<group>/` — a named artifact collection** that is not an execution: analysis outputs, derived tables, figure sets. snake_case, unique within the version, no timestamp — the parent path scopes it to a version and the name distinguishes it within that version.
+
+**No loose files.** Nothing sits directly under `data/`, `data/runs/`, or `data/runs/vX.Y.Z/`. Every produced file lives inside one of the three entry kinds; a registry or manifest spanning several runs gets its own `<run_id>/`.
+
+**Abbreviation.** Where the rest of the protocol writes `data/<run_id>/`, it means `data/runs/vX.Y.Z/<run_id>/`, or `data/runs/vX.Y.Z/set__…/<run_id>/` for a phase of a multi-phase execution.
+
+**`config.yaml`** — the **effective** configuration: deep-merge of `base_config.yaml`, `exp_config.yaml`, and any CLI overrides. Written **once** at run start; never re-read at runtime (the trainer reads the merged in-memory config). This file is the audit record.
+
+**`git_commit.txt`** — full hash and a dirty flag (e.g. `5f3a9e... DIRTY` if the working tree is unclean at run start). A dirty start emits a warning to stdout but does not block the run.
 
 **File schemas** — defined in `04_eval` §7.2 / §7.3. `05_code` does not duplicate.
 
@@ -192,22 +208,25 @@ The Researcher / Strategist sees the `<run_id>` format consistently across `metr
 
 ## 4. `.gitignore` policy
 
-`data/` is by default git-ignored, with `secured_data/` carved out. `docs/versions/` is git-ignored entirely (per-version `changes.md`, build-logs, and `results.md` are local working artifacts). Exact rules:
+`data/` is git-ignored with `secured_data/` carved back out. `docs/versions/` is git-ignored except for the per-version results documents, which are tracked (`00_constitution` §6); `changes.md` and build-logs stay local. Exact rules:
 
 ```text
 # .gitignore (relevant portion)
+docs/versions/*
+!docs/versions/*_results.md
 data/*
 !data/secured_data/
 !data/secured_data/**
-docs/versions/
 ```
 
 This pattern:
 
-- ignores every in-flight `data/<run_id>/`;
-- tracks **everything** inside `data/secured_data/` (pools and version snapshots);
-- keeps `docs/versions/` local-only;
+- ignores everything under `data/runs/`;
+- tracks everything inside `data/secured_data/` — the pools and the version snapshots;
+- keeps `docs/versions/vX.Y.Z/` local-only while tracking `docs/versions/*_results.md`;
 - requires no manual exception per file.
+
+**Why the two `secured_data` negations are kept.** `data/*` matches `data/secured_data` itself but not paths below it, and because that subtree holds tracked files git descends into it anyway; without the negations a newly promoted snapshot therefore still surfaces as untracked rather than ignored. That outcome rests on an interaction between the pattern's single `*` and the contents of the index, not on anything stated. The negations say the intent directly, so the tracking of `secured_data/` does not depend on that interaction continuing to hold. Changing these two lines is a Researcher decision. Separately and independently of the pattern, a secured promotion confirms with `git status --short` that the new files are staged before the commit; a promotion is not complete until they are committed (`06_workflow` §6.3).
 
 Large secured artifacts (checkpoint `.pt` files) are committed plain (no LFS). If the secured tree later grows beyond a few hundred megabytes, switching to git-LFS is a one-line `.gitattributes` change and is reserved as a one-axis future task.
 
@@ -216,6 +235,8 @@ Large secured artifacts (checkpoint `.pt` files) are committed plain (no LFS). I
 ## 5. Verification harness (required before any framework code is allowed to run)
 
 The harness lives in `tests/` and must pass before any training. The Executor refuses to start training if any test in §5.1–§5.6 fails. This is a lightweight pre-commit gate implemented as a pytest invocation in `scripts/verify.sh`, which runs `pytest -q -rs` so that the identity of any skipped test is captured and not only its count.
+
+**Verification independence.** A check never shares the code path, row filter, or parser of what produced its subject: table checks use an independent parser, not the editing script's split; liveness checks pin the launched PID and read `/proc` plus artifact freshness, never self-matchable name greps. A pass report states what makes the verifier independent.
 
 ### 5.1 QP correctness (CBF-QP)
 
@@ -291,6 +312,8 @@ Concrete requirements:
 The smoke stage (`03_train` §6) implicitly exercises the batched code paths at small batch size; it does not measure utilization.
 
 ---
+
+**Sweeps.** Multi-cell sweeps default to one cell per fresh process (no cross-cell GPU accumulation; one lineage per cell) with per-cell sidecars for resume. This is not serialization: cells and light diagnostics run in parallel wherever memory allows; the default yields only where parallel execution is actually impossible. O(T·W·B) window operations are chunked or running-form when introduced or touched; fixing one site greps the eval path for the same pattern and reports findings.
 
 ## 8. Reproducibility
 

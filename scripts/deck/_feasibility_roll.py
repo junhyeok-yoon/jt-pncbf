@@ -12,7 +12,7 @@ from src.eval.build_pools import load_pool
 from src.envs.scene_batch import batch_scenes, initial_states_from_batch
 from src.common.rk4 import rk4_step
 
-CK = Path("data/previous_runs/v2.7.6/set__20260725-043415__seed42/v2.7.6__jt__20260725-052127__seed42/checkpoints/step_042000.pt")
+CK = Path("data/runs/v2.7.6/set__20260725-043415__seed42/v2.7.6__jt__20260725-052127__seed42/checkpoints/step_042000.pt")
 POOL = Path("data/eval_pools/eval_full_quadrotor-3d-d2r_n2000_seed23456.pkl")
 OUT = Path("/tmp/claude-1000/-home-junhyeok-MIT-jt-pncbf/31d93785-ac11-4206-bf50-a4c3de145dff/scratchpad/feas_roll.npz")
 T, DT, GOAL_R = 200, 0.05, 0.15

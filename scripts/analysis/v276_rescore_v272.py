@@ -19,7 +19,7 @@ from scripts.analysis.v276_m7_fallback_trial import _split, _filter_for
 REPO = Path("/home/junhyeok/MIT/jt-pncbf")
 POOL = REPO / "data/eval_pools/eval_full_quadrotor-3d-d2r_n2000_seed23456.pkl"   # canonical 0ef3751b (shared home)
 CK = REPO / "data/secured_data/v2.7.2/seed42/checkpoints/best.pt"                # v2.7.2 secured, sha8 4baaf031
-OUT = REPO / "data/previous_runs/v2.7.6/stage2_eval/rescore_v272_canonical.json"
+OUT = REPO / "data/runs/v2.7.6/stage2_eval/rescore_v272_canonical.json"
 COMPS = ("cps", "reach", "collision", "oob", "stuck", "timeout", "infeasibility")
 DEV = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

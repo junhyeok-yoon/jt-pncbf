@@ -5,7 +5,8 @@
 --execute : move one directory at a time with rename, verifying each; SKIP active (held-open) runs and
             anything under data/secured_data/. Re-derives the plan (does not trust a stale tsv).
 
-Move set: top-level data/ dirs except {eval, eval_pools, secured_data, runs} and previous_runs/* (absorbed).
+Move set: top-level data/ dirs except {eval, eval_pools, secured_data, runs}. (The former previous-runs
+archive was absorbed into data/runs/<version>/ and retired in v2.8.0; it no longer exists.)
 Routing: a name matching the canonical run-id structure -> data/runs/<version>/; otherwise ->
 data/runs/_unversioned/ with its name unchanged. Never guesses a version from mtime or content.
 """
@@ -32,10 +33,7 @@ def _move_candidates() -> list[Path]:
     for d in sorted(DATA.iterdir()):
         if not d.is_dir() or d.name in STAY:
             continue
-        if d.name == "previous_runs":
-            out += [c for c in sorted(d.iterdir()) if c.is_dir()]     # absorbed (contents distributed)
-        else:
-            out.append(d)
+        out.append(d)
     return out
 
 

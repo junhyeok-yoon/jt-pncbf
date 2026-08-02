@@ -61,6 +61,89 @@ class FullEvalResult:
     plotted_episode_count: int
 
 
+_FINAL_CELL_SPECS = {
+    "mixed": ("eval_inloop_quadrotor-3d-d2r-mixed_n2000_seed45678", True),
+    "tilt60": ("eval_navcone_quadrotor-3d-d2r_n2000_seed34567", True),
+    "bandopen": ("eval_full_quadrotor-3d-d2r_n2000_seed23456", False),
+}
+
+
+def final_cell_specs(config: Mapping[str, Any], system_name: str) -> list[tuple[str, str | None, bool]]:
+    """v2.8.0 W2: the final-eval cells. quadrotor_3d -> mixed / tilt60 / bandopen (restrictable via
+    eval.final.cells, default all three); every other system -> a single 'main' cell (today's behaviour,
+    pool resolved as before, band terminating). Returns (cell_name, pool_stem_or_None, band_terminates)."""
+    if system_name != "quadrotor_3d":
+        return [("main", None, True)]
+    requested = config.get("eval", {}).get("final", {}).get("cells", ["mixed", "tilt60", "bandopen"])
+    return [(c, _FINAL_CELL_SPECS[c][0], _FINAL_CELL_SPECS[c][1]) for c in requested if c in _FINAL_CELL_SPECS]
+
+
+def dual_scoring_ledger_rows(
+    *, date: str, parent: str, run_id: str, seeds: str, blended_cps: float,
+    tilt60: Mapping[str, Any], bandopen: Mapping[str, Any],
+) -> list[str]:
+    """v2.8.0 W3: emit the two adjacent eval_only ledger rows for a quadrotor_3d final eval — one carrying
+    cps_tilt60, one carrying cps_bandopen as `value (crossing rate)` — sharing parent/date/run id, with the
+    mixed cell's blended cps recorded in both rows' eval_source for continuity with the historical cps column.
+    18 columns (schema of Part L); no unescaped `|` in text (norm written as ‖). Each returned string parses
+    to the header's cell count under the R-audit parser."""
+    def _row(cell, cps_tilt60_cell, cps_bandopen_cell, src, verdict):
+        o = cell
+        return ("| v2.8.0 | quadrotor_3d | %s | %s | %s | %.4f | %s | %s | %s | %.4f | %.4f | %.4f | %.4f | "
+                "%.4f | %.4f | %.4f | %.4f | %s |" % (
+                    date, parent, seeds, blended_cps, cps_tilt60_cell, cps_bandopen_cell, src,
+                    o["reach"], o["collision"], o["oob"], o["stuck"], o["timeout"], o["infeasibility"],
+                    o["saturation_rate"], o["cps"], verdict))
+    src = "eval_only(dual-scoring final, run %s; mixed blended cps %.4f)" % (run_id, blended_cps)
+    row_tilt = _row(tilt60, "%.4f" % tilt60["cps"], "", src,
+                    "cps_tilt60 cell (navcone e54d8cd6, band terminating); read with cps_bandopen row; "
+                    "mixed blended %.4f; unbolded" % blended_cps)
+    row_band = _row(bandopen, "", "%.4f (%.4f)" % (bandopen["cps"], bandopen["crossing_rate"]), src,
+                    "cps_bandopen cell (canonical 0ef3751b, band-open); value (crossing rate); read with "
+                    "cps_tilt60 row; mixed blended %.4f; unbolded" % blended_cps)
+    return [row_tilt, row_band]
+
+
+def run_final_cells(
+    run_dir: Path,
+    framework: Any,
+    config: Mapping[str, Any],
+    checkpoint: Mapping[str, Any],
+    checkpoint_path: Path,
+    max_scenes: int | None = None,
+) -> dict[str, dict[str, Any]]:
+    """v2.8.0 W2: run the dual-scoring final cells for quadrotor_3d (mixed / tilt60 / bandopen), each on its
+    own pool with its own band_terminates setting, writing a named artifact set under run_dir/eval/<cell>/
+    (eval_metrics.csv with the half sub-scores where applicable, eval_episodes.csv with collision_cause and
+    band_crossings, config.yaml). Non-3D systems and the 'main' cell are handled by run_full_eval's standing
+    single eval; run_final_cells only produces the pool-backed 3-D cells."""
+    import copy
+    from src.eval.build_pools import resolve_pool_or_raise
+    # Each cell reuses the passed framework (within-process eval reuse is deterministic) and differs only by
+    # its pool and its env.band_terminates readout. NOTE (v2.8.0 W4): the n2000 GPU eval is not bit-reproducible
+    # across *processes* (~0.002-0.004; a handful of borderline episodes flip); cells reproduce their standalone
+    # sidecars within that band, not bit-for-bit. See docs/versions/v2.8.0/wiring_and_chatter.md (W4).
+    out: dict[str, dict[str, Any]] = {}
+    for name, pool_stem, band_term in final_cell_specs(config, framework.system.name):
+        if pool_stem is None:
+            continue
+        cell_cfg = copy.deepcopy(_plain_data(config))
+        cell_cfg.setdefault("env", {})["band_terminates"] = bool(band_term)
+        res = evaluate(framework, resolve_pool_or_raise(pool_stem), cell_cfg, mode="final",
+                       step=int(checkpoint["step"]), ckpt_name=checkpoint_path.name,
+                       max_scenes=max_scenes, include_lqr_baseline=False)
+        cell_dir = run_dir / "eval" / name
+        cell_dir.mkdir(parents=True, exist_ok=True)
+        cols = EVAL_METRIC_COLUMNS + [c for c in ("cps_full_half", "cps_tilt60_half") if c in res.eval_row]
+        _append_csv(cell_dir / "eval_metrics.csv", cols, [res.eval_row])
+        _append_csv(cell_dir / "eval_episodes.csv", EVAL_EPISODE_COLUMNS, res.episode_rows)
+        (cell_dir / "config.yaml").write_text(yaml.safe_dump(cell_cfg, sort_keys=False), encoding="utf-8")
+        out[name] = {"metrics": cell_dir / "eval_metrics.csv", "episodes": cell_dir / "eval_episodes.csv",
+                     "config": cell_dir / "config.yaml", "cps": float(res.eval_row["cps"]),
+                     "band_terminates": bool(band_term)}
+    return out
+
+
 def run_full_eval(
     run_dir: Path,
     *,
@@ -126,6 +209,11 @@ def run_full_eval(
         )
         _append_csv(run_dir / "eval_metrics.csv", EVAL_METRIC_COLUMNS, insertion_eval_rows)
         _append_csv(run_dir / "eval_episodes.csv", EVAL_EPISODE_COLUMNS, insertion_episode_rows)
+    # v2.8.0 W2: for quadrotor_3d the final eval additionally emits the dual-scoring cells (mixed / tilt60 /
+    # bandopen) as named artifact sets under run_dir/eval/<cell>/. Non-3D systems are untouched (the standing
+    # single eval above is their one 'main' cell).
+    if framework.system.name == "quadrotor_3d":
+        run_final_cells(run_dir, framework, config, checkpoint, checkpoint_path, max_scenes=max_scenes)
     filter_works_count = sum(
         1
         for trajectory in eval_result.trajectories[:32]
@@ -205,7 +293,9 @@ def _load_framework(
     checkpoint_path: Path,
     config_overrides: Mapping[str, Any] | None = None,
 ) -> tuple[Any, Mapping[str, Any], dict[str, Any]]:
-    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    # v2.8.0 B6.2: load to the run device rather than forcing CPU (was map_location="cpu").
+    _run_dev = "cuda" if torch.cuda.is_available() else "cpu"
+    checkpoint = torch.load(checkpoint_path, map_location=_run_dev, weights_only=False)
     framework = str(checkpoint.get("framework", "oc_pncbf"))
     if framework == "oc_pncbf":
         from src.frameworks.oc_pncbf.train import load_framework_from_checkpoint
@@ -708,6 +798,10 @@ def _insertion_episode_row(
         t_insert,
     )
     path_delta = positions[1:] - positions[:-1]
+    if outcome == "goal" and 0 <= event_step < result.states.shape[0]:
+        angrate_at_reach = float(system.angular_rate(result.states[event_step])[0].item())
+    else:
+        angrate_at_reach = float("nan")
     return {
         "mode": mode,
         "step": int(step),
@@ -733,6 +827,12 @@ def _insertion_episode_row(
         "mean_proj_mag": float(projection.mean().item()) if projection.numel() else 0.0,
         "max_h": float(h_values.max().item()),
         "traj_path_len": float(torch.linalg.norm(path_delta, dim=-1).sum().item()),
+        "angrate_at_reach": angrate_at_reach,
+        "collision_cause": (resolved.collision_cause[0] if resolved.collision_cause else ""),
+        # v2.8.0 schema parity: the insertion path always runs band-terminating, so a band crossing is the
+        # terminal collision (0/1 with its step); the floor-permissive readout is exercised via evaluate().
+        "band_crossings": (1 if (resolved.collision_cause and resolved.collision_cause[0] in ("band_lower", "band_upper")) else 0),
+        "first_crossing_step": (int(event_step) if (resolved.collision_cause and resolved.collision_cause[0] in ("band_lower", "band_upper")) else -1),
     }
 
 
@@ -755,6 +855,11 @@ def _step_outcomes_with_insertion(
         oob=torch.where(time_mask, inserted.oob, original.oob),
         stuck=inserted.stuck,
         window_displacement=inserted.window_displacement,
+        # v2.8.0: mux the collision cause channels the same way (band surfaces are insertion-invariant;
+        # obstacle changes because the inserted obstacle can add contacts after t_insert).
+        collided_obstacle=torch.where(time_mask, inserted.collided_obstacle, original.collided_obstacle),
+        collided_band_lower=torch.where(time_mask, inserted.collided_band_lower, original.collided_band_lower),
+        collided_band_upper=torch.where(time_mask, inserted.collided_band_upper, original.collided_band_upper),
     )
 
 

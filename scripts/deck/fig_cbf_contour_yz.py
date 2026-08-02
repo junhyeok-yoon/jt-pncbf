@@ -20,7 +20,7 @@ from scripts.deck.deck_style import save, BEFORE, AFTER
 
 SCRATCH = Path("/tmp/claude-1000/-home-junhyeok-MIT-jt-pncbf/31d93785-ac11-4206-bf50-a4c3de145dff/scratchpad/m17_src")
 CK_PRE = Path("data/runs/v2.7.4/set__20260720-083533__seed42/v2.7.4__20260720-091830__seed42/checkpoints/best.pt")
-JT_YZ = Path("data/previous_runs/v2.7.6/stage2_eval/yz_headline_step42000.png")   # recorded after (09c33bf4) grid
+JT_YZ = Path("data/runs/v2.7.6/stage2_eval/yz_headline_step42000.png")   # recorded after (09c33bf4) grid
 INLOOP = Path("data/eval_pools/eval_inloop_quadrotor-3d-d2r_n500_seed12345.pkl")
 CMAP, NORM = "coolwarm", TwoSlopeNorm(vmin=-1.0, vcenter=0.0, vmax=1.0)
 SLICE = ("slice: p_x=0 m, (p_y, p_z) swept  ·  v=(v_x, v_y, v_z)=(0, 0, −1.5) m/s  ·  "

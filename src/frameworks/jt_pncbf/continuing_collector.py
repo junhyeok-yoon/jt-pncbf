@@ -110,6 +110,7 @@ def advance_round(
     k_hover = int(cc["k_hover"]); w = int(cc["stationary_window"])
     stat_thresh = float(cc["stationary_thresh"]); ep_timeout = int(cc["episode_timeout"])
     goal_radius = float(config["env"]["goal_radius"]); goal_speed = float(config["env"]["goal_speed_radius"])
+    goal_angrate = float(config["env"].get("goal_angrate_radius", float("inf")))   # v2.8.0: angular reach term
     st = ContinuingStats()
     _do_sync = (sync and torch.cuda.is_available())
 
@@ -153,11 +154,13 @@ def advance_round(
             p = system.position(state.x)                            # [B,2]
             dist = torch.linalg.norm(p - goals, dim=1)              # [B]
             spd = system.speed(state.x)                            # [B]
+            arate = system.angular_rate(state.x)                   # [B] (structural 0 on DI/unicycle)
             state.pos_ring[:, state.gstep % (w + 1)] = p
             lag = state.pos_ring[:, (state.gstep - w) % (w + 1)]
             disp = torch.linalg.norm(p - lag, dim=1)               # [B]
         # one host<->device sync per step: stack the two boolean predicates and pull them together
-        both = torch.stack([(dist <= goal_radius) & (spd <= goal_speed), disp < stat_thresh], dim=0).cpu().numpy()
+        both = torch.stack([(dist <= goal_radius) & (spd <= goal_speed) & (arate <= goal_angrate),
+                            disp < stat_thresh], dim=0).cpu().numpy()
         goal_now, disp_hit = both[0], both[1]
         cu = state.goal_hit_countup
         cu[:] = np.where(cu >= 0, cu + 1, np.where(goal_now, 0, -1))

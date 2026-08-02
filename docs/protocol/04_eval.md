@@ -308,6 +308,8 @@ The pool generation script is `src/eval/build_pools.py`, which accepts `system` 
 
 ---
 
+**Reproducibility is a lineage property.** Bit-reproduction of an n≥2000 GPU eval is demanded only within a lineage (same first-eval order, same algorithm selection). Across processes or lineages, single values carry a ±0.005 equivalence band; a difference inside the band is not an effect, and claims below it require a paired or same-process design. Every reproduction gate names its target's lineage; per-episode claims are lineage-dependent and stated as such.
+
 ## 7. Output schema
 
 This is the **only** evaluation output specification. Every framework produces the same files at the same paths within `data/<run_id>/`.

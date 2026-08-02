@@ -61,7 +61,7 @@ from src.common.value_net import make_h_fn  # noqa: E402
 
 DEF_V222 = REPO_ROOT / "data/v2.2.2__20260618-054411__seed42/checkpoints/best.pt"
 DEF_SOTA = REPO_ROOT / "data/secured_data/v2.0.1/seed42/checkpoints/best.pt"
-DEF_V221 = REPO_ROOT / "data/previous_runs/v2.2.1__20260618-001001__seed42/checkpoints/best.pt"
+DEF_V221 = REPO_ROOT / "data/runs/v2.2.1/v2.2.1__20260618-001001__seed42/checkpoints/best.pt"
 DEF_POOL = REPO_ROOT / "data/secured_data/pools/eval_full_di_n500_seed23456.pkl"
 CACHE_ROOT = REPO_ROOT / "data/diagnostics/v2.2.2_calibration_reach"
 DOC = REPO_ROOT / "docs/versions/v2.2.2/calibration_reach_diagnosis.md"

@@ -38,12 +38,20 @@ events.out.tfevents.*
 docs/versions/*
 !docs/versions/*_results.md
 
-# Generated run artifacts: ignore everything under data/ (runs, eval, previous_runs, AND
-# secured_data). Secured snapshots and frozen pools are managed by the securing process and its
-# ADOPTED.md manifests; their SHA-256 pins are the integrity mechanism, not git. Committing large
-# .pt/.pkl binaries would bloat the repo irreversibly, so data/secured_data/ is intentionally NOT
-# re-included here (the prior !data/secured_data/ negation was removed in v2.7.4 staging).
+# Generated run artifacts: ignore everything under data/ (runs, eval, the working tree) EXCEPT the
+# secured tree, which is re-included by the two negations below. The negations are kept deliberately.
+# `data/*` matches only one level down, and because data/secured_data/ already holds tracked files
+# git descends into it regardless — so the secured tree is tracked today only through an interaction
+# between this ignore pattern and the index, not through anything this file states. The two negations
+# make the intent explicit, so the tracking of data/secured_data/ does not rest on that accident
+# (06_workflow §6.3: a bold row whose checkpoint is not in the repository is a claim the repository
+# cannot back). Secured snapshots and frozen pools carry SHA-256 pins in their ADOPTED.md manifests
+# as the integrity mechanism. `!data/secured_data/` re-includes the directory; `!data/secured_data/**`
+# re-includes its contents recursively (both lines are needed — the directory negation alone does not
+# un-ignore the files beneath it).
 data/*
+!data/secured_data/
+!data/secured_data/**
 
 # Close-out tooling: the manifest + staging script that BUILD the commit, not artifacts of it.
 .close_tooling/

@@ -10,7 +10,7 @@ from src.frameworks.jt_pncbf.train import load_framework_from_checkpoint
 REPO=Path("/home/junhyeok/MIT/jt-pncbf"); SP=Path("/tmp/claude-1000/-home-junhyeok-MIT-jt-pncbf/31d93785-ac11-4206-bf50-a4c3de145dff/scratchpad")
 SYS={
  "DI_v2.3.0_s42":  (REPO/"data/secured_data/v2.3.0/seed42/checkpoints/best.pt", REPO/"data/secured_data/pools/eval_full_di_n2000_seed23456.pkl"),
- "UNI_v2.2.2_28k": (REPO/"data/previous_runs/v2.2.2__20260619-083424__seed42/checkpoints/best.pt", REPO/"data/secured_data/pools/eval_full_unicycle_n2000_seed23456.pkl"),
+ "UNI_v2.2.2_28k": (REPO/"data/runs/v2.2.2/v2.2.2__20260619-083424__seed42/checkpoints/best.pt", REPO/"data/secured_data/pools/eval_full_unicycle_n2000_seed23456.pkl"),
 }
 def boot(v,seed=20260718,n=10000):
     v=np.asarray(v); rng=np.random.default_rng(seed); b=np.array([v[rng.integers(0,len(v),len(v))].mean() for _ in range(n)])

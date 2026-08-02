@@ -115,6 +115,9 @@ class QuadrotorQuad3D:
     def speed(self, x: Tensor) -> Tensor:
         return torch.linalg.norm(x[..., 7:10], dim=-1)
 
+    def angular_rate(self, x: Tensor) -> Tensor:
+        return torch.linalg.norm(x[..., 10:13], dim=-1)      # body angular rate ||omega||
+
     def thrust_axis(self, x: Tensor) -> Tensor:
         """Body up-axis in world = R(q) e3 (3rd column)."""
         return _quat_to_R(x[..., 3:7])[..., :, 2]

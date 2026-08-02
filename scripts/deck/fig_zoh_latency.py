@@ -1,6 +1,6 @@
 """v2.7.7 M5 — ZOH inter-sample violating periods (2.45%% -> 0.379%% from dt 0.05 -> 0.01), the C2 s^2 protected
 layer, and a per-step latency table. Sources: docs/versions/v2.7.5/theory_measurements.md:71-74,172 (violating
-periods + C2); data/previous_runs/v2.7.6/stage2_eval/m8_latency.json (latency)."""
+periods + C2); data/runs/v2.7.6/stage2_eval/m8_latency.json (latency)."""
 from __future__ import annotations
 import csv, json, re
 from pathlib import Path
@@ -14,7 +14,7 @@ viol_01 = float(re.search(r"489 ?/ ?129158 = ([\d.]+) ?%", t).group(1))        #
 C2 = float(re.search(r"C2 = ([\d.]+)", t).group(1))                            # 19.59
 assert (viol_05, viol_01) == (2.45, 0.379), f"parsed {(viol_05, viol_01)}"
 
-LAT = Path("data/previous_runs/v2.7.6/stage2_eval/m8_latency.json"); L = json.load(open(LAT))
+LAT = Path("data/runs/v2.7.6/stage2_eval/m8_latency.json"); L = json.load(open(LAT))
 lat_rows = []
 for c in L["cells"]:
     if c["label"] == "non_empty_base":

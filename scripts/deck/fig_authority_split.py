@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 LG.POOLS = Path("data/eval_pools")   # v2.7.6 pools were archived; canonical lives here
 STEM = "eval_full_quadrotor-3d-d2r_n2000_seed23456"
 CK = {"preband": Path("data/runs/v2.7.4/set__20260720-083533__seed42/v2.7.4__20260720-091830__seed42/checkpoints/best.pt"),
-      "jt": Path("data/previous_runs/v2.7.6/set__20260725-043415__seed42/v2.7.6__jt__20260725-052127__seed42/checkpoints/step_042000.pt")}
+      "jt": Path("data/runs/v2.7.6/set__20260725-043415__seed42/v2.7.6__jt__20260725-052127__seed42/checkpoints/step_042000.pt")}
 CACHE = OUT / "authority_split_canonical.json"
 if CACHE.exists():                                        # reuse the eval-only recompute (headless re-run cheap)
     res = json.load(open(CACHE))

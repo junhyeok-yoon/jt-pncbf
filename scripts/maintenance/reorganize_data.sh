@@ -8,7 +8,7 @@
 # Audit + rationale: docs/maintenance/data_reorg_plan.md
 #
 # WHY plain `mv` (not `git mv`): .gitignore is `data/*` + `!data/secured_data/`, so the lookahead
-# runs / diagnostics / previous_runs are git-IGNORED (untracked). `git mv` would fail; plain `mv`
+# runs / diagnostics are git-IGNORED (untracked). `git mv` would fail; plain `mv`
 # is correct. Only `data/secured_data/` is tracked, and this script NEVER touches it.
 #
 # Reference-safety (see plan Part 1): the 20 `data/v2.1.0__*lookahead*` dirs have ZERO references
@@ -78,10 +78,7 @@ echo
 echo "NOT moved by this script (see plan Part 2):"
 echo "  - data/secured_data/   : canonical + git-tracked + heavily referenced -> NEVER move."
 echo "  - data/diagnostics/    : hard-coded by all v2.2.0 scripts + cited in v2.2.0 docs -> keep."
-echo "  - data/previous_runs/  : already an organized archive; if you later move it to"
-echo "        data/archive/previous_runs/, you MUST first update the ONE reference:"
-echo "        scripts/analysis/stage1_scod_build.py:59  PREV_RUN = .../data/previous_runs/v2.0.1__20260529-171057__seed42"
-echo "        (and note the historical doc paths in docs/versions/v2.0.1/{jt_pretraining_build,failure_modes_dissection}.md)."
-echo "        This script does NOT apply that sed; do it deliberately if desired."
+echo "  - (retired) the former data/previous-runs archive was absorbed into data/runs/<version>/ (v2.8.0)"
+echo "        and no longer exists; this script no longer references it."
 echo
 echo "=== done ($([[ $APPLY -eq 1 ]] && echo applied || echo dry-run; )) ==="

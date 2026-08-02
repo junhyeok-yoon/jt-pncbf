@@ -32,6 +32,7 @@ class _HardNetParams:
     empty_fallback_mode: str = "none"       # v2.7.1 Stage-1: none | kstep (eval-only; none = bit-parity)
     empty_fallback_k: int = 10
     empty_fallback_phases: int = 2          # v2.7.6 M8.1: 2 = two-phase (default, unchanged) | 1 = single-phase
+    projection: str = "dual_solve"          # v2.8.0 S1: dual_solve (exact, prop:lambda-solve) | enumerate (legacy)
 
 
 class HardNetFilter:
@@ -115,13 +116,20 @@ class HardNetFilter:
                 return projected, singular, u_cbf_raw, singular
             return projected, singular
 
-        box_projected, empty_intersection = _box_aware_projection(
+        box_projected, empty_intersection = _select_projection(
+            self.params.projection,
             u_nom,
             projected,
             lg_h,
             row_upper,
             bounds,
         )
+        # v2.8.0 Phase-2 C1 instrumentation (additive; does NOT change the returned action or flag): stash the
+        # constraint row a=L_g h, the RHS b=row_upper, and the geometric box projection (pre-fallback) so the
+        # per-step chatter dump can recover a, b, and the box-clipped coordinate set. Read via last_a/last_b/…
+        self.last_a = lg_h.detach()
+        self.last_b = row_upper.detach()
+        self.last_box_projected = box_projected.detach()
         # v2.7.1 Stage-1: k-step empty-branch ACTION fallback (eval-only, default off). On rows where the
         # geometric intersection is empty, replace the least-violating action with the first-phase control of
         # the two-phase k-step argmin. INVARIANT: the returned flag `singular | empty_intersection` is NOT
@@ -232,6 +240,121 @@ def _box_aware_projection(
     return selected, empty_intersection
 
 
+def _select_projection(
+    projection: str,
+    u_nom: Tensor,
+    base_projected: Tensor,
+    halfspace_normal: Tensor,
+    row_upper: Tensor,
+    bounds: Tensor,
+) -> tuple[Tensor, Tensor]:
+    """v2.8.0 S1: dispatch the box-aware projection realization behind filter.projection.
+
+    Both realizations return (selected_action, empty_intersection) and are reachable at every
+    call site. `enumerate` = the legacy finite-candidate selection (prop:sel; exact only for
+    action dim <= 2, prop:enum-exact(b)). `dual_solve` = the exact single-scalar dual root of
+    prop:lambda-solve (exact and continuous in every dimension)."""
+    if projection == "enumerate":
+        return _box_aware_projection(u_nom, base_projected, halfspace_normal, row_upper, bounds)
+    if projection == "dual_solve":
+        return _dual_solve_projection(u_nom, base_projected, halfspace_normal, row_upper, bounds)
+    raise ValueError(
+        f"Unknown filter.projection {projection!r}; expected 'dual_solve' or 'enumerate'."
+    )
+
+
+def _dual_solve_projection(
+    u_nom: Tensor,
+    base_projected: Tensor,
+    halfspace_normal: Tensor,
+    row_upper: Tensor,
+    bounds: Tensor,
+) -> tuple[Tensor, Tensor]:
+    """Exact projection of prop:lambda-solve: the Euclidean projection of u_nom onto the single
+    row {a^T u <= b} intersected with the box U, computed as the unique nonnegative root of the
+    piecewise-linear non-increasing phi(lambda)=a^T clip(u_nom - lambda a, U). Feasible rows get
+    the exact minimizer; empty rows (prop:lambda-solve does not apply) keep the UNCHANGED
+    least-violating enumeration output (bit-parity, scored by A1n)."""
+    empty = _empty_halfspace_box(halfspace_normal, row_upper, bounds)
+    projected = _exact_dual(u_nom, halfspace_normal, row_upper, bounds)
+    if bool(empty.any()):
+        mask = empty
+        enum_sub, _ = _box_aware_projection(
+            u_nom[mask],
+            base_projected[mask],
+            halfspace_normal[mask],
+            row_upper[mask],
+            bounds,
+        )
+        projected = projected.clone()
+        projected[mask] = enum_sub.to(projected.dtype)
+    return projected, empty
+
+
+def _exact_dual(
+    u_nom: Tensor,
+    a: Tensor,
+    b: Tensor,
+    bounds: Tensor,
+) -> Tensor:
+    """Batched closed-form solve of a^T clip(u_nom - lambda a, U) = b, lambda >= 0.
+
+    The active interval and clipped set are found on detached copies (they are locally constant
+    off the measure-zero breakpoint set, exactly prop:lambda-solve's a.e. statement); lambda* and
+    the returned action are then written in closed form of the LIVE (u_nom, a, b) so autograd sees
+    I - a a^T / ||a||_I^2 on the interior block. No batch loop; no iterative root finder."""
+    batch, dim = u_nom.shape
+    low = bounds[:, 0].to(device=u_nom.device, dtype=u_nom.dtype)     # [dim]
+    high = bounds[:, 1].to(device=u_nom.device, dtype=u_nom.dtype)    # [dim]
+    clip0 = torch.clamp(u_nom, low, high)
+
+    ud, ad, bd = u_nom.detach(), a.detach(), b.detach()
+    amask = ad.abs() > _DENOM_TOL                                     # [B,dim] moving coords
+    safe_a = torch.where(amask, ad, torch.ones_like(ad))
+    bp_hi = torch.where(amask, (ud - high) / safe_a, torch.full_like(ud, -1.0))
+    bp_lo = torch.where(amask, (ud - low) / safe_a, torch.full_like(ud, -1.0))
+    bp = torch.cat([bp_hi, bp_lo], dim=1)                             # [B,2*dim]
+    keep = bp >= 0.0
+    bp = torch.where(keep, bp, torch.full_like(bp, -1.0))
+    lam_max = torch.clamp(bp.amax(dim=1, keepdim=True), min=0.0)      # [B,1] largest real breakpoint
+    bp = torch.where(keep, bp, lam_max.expand_as(bp))                 # invalid -> finite sentinel
+    lam = torch.cat(
+        [torch.zeros(batch, 1, device=u_nom.device, dtype=u_nom.dtype), bp], dim=1
+    )                                                                 # [B, 2*dim+1]
+    lam_sorted, _ = torch.sort(lam, dim=1)
+    u_lam = torch.clamp(
+        ud.unsqueeze(1) - lam_sorted.unsqueeze(2) * ad.unsqueeze(1), low, high
+    )                                                                 # [B,K,dim]
+    phi = torch.sum(ad.unsqueeze(1) * u_lam, dim=2)                   # [B,K] non-increasing in lambda
+    le = phi <= bd.unsqueeze(1) + _FEASIBILITY_TOL
+    has = le.any(dim=1)
+    kstar = torch.where(
+        has, torch.argmax(le.to(torch.int8), dim=1),
+        torch.zeros(batch, dtype=torch.long, device=u_nom.device),
+    )
+    rows = torch.arange(batch, device=u_nom.device)
+    lam_hi = lam_sorted[rows, kstar]
+    lam_lo = lam_sorted[rows, torch.clamp(kstar - 1, min=0)]
+    lam_mid = 0.5 * (lam_lo + lam_hi)                                 # strictly inside the active interval
+    uj = ud - lam_mid.unsqueeze(1) * ad
+    interior = (uj > low) & (uj < high) & amask                      # [B,dim] locally-constant active set
+    clipped_val = torch.clamp(uj, low, high)                          # clipped coords sit at a bound
+    already = phi0_le(ad, clip0.detach(), bd)                         # row already satisfied by clip(u_nom)
+
+    w = torch.where(interior, u_nom, clipped_val)                     # LIVE on interior coords
+    num = torch.sum(a * w, dim=1) - b
+    denom = torch.sum(torch.where(interior, a * a, torch.zeros_like(a)), dim=1)
+    denom = torch.where(denom > _DENOM_TOL, denom, torch.ones_like(denom))
+    lam_star = num / denom
+    projected = torch.clamp(u_nom - lam_star.unsqueeze(1) * a, low, high)
+    return torch.where(already.unsqueeze(1), clip0, projected)
+
+
+def phi0_le(a_det: Tensor, clip0_det: Tensor, b_det: Tensor) -> Tensor:
+    """a^T clip(u_nom, U) <= b : the row is already satisfied by the box-clipped nominal."""
+    return torch.sum(a_det * clip0_det, dim=1) <= b_det + _FEASIBILITY_TOL
+
+
 def _candidate_actions(
     u_nom: Tensor,
     base_projected: Tensor,
@@ -312,6 +435,13 @@ def _replace_column(tensor: Tensor, column_idx: int, values: Tensor) -> Tensor:
 def _hardnet_params(config: Mapping[str, Any]) -> _HardNetParams:
     hardnet_cfg = config["filter"]["hardnet"]
     lookahead_cfg = config["filter"].get("lookahead", {})
+    # v2.8.0 B6.1: per-system empty_fallback. A nested dict under the system's name overrides the global
+    # scalars; an absent per-system entry leaves the global block untouched (byte-identical).
+    ef_cfg = dict(config["filter"].get("empty_fallback", {}))
+    _sys = str(config.get("run", {}).get("system", ""))
+    _per_sys = ef_cfg.get(_sys)
+    if isinstance(_per_sys, dict):
+        ef_cfg = {**ef_cfg, **_per_sys}
     return _HardNetParams(
         epsilon=float(hardnet_cfg["epsilon"]),
         lg_reg_eps=float(config["filter"].get("lg_reg_eps", 0.0)),
@@ -323,9 +453,10 @@ def _hardnet_params(config: Mapping[str, Any]) -> _HardNetParams:
         lookahead_beta=float(lookahead_cfg.get("beta", 0.0)),
         lookahead_delta=max(float(lookahead_cfg.get("delta", 0.1)), 1.0e-8),
         dt=float(config.get("env", {}).get("dt", 0.05)),
-        empty_fallback_mode=str(config["filter"].get("empty_fallback", {}).get("mode", "none")),
-        empty_fallback_k=int(config["filter"].get("empty_fallback", {}).get("k", 10)),
-        empty_fallback_phases=int(config["filter"].get("empty_fallback", {}).get("phases", 2)),
+        empty_fallback_mode=str(ef_cfg.get("mode", "none")),
+        empty_fallback_k=int(ef_cfg.get("k", 10)),
+        empty_fallback_phases=int(ef_cfg.get("phases", 2)),
+        projection=str(config["filter"].get("projection", "dual_solve")),
     )
 
 
@@ -367,7 +498,8 @@ def _lookahead_peak_h(
         row_upper = -lf_h - alpha * h
         projected = _base_projection(u_nom, lg_h, row_upper, bounds, params)
         if params.box_aware:
-            projected, _ = _box_aware_projection(
+            projected, _ = _select_projection(
+                params.projection,
                 u_nom,
                 projected,
                 lg_h,

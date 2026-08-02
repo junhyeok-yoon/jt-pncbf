@@ -21,7 +21,7 @@ from matplotlib.gridspec import GridSpec
 from matplotlib.animation import FuncAnimation, FFMpegWriter, PillowWriter
 
 torch.manual_seed(42)
-OC34 = Path("data/previous_runs/v2.7.6/set__20260725-043415__seed42/v2.7.6__oc__20260725-043415__seed42/checkpoints/best.pt")
+OC34 = Path("data/runs/v2.7.6/set__20260725-043415__seed42/v2.7.6__oc__20260725-043415__seed42/checkpoints/best.pt")
 INLOOP = Path("data/eval_pools/eval_inloop_quadrotor-3d-d2r_n500_seed12345.pkl")
 T, DT, LIMIT, OOB, STRIDE, FPS = 200, 0.05, 4.0, 8.0, 3, 12
 

@@ -31,10 +31,6 @@ def _run_dirs():
                        key=lambda p: p.name)
     # old top-level: data/<run_id> (the active run not yet migrated)
     seen += [d for d in sorted(DATA.glob("*__*seed*")) if _is_run_dir(d)]
-    # absorbed previous_runs (dirs, if any remain)
-    pr = DATA / "previous_runs"
-    if pr.exists():
-        seen += [d for d in sorted(pr.iterdir()) if _is_run_dir(d)]
     return seen
 
 
@@ -93,7 +89,7 @@ def main() -> int:
                          value_init=vi or "", in_ledger="yes" if in_ledger else "NO"))
 
     lines = ["# Run index (v2.7.4 migration)\n",
-             f"Generated over {len(rows)} run directories (data/runs/ + old data/*__*seed* + data/previous_runs/).",
+             f"Generated over {len(rows)} run directories (data/runs/ + old data/*__*seed*).",
              "final_step is the max step in eval_metrics.csv (not status.json). in_ledger = run_id appears in docs/ledger.md.\n",
              "| old path | new path | fw | system | seed | final_step | best sha8 | value_init_run_id | in_ledger |",
              "|---|---|---|---|---|---|---|---|---|"]

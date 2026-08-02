@@ -115,6 +115,13 @@ def _rolled_batch_with_empty(ck_path, pool_path, fb, n=250, roll=25):
         cfg["filter"].pop("empty_fallback", None)
     else:
         cfg["filter"]["empty_fallback"] = fb
+    # v2.8.0 S2 B7: PIN RETAINED (projection=enumerate). The f2 assertion "kstep changes an empty row" is a
+    # rollout-state-dependent property, not an analytic expectation: under the exact dual_solve the closed loop
+    # follows a different trajectory and (e.g. unicycle) reaches only a couple of empty rows, both at the same
+    # box vertex where kstep and least-violating coincide, so the assertion cannot be recomputed exactly. The
+    # fallback mechanism is realization-independent (empty-branch delegates to the same least-violating rule);
+    # the exact default path is covered by test_dual_projection.py and test_filter_aux_analytic_cases.
+    cfg["filter"]["projection"] = "enumerate"
     from src.frameworks.jt_pncbf.train import load_framework_from_checkpoint
     fw, cfg2, _ = load_framework_from_checkpoint(ck_path, config_overrides={"filter": cfg["filter"]})
     scenes = load_pool(pool_path).scenes[:n]

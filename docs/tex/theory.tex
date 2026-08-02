@@ -67,6 +67,7 @@
 \newcommand{\Hu}{H_u}
 \newcommand{\viol}{\mathrm{viol}}
 \newcommand{\sgn}{\operatorname{sgn}}
+\newcommand{\bignormone}[1]{\lVert#1\rVert_1}
 \newcommand{\eqdef}{:=}
 
 \title{\textbf{JT-PNCBF Theory (consolidated)}\\[2mm]
@@ -706,8 +707,12 @@ $\Vhat$와 대칭인 reach--avoid liveness 인증서 $W$를 도입한다. $W$의
 
 \begin{definition}[Goal set with settling, and reach value]\label{def:reach}
 Fix $o$. The \emph{goal set} is
-$\mathcal G\eqdef\{x\in\calX_0:\ \norm{p-g}\le\rho\ \text{and}\ \norm{v}\le v_{\mathcal G}\}$
---- position within radius $\rho$ \emph{and} speed within $v_{\mathcal G}$. A \emph{reach value}
+$\mathcal G\eqdef\{x\in\calX_0:\ \norm{p-g}\le\rho,\ \norm{v}\le v_{\mathcal G},\
+\norm{\omega}\le\omega_{\mathcal G}\}$
+--- position within radius $\rho$, speed within $v_{\mathcal G}$, \emph{and} angular rate within
+$\omega_{\mathcal G}$; on systems whose state carries no angular rate the last condition is
+vacuous ($\omega_{\mathcal G}=\infty$ by convention), so the definition specializes to the
+earlier one. A \emph{reach value}
 is $W\in C^1(\calX_0)$, $W\ge0$, proper, with $W=0$ on $\mathcal G$ and $W>0$ off $\mathcal G$.
 \end{definition}
 
@@ -745,9 +750,27 @@ penalizes goal-distance only at the horizon endpoint $x_T$, once per length-$T$ 
 \emph{not} impose the per-step descent of \cref{def:ra}. Consequently a policy trained with the
 terminal alone has no guarantee that any reach value decreases at each step and may be
 stationary in $W$ near $\mathcal G$ while the terminal is already small; and because the
-terminal is position-only, it does not penalize the residual speed that $\mathcal G$'s
-$v_{\mathcal G}$ condition forbids.
+terminal is position-only, it penalizes neither the residual speed that $\mathcal G$'s
+$v_{\mathcal G}$ condition forbids nor the residual angular rate that its
+$\omega_{\mathcal G}$ condition forbids.
 \end{proposition}
+
+\begin{remark}[Measured: the angular condition reclassifies before it is learned, and is nearly
+free after]\label{rem:reach-angular}
+배포값은 $\omega_{\mathcal G}=0.48$~rad/s --- 선형 조건과의 비율 일치
+$v_{\mathcal G}/v_{\max}=0.12$를 $\omega_{\max}=4.0$에 적용 --- 이고, goal-gated settling은
+같은 gate 아래 등가화된 각속도 항($w_\omega\omega_{\mathcal G}^2=w_v v_{\mathcal G}^2$)을
+얻는다. 이 정의 아래에서:
+
+조건을 학습한 적 없는 checkpoint는 정의 변경만으로 무너진다: reach $0.933\to0.194$,
+stuck $0\to0.7295$ --- 잔여 회전을 지닌 도착은 그 자리에 머물러 stuck으로 재분류되며, 이는
+성능 진술이 아니라 정의 artifact다(등록 예측 --- stuck $+0.10$ 초과 상승 --- 적중, falsifier
+불발화). 같은 예산으로 재학습하면 reach $0.9295$로 회복되고, fallback을 일치시킨 $2\times2$
+분해에서 순수 terminal 비용은 $-0.006$ --- 신뢰구간 안이다. 즉 각속도 정착은 이 예산에서
+학습 가능하고 거의 무비용이며, 해결된 reach의 $100\%$가 조건을 담는다. 범위: 단일 seed,
+하나의 계(quadrotor\_3d), canonical pool; 각속도 state가 없는 두 계는 byte-identical로
+검증되어 조건이 구조적으로 vacuous함이 확인되었다.
+\end{remark}
 
 \begin{remark}[Safety--liveness compatibility]\label{rem:ra-compat}
 $\mathrm{RA}$는 $\{\Vhat\le0\}\cap\mathcal F(\Vhat)$의 진부분집합일 수 있다: 두 half-space가 box와
@@ -1115,6 +1138,70 @@ $[0,60)/[60,120)/[120,180]$에 걸쳐 cylinder-collision rate는 감소하고
 평탄하다($0.0355/0.0376/0.0373$).
 \end{remark}
 
+\begin{proposition}[A two-sided recoverability bracket for the floor]\label{prop:floor-bracket}
+Fix the plant of \cref{def:sys} with per-rotor bound $f_{\mathrm{r}}\in[0,\bar f_{\mathrm r}]$,
+mass $\mass$, gravity $g$, floor at $z_{\mathrm{fl}}$, and an initial state with altitude
+$z_0$, vertical velocity $v_{z0}$, attitude tilt $\theta_0$ and angular rate $\omega_0$.
+\begin{enumerate}[label=(\alph*)]
+  \item \textbf{(lower bound: proved unrecoverable)} Consider the relaxation in which the
+  attitude is level for all $t\ge0$ and collective thrust is maximal. Its upward acceleration is
+  $a_{\max}=4\bar f_{\mathrm r}/\mass-g$, and its minimum altitude from a descent
+  ($v_{z0}<0$) is
+  \[
+    z_{\min}^{\mathrm{relax}}\ =\ z_0-\frac{v_{z0}^2}{2a_{\max}} .
+  \]
+  No admissible trajectory attains a higher minimum: no attitude yields more upward
+  acceleration than level at maximal thrust, and no attitude change is faster than
+  instantaneous. Hence $z_{\min}^{\mathrm{relax}}<z_{\mathrm{fl}}$ implies the initial
+  condition is unrecoverable by \emph{any} controller.
+  \item \textbf{(the bound binds only through vertical kinetic energy)} $\theta_0$ and
+  $\omega_0$ do not appear in (a); the flagged set is
+  $\{\,z_0-z_{\mathrm{fl}}<v_{z0}^2/(2a_{\max})\,\}$. Under a sampler with
+  $\abs{v_{z0}}\le v_{\mathrm{ic}}$ the flagged clearance band has width at most
+  $v_{\mathrm{ic}}^2/(2a_{\max})$.
+  \item \textbf{(upper bound: demonstrated recoverable)} Let a fraction
+  $\kappa\in[0,1)$ of each rotor's range be reserved for differential torque and the rest
+  commanded as collective. Any member of this family is admissible; its collective is
+  $4(1-\kappa)\bar f_{\mathrm r}$, so it can arrest a descent only if
+  \[
+    \kappa\ <\ 1-\frac{\mass g}{4\bar f_{\mathrm r}} ,
+  \]
+  while $\kappa=0$ leaves no torque authority to leave a tilt. If some member of the family,
+  simulated under the deployed integrator, keeps $z(t)>z_{\mathrm{fl}}$, the initial condition
+  is recoverable, constructively. Initial conditions failing (a)'s test are unrecoverable;
+  those passing (c)'s are recoverable; the remainder is undetermined and is not apportioned.
+\end{enumerate}
+Scope: (a),(b) exact; (c) constructive, family-dependent.
+\end{proposition}
+\begin{proof}
+(a) 임의의 admissible 궤적에서 $\dot v_z=\tfrac1\mass f_{\mathrm{thr}}(Re)_z-g
+\le\tfrac1\mass(4\bar f_{\mathrm r})\cdot1-g=a_{\max}$가 모든 $t$에서 성립하므로, 완화 궤적은
+매 순간 상방 가속을 pointwise로 지배하고 따라서 $z(t)$를 pointwise로 지배한다. 완화의 최소
+고도는 에너지 적분 $v_{z0}^2/(2a_{\max})$이다. (b)는 (a)의 식에서 읽힌다. (c) 앞 부등식은
+hover 조건 $4(1-\kappa)\bar f_{\mathrm r}>\mass g$의 재배열이고, 존재 증명은 시뮬레이션된
+admissible 궤적 자체다.
+\end{proof}
+
+\begin{remark}[Measured: the floor is an initial-condition property on this pool]\label{rem:floor-bracket}
+plant 상수 $4\bar f_{\mathrm r}=2\mass g$에서 $a_{\max}=g$이고, IC sampler의
+$v_{\mathrm{ic}}=1.5$~m/s가 (b)의 대역폭을 $v_{\mathrm{ic}}^2/(2g)\approx0.115$~m로 제한한다
+--- 하한이 이 pool에서 거의 공허한 것은 pool이 순해서가 아니라 완화가 수직 운동에너지만 보기
+때문이며, 실제로 canonical $2000$개 중 $1$개만 걸린다. 상한: $\kappa$-가족은 $1852$개
+($92.6\%$)를 회복 가능으로 시연했고 최적 $\kappa$는 $0.2$ 부근에 몰린다 ---
+\cref{prop:floor-bracket}(c)의 창 $\kappa\in(0,\,1-\tfrac{\mass g}{4\bar f_{\mathrm r}})
+=(0,\tfrac12)$의 내부점으로, 전-collective($\kappa=0$)는 기울기에서 못 빠져나오고
+$\kappa\ge\tfrac12$는 hover 불능이라는 per-rotor 결합의 실측이다. 미확정 $147$개($7.35\%$)는
+배분하지 않는다.
+
+교차(v2.8.0 deliverable, 바닥 충돌 $67$건): 회복-시연 IC에서 $0$건, 미확정 $66$, 불가 $1$;
+역으로 회복-시연 $1852$개 전부에서 정책은 바닥을 넘지 않았다. \cref{rem:hold-bind}의 결합과
+합치면: 이 lineage의 바닥 충돌은 측정 가능한 한도에서 정책 실패가 아니라 IC 성질이며, 남은
+질문은 전부 미확정 대역 --- 고tilt$\times$저여유의 모서리 --- 에 있다. 그 대역을 좁히는 것은
+상수-$\kappa$ 가족의 정밀화가 아니라 수직 부분문제 $(z,v_z,\theta,\dot\theta)$의 도달가능성
+계산이 요구되며, 그때까지 회복 가능성의 정의는 제어기-가족 의존임을 명시한다. 범위: 단일 seed,
+하나의 계, 하나의 checkpoint; 상한은 $\kappa$-격자 의존.
+\end{remark}
+
 \section{Where the learned certificate's authority lives}\label{sec:channel}
 
 \begin{remark}[Measured: the authority is relocated, not merely restored]\label{rem:hstar-resolved}
@@ -1198,6 +1285,97 @@ box vertex를 반환하는 곳 --- $\mathcal E$의 다수 --- 에서 gradient가
 측정 정황: \cref{rem:hold-bind}의 residual 실패 모드에 걸쳐 스텝의 $51\%$가 $\mathcal E$ active이고
 거기서 명령된 total thrust가 per-rotor box의 vertex 값을 취하는 반면, 비교 group에서는 filter가
 비활성이다(override 중앙값 $0$, 스텝의 $5.5\%$에서 $\mathcal E$ active).
+\end{remark}
+
+\begin{proposition}[The infeasibility margin: closed form and what the policy controls]\label{prop:sinfty-decomp}
+Define the \emph{infeasibility margin}
+$s_\emptyset(x)\eqdef\min_{u\in\calU}a^\top u-b$, so that
+$\mathcal E=\{s_\emptyset>0\}$ and $\mathcal F(\Vhat)=\{s_\emptyset\le0\}$
+(\cref{prop:box-feas}). On the deployed per-rotor box $\calU=[0,\bar u]^m$,
+\[
+  s_\emptyset(x)\;=\;\underbrace{\Lf\Vhat(x)+\alpha\Vhat(x)}_{\text{demand}}
+  \;-\;\underbrace{\bar u\,\bignormone{(\Lg\Vhat(x))^-}}_{\text{authority}},
+\]
+where $(\cdot)^-$ is the negative part taken coordinatewise. Consequently:
+\begin{enumerate}[label=(\alph*)]
+  \item $s_\emptyset$ is a state function, independent of $u_{\mathrm{nom}}$, continuous
+  wherever $\Vhat$ is $C^1$, and computable in closed form --- it is the quantity the deployed
+  empty-branch test evaluates;
+  \item its state gradient decomposes along the two levers the policy owns:
+  $\nabla s_\emptyset=\nabla(\Lf\Vhat+\alpha\Vhat)-\bar u\,\nabla\bignormone{(\Lg\Vhat)^-}$
+  --- the first term falls when the closed loop sheds the hazard-directed momentum that
+  \cref{eq:hdep}'s velocity term converts into demand, the second rises when the attitude
+  re-aligns actuation with the certificate's descent cone. A trajectory can therefore steer
+  $s_\emptyset$ before $\partial\mathcal E$ is reached, which no pointwise action choice on
+  $\mathcal E$ can do (\cref{rem:empty-grad});
+  \item $\nabla s_\emptyset$ involves first and second derivatives of $\Vhat$ only --- no
+  dual variable, no active set, and no denominator. In particular the
+  $1/\norm{a_I}$ amplification of \cref{cor:lambda-jac}(d), which sits on every gradient path
+  \emph{through} the filter, does not exist on this path.
+\end{enumerate}
+Scope: exact; the display is the $[0,\bar u]^m$ specialization of \cref{prop:box-feas}'s
+separable minimum.
+\end{proposition}
+\begin{proof}
+box 위 선형형의 최소는 좌표 분리되고, $[0,\bar u]$에서 좌표 $j$의 최소는
+$\bar u\min(a_j,0)$이므로 $\min_\calU a^\top u=-\bar u\bignormone{a^-}$이다.
+$b=-\alpha\Vhat-\Lf\Vhat$를 대입하면 표시가 나온다. (a)는 정의에서, (b)는 두 항의 미분에서,
+(c)는 표시에 나타나는 양의 목록에서 읽힌다.
+\end{proof}
+
+\begin{proposition}[An exact avoid value leaves its own policy strictly feasible]\label{prop:exact-value-feasible}
+Suppose $\Vhat$ coincides on an open set $O\subseteq\{\Vhat<0\}$ with the exact avoid value
+$\Vhp{\pi_0}$ of some admissible policy $\pi_0$, and both are $C^1$ there. Then for every
+$x\in O$,
+\[
+  a^\top\pi_0(x)-b\;=\;\underbrace{\Lf\Vhat+\Lg\Vhat\,\pi_0}_{=\ \dot{\Vhat}\ \le\ 0}
+  \;+\;\underbrace{\alpha\Vhat}_{<0}\;<\;0,
+\]
+so $\pi_0$'s own action is strictly feasible and $s_\emptyset(x)<0$: exactness implies
+$\mathcal E\cap O=\emptyset$. Contrapositively, every state of
+$\mathcal E\cap\{\Vhat<0\}$ is a \emph{certified} label error --- a point where $\Vhat$ is
+not the avoid value of any policy --- located without knowing the true value.
+Scope: exact under the stated regularity.
+\end{proposition}
+\begin{proof}
+$\Vhp{\pi_0}(x_t)=\sup_{s\ge t}h(x_s)$는 $\pi_0$의 closed loop을 따라 상한 범위가 줄어드는
+sup이므로 비증가이고, $C^1$ 가정 아래 그 경로 미분 $\Lf\Vhat+\Lg\Vhat\,\pi_0$는 비양이다.
+$\{\Vhat<0\}$에서 $\alpha\Vhat<0$이므로 합이 엄격히 음이다. $\pi_0(x)\in\calU$가 row를
+만족하므로 box-최소는 그보다 작거나 같다: $s_\emptyset(x)<0$.
+\end{proof}
+
+\begin{remark}[Why the margin can be a training signal now, and could not be before]\label{rem:sinfty-signal}
+세 폐쇄 항목의 실패 기전이 각각 구조적으로 제거되는 조건에서만 이 신호는 사용 가능하며, 그
+조건을 명시한다.
+
+\textbf{(i) value-측 자멸은 1-동차성이다.} 선형 $\alpha$에서 $\Vhat\to c\Vhat$는
+$\Lf\Vhat,\Lg\Vhat,\alpha\Vhat$를 모두 $c$배 하므로 $s_\emptyset\to c\,s_\emptyset$:
+$s_\emptyset$은 $\Vhat$에 1-동차다. 따라서 $\theta_V$가 자유 변수인 어떤 penalty
+$\mathrm{relu}(s_\emptyset)$에도 모든 $\theta_V$에서 물리와 무관한 하강 방향 --- 인증서의
+균일 축소 --- 이 열려 있고, 이것이 v2.2.1 $L_{\mathrm{feas}}$의 self-extinguishing의 정리적
+형태다. $\Vhat$를 detach하면 $\theta_V$가 계산 그래프에서 제거되어 그 방향이 구성상
+봉쇄되고, value 회귀는 순수 label 회귀로 남는다.
+
+\textbf{(ii) filter-경로 폭발은 이 경로에 없다.} v2.4.1 $w_{\mathrm{deficit}}$가 실패한
+경로는 filter 계수의 Jacobian을 통과했고, 그 경로에는 \cref{cor:lambda-jac}(d)의
+$1/\norm{a_I}$이 앉아 있다. \cref{prop:sinfty-decomp}(c)에 의해
+$\nabla s_\emptyset$ 경로는 그 양을 포함하지 않는다.
+
+\textbf{(iii) pointwise 무력성은 궤적 조향으로 우회된다.} $\mathcal E$ 소속은 $x$만의
+성질이므로 그 위의 action 재조정은 무력하다는 판정은 서 있다. headroom $\delta>0$의 running
+cost $w_\emptyset\,\mathrm{relu}(s_\emptyset^{\mathrm{detach}}+\delta)$는 다른 지렛대다:
+Markov 부등식으로 그 기대 적분은 경계층
+$\{s_\emptyset\ge-\delta+\epsilon\}$ 체류 시간을 상계로 누르고, 폐루프에서
+$\abs{\dot s_\emptyset}\le c$이면 $\{s_\emptyset\le-\delta\}$에서 $\mathcal E$ 도달까지
+$\delta/c$의 시간이 남는다 --- $\delta$가 사는 것은 반응 시간이며, feasible action이 아직
+존재하는 곳에서 신호가 켜진다.
+
+\textbf{한계와 등록.} \cref{prop:exact-value-feasible}는 $\{\Vhat<0\}$ 안의
+$\mathcal E$만 오류로 인증한다; $t=0$부터 $\mathcal E$인 회복 불가·미확정 IC의 몫
+(\cref{rem:floor-bracket})은 어떤 running cost로도 줄지 않으므로, 이 신호의 상한은
+trajectory-entry 몫이고 그 분해는 사용 전에 측정되어야 한다. 신호의 kernel은 v2.2.1
+$L_{\mathrm{feas}}$의 $m(x)$와 동일하며, 재개는 새 kernel이 아니라 위 (i)--(iii)의 기전
+제거에 의한 것임을 기록한다.
 \end{remark}
 
 \begin{remark}[Graded-authority predictions, continued]\label{rem:kstep-empirical-2}
@@ -1434,6 +1612,88 @@ $\lambda^\star=\lambda_0$, $\abs A=2$가 된다. $2\notin\{0,1,4\}$이므로 $\m
 active set을 갖지 않으며, $P$가 유일한 최소화점이므로 모든 candidate가 순수하게 더 나쁘다.
 \end{proof}
 
+\begin{proposition}[The regularized base projection defeats its own feasibility test]\label{prop:eps-selection}
+Fix $\varepsilon>0$ and a feasibility tolerance $\tau\ge0$. Let $a\neq0$, $b\in\R$, and the box
+$\calU\subset\R^m$ be as in \cref{prop:enum-exact}, and suppose the row is violated at the
+nominal action, $s\eqdef a^\top u_{\mathrm{nom}}-b>0$. The deployed base-projection candidate is
+\[
+  u_\varepsilon\eqdef\mathrm{clip}\big(\tilde u_\varepsilon,\calU\big),
+  \qquad
+  \tilde u_\varepsilon\eqdef u_{\mathrm{nom}}-\frac{s}{\norm{a}^2+\varepsilon^2}\,a .
+\]
+Then:
+\begin{enumerate}[label=(\alph*)]
+  \item \textbf{(the regularizer shortens the exact step by a computable factor)} the unclipped
+  point satisfies
+  $a^\top\tilde u_\varepsilon-b=\dfrac{\varepsilon^2}{\norm{a}^2+\varepsilon^2}\,s>0$ for every
+  $\varepsilon>0$: the candidate is infeasible whenever the row is violated, with residual
+  proportional to the violation itself;
+  \item \textbf{(retention condition)} the candidate survives the test $a^\top u\le b+\tau$ iff
+  $\varepsilon^2 s\le\tau\big(\norm{a}^2+\varepsilon^2\big)$, i.e.\ iff the violation is below
+  $s_{\max}(\norm{a})\eqdef\tau\big(\norm{a}^2+\varepsilon^2\big)/\varepsilon^2$;
+  \item \textbf{(it is the only interior candidate)} every box vertex has all $m$ coordinates on
+  the boundary, every fix-one-solve-one point has at least one, and
+  $\mathrm{clip}(u_{\mathrm{nom}})$ either equals $u_{\mathrm{nom}}$ --- which violates the row
+  by $s$ and is discarded --- or has a coordinate on the boundary. Hence whenever
+  $u_\varepsilon$ is discarded, the selection returns a point of $\partial\calU$;
+  \item \textbf{(lower bound on the resulting error)} on the set where the exact projection is
+  interior, $P(u_{\mathrm{nom}})\in\operatorname{int}\calU$,
+  \[
+    \norm{u_{\mathrm{sel}}-P(u_{\mathrm{nom}})}\ \ge\
+    \operatorname{dist}\big(P(u_{\mathrm{nom}}),\,\partial\calU\big)\ >\ 0 ;
+  \]
+  \item \textbf{(dimension-free)} no step above refers to $m$.
+\end{enumerate}
+Scope: exact, per $(x,u_{\mathrm{nom}})$.
+\end{proposition}
+\begin{proof}
+(a) 위반된 row에서 exact projection의 무clip 스텝은 $s/\norm{a}^2$이고 정규화된 스텝은
+$s/(\norm{a}^2+\varepsilon^2)$로 엄밀히 짧다. 직접 계산으로
+$a^\top\tilde u_\varepsilon
+=a^\top u_{\mathrm{nom}}-s\norm{a}^2/(\norm{a}^2+\varepsilon^2)
+=b+s\varepsilon^2/(\norm{a}^2+\varepsilon^2)$.
+잔여 위반이 $s$에 비례한다는 것이 (b)를 준다: $s$가 $s_{\max}$를 넘는 순간 candidate가 탈락하며,
+$s_{\max}$는 $\tau/\varepsilon^2$ 크기의 상수이다. (c)는 family의 검사로 --- 각 candidate class의
+경계 좌표 수는 구성에서 읽힌다. clip이 $\tilde u_\varepsilon$을 경계로 보낼 수는 있으나 내부로
+보낼 수는 없으므로, 내부점이 가능해지는 유일한 경로는 $\tilde u_\varepsilon$ 자신이 내부에 있고
+유지되는 경우뿐이다. (d) 유지된 family가 $\partial\calU$에 놓이므로 최소 거리가 내부점
+$P$에서 경계까지의 거리로 하계된다. (e) 검사로.
+\end{proof}
+
+\begin{corollary}[Exactly two repairs, one of them uniform]\label{cor:eps-fix}
+The selection retains an interior candidate on the whole set where the exact projection is
+interior iff either $\varepsilon=0$, or
+$\tau\ \ge\ \sup_{s}\ \varepsilon^2 s/\big(\norm{a}^2+\varepsilon^2\big)$
+over every violation $s$ that arises. The second condition is not uniform unless $s$ is bounded a
+priori --- and on this system it is not: $s=\Lf\Vhat+\Lg\Vhat\,u_{\mathrm{nom}}+\alpha\Vhat$ grows
+with the certificate's slope along fast approaches. The first condition is uniform.
+\cref{prop:lambda-solve} carries no regularizer; that, and not its dimension-independence alone,
+is why it is exact everywhere while the deployed enumeration was exact nowhere.
+\end{corollary}
+\begin{proof}
+(b)의 유지 조건이 모든 $s$에 대해 성립해야 한다는 것의 재서술이다. $s$의 비유계성은
+\cref{eq:hdep}의 velocity 항이 접근 속도에 따라 $\Vhat$의 감소 요구를 키우는 데서 온다.
+$\varepsilon=0$이면 (a)의 잔여가 항등적으로 $0$이라 조건이 공허하게 성립한다.
+\end{proof}
+
+\begin{remark}[Measured: the regularizer, not the dimension, is what broke $m\le2$]\label{rem:eps-measured}
+배포 상수는 $\varepsilon=5.0\times10^{-4}$, $\tau=10^{-9}$이다. (b)의 유지 상계는
+$s_{\max}\approx(\tau/\varepsilon^2)\norm{a}^2=4\times10^{-3}\norm{a}^2$ --- 즉 거의 만족된 row를
+제외한 모든 곳에서 candidate가 자기 잔여 위반($\tau$의 $10^2$--$10^3$배)에 의해 탈락하고, (c)에
+의해 남는 family에 내부점이 없다.
+
+측정(v2.8.0 S2--A1, 세 계, 각 단일 seed, closed-loop rollout state): $\varepsilon=0$에서 두
+realization의 값은 \cref{prop:enum-exact}(b)가 말하는 대로 일치한다 --- double integrator
+$4.4\times10^{-16}$, unicycle $6.7\times10^{-16}$, planar quadrotor $1.03\times10^{-9}$. 배포
+$\varepsilon$에서는 satisfiable row의 $5$--$13\%$에서 갈라지며 차이가 box 폭에 이른다.
+
+따라서 \cref{prop:enum-exact}(b)의 exactness는 정규화되지 않은 family에 대한 진술이고, 배포된
+map에는 어느 차원에서도 성립한 적이 없다: $m\ge3$의 family 누락과 전 차원의 regularizer 탈락은
+서로 독립인 두 기전이며, \cref{rem:sel-history}의 planar-was-correct 서술은 값의 exactness에
+관하여 이 remark로 대체된다(gradient에 관한 그 remark의 교훈 --- plant가 바뀌면 closed-form
+성분은 재유도 --- 은 그대로 선다).
+\end{remark}
+
 \begin{proposition}[Regularity of a finite selection]\label{prop:sel}
 For $u_{\mathrm{sel}}$ of \cref{def:sel}:
 \begin{enumerate}[label=(\alph*)]
@@ -1476,9 +1736,14 @@ Let $\pi_{\mathrm{HN}}$ denote the deployed filtered policy, i.e.\ the selection
 \end{enumerate}
 Consequently \cref{cor:main} should be read as: joint training is well posed almost everywhere
 \emph{provided the filter is realized by a map that is continuous and depends on
-$u_{\mathrm{nom}}$}. For $m\le2$ the deployed enumeration meets this by
-\cref{prop:enum-exact}(b); for $m\ge3$ it does not, and \cref{prop:lambda-solve} supplies a
-realization that does.
+$u_{\mathrm{nom}}$}. The deployed enumeration meets this premise in no dimension: for $m\ge3$ the
+candidate family omits every optimum with $2\le\abs A\le m-1$ (\cref{prop:enum-exact}(b)), and for
+$m\le2$ --- where the family is exhaustive --- the deployed base projection carries a regularizer
+that leaves the only interior candidate infeasible against the feasibility tolerance, so the
+selection returns boundary points wherever the exact projection is interior
+(\cref{prop:eps-selection}). The two mechanisms are independent and both are measured
+(\cref{rem:sel-measured}, \cref{rem:eps-measured}). \cref{prop:lambda-solve} meets the premise in
+every dimension and carries no regularizer (\cref{cor:eps-fix}).
 \end{corollary}
 
 \begin{proposition}[An exact, continuous realization in any dimension]\label{prop:lambda-solve}
@@ -1493,9 +1758,9 @@ P(u_{\mathrm{nom}})=\mathrm{clip}\big(u_{\mathrm{nom}}-\lambda^\star a,\calU\big
 \text{the unique root of }\varphi(\lambda)=b,&\text{otherwise,}
 \end{cases}
 \end{equation}
-whenever the feasible set is nonempty. The resulting map is exact for every $m$, is continuous
-in $(u_{\mathrm{nom}},a,b)$, and has vanishing $u_{\mathrm{nom}}$-derivative only on the
-genuinely all-clipped set $\{\abs A=m\}$.
+whenever the feasible set is nonempty. The resulting map is exact for every $m$ and continuous in $(u_{\mathrm{nom}},a,b)$; its
+first-order structure --- including the exact set on which the $u_{\mathrm{nom}}$-derivative
+vanishes, which is strictly larger than $\{\abs A=m\}$ --- is given in \cref{cor:lambda-jac}.
 \end{proposition}
 \begin{proof}
 $\mathrm{clip}(u_{\mathrm{nom}}-\lambda a,\calU)$의 각 좌표는 $\lambda$에 대해 연속이고
@@ -1504,6 +1769,131 @@ $\mathrm{clip}(u_{\mathrm{nom}}-\lambda a,\calU)$의 각 좌표는 $\lambda$에 
 defined이다. 이것이 최소화점임은 정확히 $\varphi(0)>b$일 때 single row가 active인 strictly convex
 program의 KKT 시스템이다. 데이터에 대한 연속성은 $\varphi$의 결합 연속성과 $\lambda$에 대한
 단조성에서 따른다.
+\end{proof}
+
+\begin{corollary}[First-order structure of the exact realization]\label{cor:lambda-jac}
+Let $u=\mathrm{clip}(u_{\mathrm{nom}}-\lambda^\star a,\calU)$ as in \cref{prop:lambda-solve},
+and fix a point at which the active set $A$ and the activity of the row are locally constant,
+with $I\eqdef\{1,\dots,m\}\setminus A$ the free coordinates and $a_I\neq0$ when the row is
+active. Then:
+\begin{enumerate}[label=(\alph*)]
+  \item \textbf{(row inactive, $\lambda^\star=0$)}
+  $\dfrac{\partial u}{\partial u_{\mathrm{nom}}}=\operatorname{diag}(\mathbf 1_I)$ and
+  $\dfrac{\partial u}{\partial b}=0$;
+  \item \textbf{(row active, $\lambda^\star>0$)} on the free block,
+  \[
+    \frac{\partial u_I}{\partial u_{\mathrm{nom},I}}
+      \;=\;\Pi_I\;\eqdef\;\mathrm I_{\abs I}-\frac{a_I a_I^\top}{\norm{a_I}^2},
+    \qquad
+    \frac{\partial u}{\partial b}\;=\;\frac{a_I}{\norm{a_I}^2}\ \ \text{(embedded)},
+  \]
+  all other entries zero. $\Pi_I$ is the orthogonal projector onto $a_I^\perp$ within the free
+  block and has rank $\abs I-1$; and $\norm{\partial u/\partial b}=1/\norm{a_I}$;
+  \item \textbf{(vanishing set)} consequently the $u_{\mathrm{nom}}$-derivative vanishes exactly
+  on
+  \[
+    \{\abs A=m\}\ \cup\ \{\text{row active},\ \abs A=m-1\},
+  \]
+  the second part because the single free coordinate is pinned by the active equality
+  $a^\top u=b$ and therefore does not depend on $u_{\mathrm{nom}}$;
+  \item \textbf{(where the level-sensitivity is largest)} the gain from the constraint level to
+  the command, $1/\norm{a_I}$, is largest exactly where the free directions are fewest --- the
+  same class $\abs A=m-1$ on which the policy gradient is structurally zero.
+\end{enumerate}
+Scope: exact at points of local constancy of $(A,\ \text{activity})$; these are generic.
+\end{corollary}
+\begin{proof}
+(a)에서 $u=\mathrm{clip}(u_{\mathrm{nom}})$이므로 자유 좌표는 항등, clip된 좌표는 국소 상수다.
+(b) 활성 row에서 자유 좌표는 $u_j=u_{\mathrm{nom},j}-\lambda^\star a_j$이고 등식
+$\sum_{j\in I}a_j(u_{\mathrm{nom},j}-\lambda^\star a_j)+\sum_{j\in A}a_jc_j=b$가
+$\lambda^\star$를 결정한다. $u_{\mathrm{nom}}$에 대해 미분하면
+$a_I^\top\mathrm du_{\mathrm{nom},I}-\norm{a_I}^2\,\mathrm d\lambda^\star=0$, 즉
+$\mathrm d\lambda^\star=a_I^\top\mathrm du_{\mathrm{nom},I}/\norm{a_I}^2$이고, 이를
+$\mathrm du_j=\mathrm du_{\mathrm{nom},j}-a_j\,\mathrm d\lambda^\star$에 대입하면 $\Pi_I$가
+나온다. clip된 좌표의 $u_{\mathrm{nom}}$-의존은 국소적으로 없고, $b$에 대해서는
+$-\norm{a_I}^2\mathrm d\lambda^\star=\mathrm db$에서 $\partial u/\partial b=a_I/\norm{a_I}^2$.
+(c) $\Pi_I$의 계수가 $\abs I-1$이므로 $\abs I\le1$에서, 그리고 오직 그때에만 자유 블록이
+소멸한다; row 비활성이면 (a)에 의해 $\abs I=0$일 때만 소멸한다. (d)는
+$\norm{\partial u/\partial b}=1/\norm{a_I}$와, $\abs I$가 줄수록 $\norm{a_I}$에 남는 성분이
+줄어든다는 관찰이다.
+\end{proof}
+
+\begin{remark}[Measured: where the Jacobian lives, and what the repair changed]\label{rem:lambda-measured}
+(i) 배포 몫(v2.8.0, canonical pool, dual deliverable): 구조적 영-Jacobian class
+$\{$row active, $\abs A=m-1\}$는 filtered step의 약 $2.5\%$이고, 전체 영-Jacobian 집합은
+empty branch $55\%$ / feasible $45\%$로 갈리며 feasible 몫은 위 class가 지배한다 ---
+\cref{cor:lambda-jac}(c)가 예측하는 그대로, 결함이 아니라 활성 등식의 기하다.
+
+(ii) 학습 중 몫(P2, dual arm, logged): filter 개입률은 $0.92\to0.28$, 영-Jacobian share는
+$0.28\to0.15$로 감소한다 --- 정책이 학습될수록 두 realization이 다를 수 있는 표면 자체가
+줄어든다. enumeration arm의 대응 구간은 기록 소실로 \emph{not recorded}.
+
+(iii) 민감도 가설의 기각(D2): (d)의 gain $1/\norm{a_I}$은 실재하나 chatter를 구동하지 않는다
+--- per-step $\norm{\Delta u}$와의 순위상관이 약한 음수로 측정되어, 증폭자 가설은 기각되었다.
+
+(iv) 축의 학습 채널(P3, matched budget step 34500, scene-paired): full pool
+$\Delta\mathrm{cps}=-0.0065\ [-0.024,+0.011]$, hold-feasible 부분집합
+$-0.0321\ [-0.0645,-0.0028]$ --- 분리된 유일한 신호가 enumeration 쪽이다. 배포 채널(M5)은
+$-0.0013$. 축은 cps 예측 없이 전제 복원으로 등록되었고, 측정은 그 등록이 옳았음을 보인다:
+전제는 복원되었고, 이 예산과 seed에서 학습되는 것은 바뀌지 않았다. 범위: 단일 seed, 학습
+궤적의 한 공통 지점, cps 비단조($50$k 종점 비교는 crash로 unavailable).
+\end{remark}
+
+\begin{proposition}[A continuous, gradient-carrying realization of the infeasible branch]\label{prop:empty-prox}
+On $\mathcal E=\{s_\emptyset>0\}$ (\cref{rem:empty-grad}), where every $u\in\calU$ violates the
+row, fix a gain $\gamma>0$ and define
+\[
+  u_\gamma\ \eqdef\ \operatorname*{argmin}_{u\in\calU}\;
+  \Big[(a^\top u-b)\ +\ \tfrac{1}{2\gamma}\norm{u-u_{\mathrm{nom}}}^2\Big]
+  \ =\ \mathrm{clip}\big(u_{\mathrm{nom}}-\gamma\,a,\ \calU\big).
+\]
+Then:
+\begin{enumerate}[label=(\alph*)]
+  \item \textbf{(closed form; bounded excess violation)} the identity holds because on
+  $\mathcal E$ the hinge is affine over all of $\calU$; and against the least-violating vertex
+  $v^\star\in\operatorname{argmin}_{u\in\calU}a^\top u$,
+  \[
+    0\ \le\ a^\top u_\gamma-a^\top v^\star\ \le\ \frac{\operatorname{diam}(\calU)^2}{2\gamma},
+  \]
+  so the price of proximality over the deployed argmin is an excess violation controlled by
+  $1/\gamma$ --- and on $\mathcal E$ no admissible action satisfies the row, so no guarantee is
+  forfeited by paying it;
+  \item \textbf{(regularity)} $u_\gamma$ is $1$-Lipschitz in $u_{\mathrm{nom}}$ and
+  $\gamma$-Lipschitz in $a$; if $\gamma=\gamma(s_\emptyset)$ is continuous then
+  $(u_{\mathrm{nom}},a,b)\mapsto u_\gamma$ is continuous on all of $\mathcal E$ --- in
+  particular the vertex map's discontinuities across the sign loci $\{a_j=0\}$, the locus
+  family carrying the measured empty-branch chatter (\cref{rem:rate-slope}), are removed
+  entirely;
+  \item \textbf{(the gradient returns)} $\partial u_\gamma/\partial u_{\mathrm{nom}}
+  =\operatorname{diag}(\mathbf 1_I)$ with $I$ the unclipped coordinates, which is nonzero off
+  the all-clipped set --- the branch on which \cref{cor:jt-deployed}(b) recorded an identically
+  zero policy gradient regains one;
+  \item \textbf{(the boundary)} across $\partial\mathcal E$ the exact projection's one-sided
+  limit is $\mathrm{clip}(u_{\mathrm{nom}}-\lambda_{\mathrm{sat}}a)$ with
+  $\lambda_{\mathrm{sat}}$ the saturation knee of \cref{prop:lambda-solve}'s breakpoint scan,
+  so the residual jump at a branch transition is
+  $\norm{\mathrm{clip}(u_{\mathrm{nom}}-\gamma(0)a)-\mathrm{clip}(u_{\mathrm{nom}}-\lambda_{\mathrm{sat}}a)}
+  \le\abs{\gamma(0)-\lambda_{\mathrm{sat}}}\,\norm{a}$, vanishing where
+  $\gamma(0)\ge\lambda_{\mathrm{sat}}$ and bounded otherwise; branch-transition steps are a
+  separately measured, small class, distinct from the within-$\mathcal E$ chatter that (b)
+  removes.
+\end{enumerate}
+Scope: exact. The deployed choice of $\gamma(\cdot)$ is a registration, not a theorem.
+\end{proposition}
+\begin{proof}
+(a) $\mathcal E$에서 $a^\top u-b>0$이 $\calU$ 전체에서 성립하므로 목적함수는 강볼록 이차식
+$a^\top u+\tfrac{1}{2\gamma}\norm{u-u_{\mathrm{nom}}}^2$과 상수 차이이고, 그 box-제약 최소는
+좌표 분리되어 $\mathrm{clip}(u_{\mathrm{nom}}-\gamma a)$이다. 초과 위반은 최적성
+$f(u_\gamma)\le f(v^\star)$의 재배열에 $\norm{v^\star-u_{\mathrm{nom}}}^2
+-\norm{u_\gamma-u_{\mathrm{nom}}}^2\le\operatorname{diam}(\calU)^2$를 대입한 것이다.
+(b) clip은 non-expansive이므로 $u_{\mathrm{nom}}$-Lipschitz 상수 $1$; $a$-차는
+$\gamma\norm{\Delta a}$로 유계; $\gamma(s_\emptyset)$가 연속이면 합성이 연속이고, 유한한
+$\gamma$에서 $a_j\mapsto\mathrm{clip}(u_{\mathrm{nom},j}-\gamma a_j)$는 부호 통과점에서
+연속이다 --- vertex argmin은 $\gamma\to\infty$ 극한이며 불연속은 그 극한에서만 생긴다.
+(c) 자유 좌표에서 항등, clip 좌표에서 $0$. (d) feasible 쪽에서 $b\downarrow\min_\calU a^\top
+u$일 때 $\lambda^\star\uparrow\lambda_{\mathrm{sat}}$이고 사영은
+$\mathrm{clip}(u_{\mathrm{nom}}-\lambda_{\mathrm{sat}}a)$로 수렴한다; 차의 상계는 clip의
+non-expansiveness다.
 \end{proof}
 
 \begin{remark}[Measured: the selection is the initiating discontinuity]\label{rem:sel-measured}
@@ -1520,17 +1910,159 @@ empty-branch fallback이 아니라 box-aware selection 자체에서 일어난다
 \cref{rem:churn-null}과 함께 이는 재배치의 설명을 닫는다: closed loop은 매끄러운 의미에서 혼돈적이지
 않다 --- 증폭이 지수적 성장이 아니라 한 스텝에서 일어난다 --- 그것은 \emph{불연속}이며, $10^{-5}$
 규모를 포함한 어떤 섭동도 $\calT_\ast$를 가로질러 $O(1)$ 제어 차이를 낳는다. 범위: 단일 seed,
-하나의 계, 하나의 checkpoint.
+하나의 계, 하나의 checkpoint --- 구체적으로 v2.7.4 checkpoint와 v2.7.5 $dt_{\mathrm{ctrl}}$ arm
+위의 \texttt{theory\_r13r14.py} 측정이다. v2.8.0 S1이 같은 protocol을 v2.7.6 checkpoint와
+canonical pool 위에서 재실행하여 중앙값 $2.92$, $p_{90}$ $30.96$, 최대 $47{,}769$를 얻었다. 두
+수치 집합은 서로 다른 측정이며 대체되지 않는다; 질적 결론 --- 증폭이 지수적 성장이 아니라 한
+스텝의 불연속에서 온다 --- 은 양쪽에서 같고, 꼬리의 크기는 checkpoint와 pool에 의존한다.
 \end{remark}
 
 \begin{remark}[Why this was correct before and is not now]\label{rem:sel-history}
 \cref{prop:enum-exact}(b)에 의해 enumeration은 정확히 action 차원이 최대 $2$일 때 exhaustive이다.
-planar lineage는 $m=2$이므로 그 위에서 배포된 selection은 projection과 \emph{같고} \cref{prop:jt}이
-수정 없이 이전된다. spatial lineage는 물리적으로 올바른 per-rotor box, $m=4$를 채택했고 그 시점에
+planar lineage는 $m=2$이므로 \emph{정규화 없는} enumeration은 그 위에서 projection과 같다;
+그러나 배포된 map은 regularizer 때문에 그렇지 않았음이 뒤에 판명되었고
+(\cref{prop:eps-selection}, \cref{rem:eps-measured}), 값의 exactness에 관한 본 remark의 주장은
+그 remark로 대체된다 --- 아래의 gradient 및 \cref{prop:jt} 이전 서술은 정규화 없는 family에
+대한 것으로 읽는다. spatial lineage는 물리적으로 올바른 per-rotor box, $m=4$를 채택했고 그 시점에
 같은 code가 조용히 projection 계산을 멈췄다: source 주석은 여전히 그 family를 2차원 action 계를
 위해 명시된 것으로 기록한다. 이는 \cref{cor:obs-quad}과 같은 실패 양식으로, 거기서는 unicycle에
 옳던 observation encoding이 중력이 들어오자 조용히 틀렸다. 교훈은 일반화된다: lineage가 plant를
 바꾸면, 유도가 옛 차원을 사용한 모든 closed-form 성분은 재실행이 아니라 재유도되어야 한다.
+\end{remark}
+
+\section{Deployment regularity: rate, chatter, and lag}\label{sec:rate}
+
+The results of \cref{sec:selection} concern the filter as a map. This section concerns what that
+map's regularity does under zero-order-hold deployment: how the command's total variation scales
+with the control rate, and whether irregularity converts into safety loss on a lagged actuator.
+Both questions admit sharp statements, and both were measured in v2.8.0.
+
+\begin{proposition}[Total-variation dichotomy under zero-order hold]\label{prop:tv-rate}
+Let the closed loop be sampled with period $h$, let the state velocity be bounded,
+$\norm{\dot x}\le M$ along the trajectories considered, and write
+$u_k=\pi_{\mathrm{dep}}(x(t_k))$ for the held command. Define the command total-variation rate
+$\mathrm{TV/s}\eqdef\frac1T\sum_k\norm{u_{k+1}-u_k}$ over a horizon $T$.
+\begin{enumerate}[label=(\alph*)]
+  \item \textbf{(Lipschitz feedback: rate-independent bound)} If $\pi_{\mathrm{dep}}$ is
+  $L$-Lipschitz on the visited set, then
+  $\norm{u_{k+1}-u_k}\le L\norm{x(t_{k+1})-x(t_k)}\le LMh$, and since there are $1/h$ samples
+  per second,
+  \[
+    \mathrm{TV/s}\ \le\ LM \qquad\text{independently of }h .
+  \]
+  \item \textbf{(tie-crossing feedback: rate-proportional growth)} If $\pi_{\mathrm{dep}}$ is
+  discontinuous across a tie locus $\calT_\ast$ with jump size $J>0$, and the sampled trajectory
+  chatters across $\calT_\ast$ --- successive samples on alternating sides, the regime
+  \cref{rem:sel-measured} measures --- then each chattering sample contributes a jump, so
+  \[
+    \mathrm{TV/s}\ \sim\ \frac{J\,\rho_\ast}{h},
+  \]
+  where $\rho_\ast\in(0,1]$ is the fraction of samples in the chattering regime. In a log-log
+  plot of $\mathrm{TV/s}$ against $1/h$, (a) has slope $0$ and (b) slope $1$; mixtures
+  interpolate.
+\end{enumerate}
+Scope: (a) exact under its hypotheses; (b) exact within the chattering regime, descriptive of
+the mixture.
+\end{proposition}
+\begin{proof}
+(a)는 연쇄 부등식 그대로다: 상태가 $h$ 동안 $Mh$ 이상 못 움직이고, Lipschitz 되먹임이 그것을
+$LMh$의 명령 변화로 옮기며, 초당 $1/h$개 표본이 이를 합산한다 --- $h$가 소거된다. (b)에서
+chattering 표본 각각은 $\calT_\ast$의 반대편에서 평가되므로 도약 크기 $J$ 이상을 기여하고, 그런
+표본이 초당 $\rho_\ast/h$개다. 기울기 주장은 두 식을 $\log(1/h)$에 대해 미분한 것이다.
+\end{proof}
+
+\begin{remark}[Measured: continuity is read off as an exponent]\label{rem:rate-slope}
+\cref{prop:tv-rate}는 실현의 연속성을 배포 관측량의 \emph{지수}로 검정 가능하게 만든다 ---
+상수가 아니라 지수이므로 우연 일치의 여지가 좁다. 측정(v2.8.0, canonical pool, dual-arm
+deliverable checkpoint, $20/100/500$~Hz): $\log$-$\log$ 기울기는 dual solve
+$0.124\pm0.033$, enumeration $0.531\pm0.069$ --- 각각 (a)와 (b) 쪽에 붙었고 차이가 합성
+표준오차의 $5$배를 넘는다. $500$~Hz에서 TV/s는 $37.4$ 대 $179.8$($4.8\times$)이다.
+
+대조가 해석을 잠근다: 표본간 barrier 상승 --- hold 구간 내 $\Vhat$ 증가의 최대치 --- 은 두
+realization에서 같은 기울기 $-1.2$로 감소한다. 이산화 효과는 realization과 무관하게 공통이고,
+TV만이 연속성에 반응한다. 이로써 v2.7.5의 $100$~Hz H3 실패(TV/s 중앙값 $+40.5\%$)는 결함이
+아니라 당시 배포된 selection의 (b)-거동으로 소급 설명된다.
+
+dual solve의 잔여 TV는 rate가 오를수록 empty branch로 집중된다($500$~Hz에서 $51\%$) --- 두
+realization이 공유하는, 여전히 유한-후보 argmin인 그 분기다. \cref{prop:tv-rate}(a)의 상계가
+무조건 성립하려면 그 분기의 연속 실현이 남은 조건이며, \cref{prop:empty-prox}가 그 실현을 준다. 범위: 단일
+seed, 하나의 계, 두 checkpoint lineage; 기울기는 $3$점 적합.
+\end{remark}
+
+\begin{proposition}[Lag transfer: what a first-order actuator does to the enforced row]\label{prop:lag-transfer}
+Let the plant apply $u_a$ governed by $\tau\dot u_a=u_c-u_a$ while the filter enforces
+$a^\top u_c\le b$ on the command. Then at any time,
+\[
+  a^\top u_a-b\ =\ a^\top(u_a-u_c)+\underbrace{(a^\top u_c-b)}_{\le0}
+  \ \le\ \norm{a}\,\norm{u_a-u_c},
+\]
+and along a command of bounded variation the tracking error obeys the standard first-order
+bound $\norm{u_a-u_c}\lesssim\tau\,\norm{\dot u_c}$ in steady following, so the realized
+violation of the enforced row is bounded by $\norm{a}\,\tau\,\norm{\dot u_c}$: command
+irregularity converts into guarantee loss \emph{at most} linearly in $\tau$ and linearly in the
+command rate. Scope: exact inequality in the first display; the second is the first-order
+tracking estimate and degrades as $\tau$ approaches the loop's dominant time constants.
+\end{proposition}
+\begin{proof}
+첫 표시는 항등 분해와 Cauchy--Schwarz이다. 둘째는 1차 지연의 표준 추종 추정으로, 명령 도함수가
+유계인 구간에서 $u_a-u_c=-\tau\dot u_a\approx-\tau\dot u_c$가 성립하는 데서 온다; $\tau$가
+루프의 지배 시정수 규모에 접근하면 근사가 무너지고 위반은 더 이상 이 항이 지배하지 않는다.
+\end{proof}
+
+\begin{remark}[Measured: the registered lag prediction failed, and the failure is the
+finding]\label{rem:lag-null}
+\cref{prop:lag-transfer}에서 자연스러운 예측이 등록되었다: enumeration의 명령이 $4.8\times$
+거칠므로(\cref{rem:rate-slope}), $\tau$가 커질수록 그 위반 상계가 먼저 소진되어 enumeration의
+충돌이 dual solve보다 빨리 오르고 격차가 rate와 함께 벌어진다는 것. falsifier --- 두
+realization이 $\tau$에서 등속으로 열화한다 --- 가 발화했다: 측정(v2.8.0, $30$-cell 격자,
+$\tau\in\{0,0.005,0.01,0.02,0.05\}$~s $\times$ 두 realization $\times$ 세 rate, canonical
+pool)에서 $\tau\le0.02$~s의 충돌 격차는 전 구간 등가대역 $\pm0.005$ 안이고,
+$\tau=0.05$~s에서는 rate가 높을수록 두 realization이 \emph{함께} 파괴된다.
+
+기전 독해: \cref{prop:lag-transfer}의 상계는 참이나 지배 항이 아니다. 파괴를 일으키는 것은
+chatter의 지연 전이가 아니라 지연 자체가 만드는 위상 손실이며, 그것은 명령의 거칠기와 무관하게
+양쪽에 같게 작용한다. 따라서 exact projection의 배포상 가치는 이 $\tau$ 범위($\le0.02$~s,
+전형적 모터 시정수 대역)에서 안전이 아니라 명령 품질이다 --- \cref{prop:tv-rate}(a)의
+rate-무관 TV 상계는 하드웨어 논거(구동기 부담)이지 성능 주장이 아니다. 등록된 예측의 기각을
+그대로 기록한다. 범위: 단일 seed, 하나의 계, 하나의 checkpoint.
+\end{remark}
+
+\begin{proposition}[The repair is argument-continuity; state-continuity needs the whole
+chain]\label{prop:obs-chain}
+Let the deployed feedback be
+$x\mapsto F\big(\pi_\theta(o(x)),\,a(x),\,b(x)\big)$, where $F$ is the realization, and let the
+constraint row be built from a certificate that takes the observation,
+$\Vhat=\Vhat_{\mathrm{net}}\circ o$, so that $a$ and $b$ are functions of $x$ through $o$ as
+well. Suppose $F$ is continuous in its arguments (\cref{prop:lambda-solve}) and
+$\pi_\theta,\Vhat_{\mathrm{net}}$ are continuous. Then:
+\begin{enumerate}[label=(\alph*)]
+  \item wherever $o$ is continuous, the feedback is continuous in $x$;
+  \item across a discontinuity locus of $o$, \emph{both} channels jump --- the nominal
+  $\pi_\theta(o)$ and the row $(a,b)$ --- so the command jump survives any regularization of
+  $\pi_\theta$ and any choice of continuous realization $F$;
+  \item the deployed encoder sorts obstacles by distance and truncates at $k$, so $o$ is
+  discontinuous exactly across the rank-crossing loci $\{d_i=d_j\}$ that exchange slot contents
+  (including the exchange at the $k$-th position) and is locally Lipschitz elsewhere.
+\end{enumerate}
+Scope: (a),(b) exact; (c) by the encoder's construction.
+\end{proposition}
+\begin{proof}
+(a)는 연속 함수의 합성이다. (b) locus를 가로지르는 극한에서 $o$의 두 극한값이 다르면
+$\pi_\theta(o)$와 $(a,b)$의 극한값도 일반적으로 다르며, $F$의 연속성은 인자에 대한 것이므로
+서로 다른 인자 극한을 하나의 출력으로 접합하지 않는다. 어느 한 채널만 고치는 수리는 다른
+채널의 도약을 남긴다. (c) 정렬은 비교 결과가 바뀌는 곳, 즉 동거리 locus에서만 출력 배치를
+바꾸고, 그 밖에서는 각 slot이 고정된 장애물의 매끄러운 함수다; $k$-절단은 $k$번째와
+$k{+}1$번째의 동거리 locus를 같은 방식으로 추가한다.
+\end{proof}
+
+\begin{remark}[Measured: the crossing jumps sit in the row itself]\label{rem:obs-chain-measured}
+측정(v2.8.0 D3, canonical pool, 세 rate): 순위 교차 스텝은 드물지만 그 스텝의
+$\norm{\Delta u}$는 비교차 스텝 중앙값의 약 $33\times$이고, $\norm{\Delta a}$와
+$\abs{\Delta b}$가 동시에 도약한다 --- \cref{prop:obs-chain}(b)의 두 채널 중 constraint 채널이
+실측으로 확인된 것으로, 이 성분은 정책측 정규화로도 realization 교체로도 제거되지 않는다. 총
+TV에서의 몫은 낮은 rate에서 작다(빈도가 낮으므로). 제거는 순서-불변이고 compact support로
+연속 소멸하는 encoding을 요구하며, 그것은 관측 차원을 바꾸므로 이 문서의 범위 밖 후속이다.
+범위: 단일 seed, 하나의 계, 하나의 checkpoint.
 \end{remark}
 
 \section{Corrections to earlier statements}\label{sec:dt-corrections}
@@ -1543,8 +2075,11 @@ fallback은 고정 vertex가 아니다. empty row에서 filter는 least-violatin
 은 거짓이다.
 
 그럼에도 gradient는 규칙의 상수성이 아니라 \cref{prop:sel}(a)에 의해 $\mathcal E$의 대부분에서
-소멸한다: empty 스텝에서 배포 action은 두 arm에서 각각 $71.1\%$와 $65.7\%$의 경우 box vertex이고
-나머지에서 clipped nominal이며, 중간의 edge-solve candidate는 $0\%$에서 선택된다.
+소멸한다: empty 스텝에서 배포 action은 대부분의 경우 box vertex이고 나머지에서 clipped
+nominal이며, 중간의 edge-solve candidate는 선택되지 않는다. 그 몫은 설정에 강하게 의존한다 ---
+seed42 band-feasible pool 위의 추적 가능한 측정은 $52.13\%$이고, canonical pool의 배포
+fallback($k$-step, $k=5$)에서 v2.8.0 S1이 잰 값은 두 arm 모두 $99.99999\%$이다. 이전 판본이
+인용한 한 쌍의 수치($71.1\%/65.7\%$)는 어떤 persisted artifact로도 재현되지 않아 삭제한다.
 
 두 귀결이 재서술되어야 한다. 첫째, \cref{prop:jt}의 배포 이전은 $\mathcal E$에서만 실패하는 것이
 아니다: \cref{cor:jt-deployed}은 vertex가 이기는 곳이면 feasible branch에서도 같은 gap을 보이고,

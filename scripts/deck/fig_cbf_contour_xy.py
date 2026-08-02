@@ -16,7 +16,7 @@ import matplotlib.patches as mpatches
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import TwoSlopeNorm
 
-CK = Path("data/previous_runs/v2.7.6/set__20260725-043415__seed42/v2.7.6__jt__20260725-052127__seed42/checkpoints/step_042000.pt")
+CK = Path("data/runs/v2.7.6/set__20260725-043415__seed42/v2.7.6__jt__20260725-052127__seed42/checkpoints/step_042000.pt")
 INLOOP = Path("data/eval_pools/eval_inloop_quadrotor-3d-d2r_n500_seed12345.pkl")
 RES, WORLD, PZ = 140, 4.5, 0.0
 CMAP, NORM = "coolwarm", TwoSlopeNorm(vmin=-1.0, vcenter=0.0, vmax=1.0)

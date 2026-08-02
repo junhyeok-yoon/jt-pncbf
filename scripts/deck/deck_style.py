@@ -10,7 +10,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 DPI = 200
-OUT = Path("/home/junhyeok/MIT/jt-pncbf/data/previous_runs/v2.7.7/deck_assets")
+OUT = Path("/home/junhyeok/MIT/jt-pncbf/data/runs/v2.7.7/deck_assets")
 
 # v2.7.7 amendment 1: bundled static ffmpeg for mp4 animations (no system change).
 try:

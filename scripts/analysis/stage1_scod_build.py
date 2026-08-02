@@ -56,7 +56,7 @@ from src.eval.evaluate import evaluate  # noqa: E402
 import jt_failure_dissect as dissect  # the per-step NPZ logger (imported, NOT modified)  # noqa: E402
 
 
-PREV_RUN = REPO_ROOT / "data/previous_runs/v2.0.1__20260529-171057__seed42"
+PREV_RUN = REPO_ROOT / "data/runs/v2.0.1/v2.0.1__20260529-171057__seed42"
 SECURED_CKPT = REPO_ROOT / "data/secured_data/v2.0.1/seed42/checkpoints/best.pt"
 METRICS_CSV = PREV_RUN / "metrics.csv"
 FULL_POOL = REPO_ROOT / "data/secured_data/pools/eval_full_di_n500_seed23456.pkl"

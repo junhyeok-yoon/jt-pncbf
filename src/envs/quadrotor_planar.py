@@ -107,6 +107,9 @@ class QuadrotorPlanar:
     def speed(self, x: Tensor) -> Tensor:
         return torch.linalg.norm(x[..., 3:5], dim=-1)
 
+    def angular_rate(self, x: Tensor) -> Tensor:
+        return torch.abs(x[..., 5])                          # scalar angular rate |omega|
+
     def thrust_axis(self, x: Tensor) -> Tensor:
         """Re = (-sin theta, cos theta), the body thrust axis (note Def 2.1 / Thm 5.3)."""
         theta = x[..., 2]

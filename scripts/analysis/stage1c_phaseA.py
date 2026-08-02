@@ -9,7 +9,7 @@ SYS={
  "DI_v2.3.0_s42":  (REPO/"data/secured_data/v2.3.0/seed42/checkpoints/best.pt",
                     REPO/"data/secured_data/pools/eval_full_di_n2000_seed23456.pkl",
                     REPO/"data/secured_data/v2.3.0/seed42/eval_episodes.csv"),
- "UNI_v2.2.2_28k": (REPO/"data/previous_runs/v2.2.2__20260619-083424__seed42/checkpoints/best.pt",
+ "UNI_v2.2.2_28k": (REPO/"data/runs/v2.2.2/v2.2.2__20260619-083424__seed42/checkpoints/best.pt",
                     REPO/"data/secured_data/pools/eval_full_unicycle_n2000_seed23456.pkl", None),
 }
 def summ(rows):

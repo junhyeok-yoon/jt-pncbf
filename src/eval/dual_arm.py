@@ -48,6 +48,13 @@ def _boot_ci(o: np.ndarray, inf: np.ndarray, n_resample: int = 1000) -> list[flo
     return [float(np.percentile(vals, 2.5, method="linear")), float(np.percentile(vals, 97.5, method="linear"))]
 
 
+def _boot_rate_ci(o: np.ndarray, key: str, n_resample: int = 1000) -> list[float]:
+    """v2.8.0 B6.3: within-seed bootstrap CI for a single outcome-component RATE (e.g. oob, timeout)."""
+    rng = np.random.default_rng(_BOOT_SEED); N = len(o); idx = rng.integers(0, N, size=(n_resample, N))
+    vals = [float((o[r] == key).mean()) for r in idx]
+    return [float(np.percentile(vals, 2.5, method="linear")), float(np.percentile(vals, 97.5, method="linear"))]
+
+
 def _rollout(scenes, un_fn: Callable[[Tensor, Any], Tensor], config, h_fn, system, device,
              *, filtered: bool, chunk: int, dtype=torch.float32):
     """Roll every scene; return per-episode (outcome, inf_v2, inf_canonical, empty, sing_viol) active-step
@@ -60,6 +67,7 @@ def _rollout(scenes, un_fn: Callable[[Tensor, Any], Tensor], config, h_fn, syste
         x = initial_states_from_batch(bs).to(dtype); B = x.shape[0]
         empt = torch.zeros(max_steps, B, dtype=torch.bool, device=device)
         sviol = torch.zeros_like(empt); infc = torch.zeros_like(empt); inf2 = torch.zeros_like(empt)
+        sat = torch.zeros_like(empt)                                 # v2.8.0 B6.3: per-step saturation flag
         states = [x]
         with torch.no_grad():
             for t in range(max_steps):
@@ -75,6 +83,7 @@ def _rollout(scenes, un_fn: Callable[[Tensor, Any], Tensor], config, h_fn, syste
                     infc[t] = sing | empty; inf2[t] = empty | (sing & (row < 0.0))
                 else:
                     u = torch.clamp(un, min=bounds[:, 0], max=bounds[:, 1])
+                sat[t] = (torch.minimum((u - bounds[:, 0]).abs(), (u - bounds[:, 1]).abs()) <= 1.0e-3).any(dim=1)
                 x = rk4_step(system, x, u, dt); states.append(x)
         S = torch.stack(states, 0); masks = step_outcomes(S, bs, system, config); res = resolve_outcome(masks)
         an = first_physical_event_step(masks)
@@ -83,28 +92,43 @@ def _rollout(scenes, un_fn: Callable[[Tensor, Any], Tensor], config, h_fn, syste
         for i in range(B):
             am = act[:, i]; na = int(am.sum())
             rate = lambda f: float((f[:, i] & am).sum()) / na if na else 0.0
-            ep.append((res.outcome[i], rate(inf2), rate(infc), rate(empt), rate(sviol)))
+            ep.append((res.outcome[i], rate(inf2), rate(infc), rate(empt), rate(sviol), rate(sat),
+                       res.collision_cause[i] if res.collision_cause else "not_recorded"))
     return ep
 
 
 def _arm_summary(ep, wall_s):
     o = np.array([e[0] for e in ep]); i2 = np.array([e[1] for e in ep]); ic = np.array([e[2] for e in ep])
-    em = np.array([e[3] for e in ep]); sv = np.array([e[4] for e in ep])
+    em = np.array([e[3] for e in ep]); sv = np.array([e[4] for e in ep]); st = np.array([e[5] for e in ep])
+    cc = np.array([e[6] for e in ep]) if ep and len(ep[0]) > 6 else np.array([""] * len(ep))
     orate = lambda k: float((o == k).mean())
+    # v2.8.0: collision-cause decomposition as episode fractions (of the whole pool, so they sum to `collision`)
+    ccrate = lambda k: float((cc == k).mean()) if len(cc) else 0.0
     return {"reach": orate("goal"), "collision": orate("collision"), "oob": orate("oob"),
             "stuck": orate("stuck"), "timeout": orate("timeout"),
+            # v2.8.0 B6.3: bootstrap CIs for oob and timeout alongside the other outcome components
+            "reach_ci": _boot_rate_ci(o, "goal"), "collision_ci": _boot_rate_ci(o, "collision"),
+            "stuck_ci": _boot_rate_ci(o, "stuck"), "oob_ci": _boot_rate_ci(o, "oob"),
+            "timeout_ci": _boot_rate_ci(o, "timeout"),
+            # v2.8.0 M1: collision cause split (obstacle/band_lower/band_upper; sum == collision)
+            "collision_obstacle": ccrate("obstacle"), "collision_band_lower": ccrate("band_lower"),
+            "collision_band_upper": ccrate("band_upper"),
             "inf_canonical": float(ic.mean()), "inf_v2": float(i2.mean()),
             "inf_empty": float(em.mean()), "inf_singular_violated": float(sv.mean()),
+            "saturation_rate": float(st.mean()),        # v2.8.0 B6.3: now carried (was omitted)
             "cps_legacy": cps_v2(o, ic), "cps_v2": cps_v2(o, i2), "cps_v2_ci": _boot_ci(o, i2),
             "wall_s": round(wall_s, 1), "n": len(ep)}
 
 
 def _shield_summary(r, wall_s, wall_a):
     outc = r["outcome"]; N = len(outc); orate = lambda k: float(np.mean([x == k for x in outc]))
+    oarr = np.array(outc)
     reach = orate("goal"); coll = orate("collision"); oob = orate("oob"); stuck = orate("stuck"); to = orate("timeout")
     vs = r["verified_start"].numpy(); cm = np.array([o == "collision" for o in outc])
     cps = reach - 2 * coll - stuck - 0.5 * (oob + to)
     return {"reach": reach, "collision": coll, "oob": oob, "stuck": stuck, "timeout": to,
+            "oob_ci": _boot_rate_ci(oarr, "oob"), "timeout_ci": _boot_rate_ci(oarr, "timeout"),
+            "saturation_rate": "not recorded",       # v2.8.0 B6.3: shield rollout does not track saturation
             "cps_legacy": cps, "cps_v2": cps, "verified_start_frac": float(vs.mean()),
             "overrides_per_ep": float(r["n_overrides"].float().mean()),
             "checks_per_ep": float(r["n_checks"].float().mean()),

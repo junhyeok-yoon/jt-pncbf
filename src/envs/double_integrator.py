@@ -66,6 +66,10 @@ class DoubleIntegrator:
     def speed(self, x: Tensor) -> Tensor:
         return torch.linalg.norm(x[..., 2:4], dim=-1)
 
+    def angular_rate(self, x: Tensor) -> Tensor:
+        # no angular-rate state -> structural zero (condition vacuous).
+        return torch.zeros_like(x[..., 0])
+
     def lqr_action(self, x: Tensor, goal: Tensor) -> Tensor:
         goal = _batched_goal(goal, x)
         target = torch.cat([goal, torch.zeros_like(goal)], dim=1)

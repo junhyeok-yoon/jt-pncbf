@@ -27,6 +27,10 @@ class System(Protocol):
     def speed(self, x: Tensor) -> Tensor:
         """Return batched scalar speeds for goal/outcome predicates."""
 
+    def angular_rate(self, x: Tensor) -> Tensor:
+        """Return batched scalar angular-rate magnitude for the goal/outcome predicate;
+        a structural zero on systems with no angular-rate state (the condition is vacuous there)."""
+
     def lqr_action(self, x: Tensor, goal: Tensor) -> Tensor:
         """Return batched clamped nominal actions toward goal."""
 

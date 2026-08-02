@@ -735,6 +735,7 @@ def run_training(
             if step % metrics_log_every == 0:
                 _append_csv(run_dir / "metrics.csv", METRIC_COLUMNS, [row])
                 _write_tb_scalars(writer, "train", row, step)
+                _flush_jac_classes(run_dir)          # v2.8.0 S3 R1: crash-safe incremental P2 flush
                 last_logged_step = step
 
         if step == n_steps or step % max(1, eval_cadence) == 0:
@@ -1847,6 +1848,23 @@ def _save_checkpoint(
     )
 
 
+def _flush_jac_classes(run_dir: Path) -> None:
+    """v2.8.0 S3 R1: persist the P2 (filter-Jacobian-class) series incrementally at the metrics cadence,
+    so a crash costs the tail rather than the whole run. No-op unless loss.policy.log_jac_classes has
+    populated the buffer (off by default -> zero effect)."""
+    from src.frameworks.jt_pncbf import losses as _losses
+    log = _losses._JAC_CLASS_LOG
+    if not log:
+        return
+    import csv as _csv
+    cols = list(log[0].keys())
+    with (run_dir / "jac_classes.csv").open("w", newline="") as fh:
+        writer = _csv.DictWriter(fh, fieldnames=cols)
+        writer.writeheader()
+        for r in log:
+            writer.writerow(r)
+
+
 def _create_run_dir(output_root: Path, config: Mapping[str, Any], seed: int, *, stage: str = "full") -> Path:
     # v2.7.4: framework-tagged run id under data/runs/<version>/[<set>/] (tag from run.framework; value/JT
     # set folder from resolve_set — value run creates its set, JT joins its value run's set, else version folder).
@@ -1894,7 +1912,11 @@ def _record_eval(
     system: System,
     value_net: ValueNetEnsemble,
 ) -> None:
-    _append_csv(run_dir / "eval_metrics.csv", EVAL_METRIC_COLUMNS, [eval_result.eval_row])
+    # v2.8.0 W1: append the two provenance-half sub-score columns only when present (mixed pool); a
+    # provenance-free pool keeps EVAL_METRIC_COLUMNS exactly -> byte-identical to today's schema.
+    _eval_cols = EVAL_METRIC_COLUMNS + [c for c in ("cps_full_half", "cps_tilt60_half")
+                                        if c in eval_result.eval_row]
+    _append_csv(run_dir / "eval_metrics.csv", _eval_cols, [eval_result.eval_row])
     _append_csv(run_dir / "eval_episodes.csv", EVAL_EPISODE_COLUMNS, eval_result.episode_rows)
     from src.eval.run_full import (
         log_png_to_tensorboard,
@@ -1991,6 +2013,14 @@ def _write_pool_manifest_copy(run_dir: Path, config: Mapping[str, Any]) -> None:
 
 def _pool_stem_for(pool_name: str, config: Mapping[str, Any], system_name: str) -> str:
     from src.eval.build_pools import obstacle_distribution_name, pool_stem, pool_variant
+
+    # v2.8.0 dual-scoring standard: quadrotor_3d in-loop evaluation uses the MIXED pool (1000 full-attitude +
+    # 1000 tilt<=60, per-IC provenance) so both regimes are exposed every cadence in one evaluation. Other
+    # systems and the `full` pool are unchanged. Gated on config so a checkpoint predating the standard (or a
+    # config that opts out via eval.in_loop.mixed=false) resolves the legacy in-loop pool.
+    if (pool_name == "inloop" and system_name == "quadrotor_3d"
+            and bool(config.get("eval", {}).get("in_loop", {}).get("mixed", True))):
+        return "eval_inloop_quadrotor-3d-d2r-mixed_n2000_seed45678"
 
     if pool_name == "inloop":
         n_scenes = int(config["eval"]["in_loop"]["n"])

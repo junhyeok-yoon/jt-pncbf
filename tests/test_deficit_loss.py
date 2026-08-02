@@ -108,6 +108,13 @@ def test_w0_parity_and_aux_not_invoked(monkeypatch) -> None:
 
 def test_filter_aux_analytic_cases() -> None:
     config, system, value_net, _ = _setup()
+    # v2.8.0 S2 B7: PIN RETAINED (projection=enumerate). Cases (B) and (C-moderate) assert that the box-aware
+    # SELECTION differs from the raw box-free CBF ask (delta_u>0) on fixed states chosen so the ε-regularized
+    # base-projection candidate exits the box. The exact dual_solve keeps the raw ask INSIDE the box on those
+    # same states (e.g. C-moderate: raw = [-1.377,-0.787] within [-2,2]^2 -> delta_u ~ 4e-6), so the expectation
+    # cannot be recomputed for the exact projection without redesigning the test states. This case validates the
+    # retained enumeration realization; the exact default path is covered by test_dual_projection.py.
+    config["filter"]["projection"] = "enumerate"
     for p in value_net.parameters():
         p.requires_grad_(False)
     params = _hardnet_params(config)

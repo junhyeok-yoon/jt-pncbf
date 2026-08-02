@@ -2,7 +2,7 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.7.7"
+  version: "v2.8.0"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
   system: quadrotor_planar          # double_integrator | unicycle | quadrotor_planar  (v2.6.0: direct-input planar quadrotor)
@@ -244,6 +244,9 @@ loss:
     # ||p-g||^2 (the Huber variant was REVERTED — audit confound). Goal-only ablation arm sets w_appr: 0.0.
     w_settle: 1.0                   # dense goal-gated settling: w_settle*exp(-||p-g||^2/settle_rho^2)*||v||^2
     settle_rho: 0.30                # settling gate width = 2*goal_radius (penalize speed only near the goal)
+    w_settle_ang: 0.39              # v2.8.0: angular settling weight, same goal gate, on ||omega||^2. Fixed by
+                                    # equalizing the two gated quadratics at their thresholds w_w*omega_G^2 =
+                                    # w_v*v_G^2 -> 1.0*(0.30/0.48)^2 = 0.39. Not tuned. 0 -> off (byte-identical).
     w_appr: 30.0                    # v2.6.2 amendment 2: BRAKING-ENVELOPE approach deficit weight (was 1.0 with
                                     # the inert gaussian gate). = the goal quadratic's near-obstacle p90 30.4 so
                                     # the term is competitive (w_terminal=30 precedent). 0 = off (parity).
@@ -298,6 +301,9 @@ halt:
   early_stop_min_delta: 0.002
 
 filter:
+  projection: dual_solve            # v2.8.0 S1: dual_solve = exact single-scalar dual root (prop:lambda-solve,
+                                    # exact + continuous at any action dim) | enumerate = legacy finite-candidate
+                                    # selection (prop:sel; exact only for action dim <= 2). S4 keeps enumerate.
   lg_reg_eps: 0.0                   # INERT with box_aware=true (box-aware enumerates the exact feasible region,
                                     # bypassing the base-projection blow-up -> smoke confirmed identical corrections
                                     # eps=0 vs 0.005 at ||L_g h||=0 states). Kept at 0; only goal_speed_radius changed.
@@ -309,8 +315,12 @@ filter:
     beta: 0.0
     delta: 0.1
   empty_fallback:                    # v2.7.1 Stage-1: k-step empty-branch ACTION fallback (eval-only)
-    mode: none                       # none = bit-parity; kstep = two-phase k-step selection on empty rows
+    mode: none                       # global default: none = bit-parity (DI/unicycle/planar keep this)
     k: 10
+    quadrotor_3d:                    # v2.8.0 B6.4: shipped 3D fallback = {kstep, phases 1, k 3}
+      mode: kstep                    # (v2.7.6_results.md:29 selected it; per-system via B6.1 plumbing)
+      phases: 1
+      k: 3
 
 eval:
   cadence: 1500                     # v2.3.0 DI run: in-loop eval + step_NNNNNN.pt cadence checkpoints every 1500 macro steps (n2000 re-selection)

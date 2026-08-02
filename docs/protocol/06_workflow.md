@@ -16,7 +16,7 @@ Sets strategy. Makes every decision: version increments, scope changes, hyperpar
 
 Analyzes, proposes, and writes prompts. Does **not** execute code. Does **not** decide unilaterally. Persistent across sessions only through this repository — a new Strategist instance is brought up to speed by reading `docs/index.md`, `docs/ledger.md`, the current version's `docs/versions/vX.Y.Z/changes.md` and its build-logs, and the protocol documents.
 
-The Strategist's deliverables are: framework proposals (`docs/proposals/`), retrieve and execute prompts (transient, not committed), decision briefs (delivered in chat), and version `changes.md` / `results.md` drafts. **Protocol edits** (`docs/protocol/`) are also the Strategist's responsibility under Researcher direction; the Executor never edits protocol files (`00_constitution` §1).
+The Strategist's deliverables are: framework proposals (`docs/proposals/`), retrieve and execute prompts (transient, not committed), decision briefs (delivered in chat), version `changes.md` / `results.md` drafts, and the theory document (`docs/tex/theory.tex`) — the Strategist's own research: it derives, states, and proves the mathematics and delivers the compiled `.tex` and PDF; the Executor installs verbatim and reports build errors without repairing the mathematics. Falsified statements and the version's measured results are reflected in `theory.tex` before that version's close. **Protocol edits** (`docs/protocol/`) are also the Strategist's responsibility under Researcher direction; the Executor never edits protocol files (`00_constitution` §1).
 
 ### 1.3 Executor (Claude Code or Codex — interchangeable)
 
@@ -93,7 +93,7 @@ The verification harness (`05_code` §5) must remain green. If a source change b
 
 The Executor runs a **smoke** stage first (`03_train` §6) on one seed. The smoke must pass — gradient-routing assertions in §6, no NaN/Inf, the loop completes — before any full run.
 
-The Executor then launches the **full** stage for each seed in the eval plan — the canonical seed set $\{42, 99, 12345\}$ of `04_eval` §5 (≥ 3, ideally in parallel if hardware allows). Each run writes to `data/v{X.Y.Z}__{TIMESTAMP}__seed{N}/`. Every other artifact the version produces — eval-only diagnostics, label or dataset generation, supervised regression, demonstration sets, registries — is written to a directory following the `<run_id>` formats of `05_code` §3: the timestamp is never omitted, and no produced file is left loose at the top of `data/`. The Researcher monitors via `tensorboard --logdir data/`.
+The Executor then launches the **full** stage for each seed in the eval plan — the canonical seed set $\{42, 99, 12345\}$ of `04_eval` §5 (≥ 3, ideally in parallel if hardware allows). Each run writes to `data/runs/v{X.Y.Z}/v{X.Y.Z}__{TIMESTAMP}__seed{N}/`. Every other artifact the version produces — eval-only diagnostics, label or dataset generation, supervised regression, demonstration sets, registries, analysis output — is written under the same version directory, as one of the three entry kinds of `05_code` §3: a `<run_id>/` whose timestamp is never omitted, a `set__…/` wrapper for a multi-phase execution, or a named `<group>/`. No produced file is left loose at the top of `data/`, `data/runs/`, or the version directory. The Researcher monitors via `tensorboard --logdir data/runs/`.
 
 If a halt triggers (`03_train` §4.7), the Executor reports the halt reason and the step at which it occurred, and waits for the Researcher's instruction. It does **not** auto-restart with adjusted hyperparameters.
 
@@ -148,19 +148,24 @@ the bold marking below whenever its evaluation used `n >= 2000` episodes. Whethe
 produced by a full-pool final, an in-loop best, or an eval-only re-evaluation does not enter the
 question; the pool size does.
 
-**Per-version, per-system SOTA marking (bold).** Within each version block in
-`docs/ledger.md`, and separately for each `system` appearing in that block, the single row with
-the highest `cps` among rows with `eval_source = full_n2000` is marked as that (version, system)
-SOTA by bolding every cell in the row (markdown `**...**`).
-At most one row per (version, system) pair is bolded. Rows with `eval_source` of `inloop_n500@<step>` or
-`eval_only(<note>)` are not eligible for SOTA bolding. Rows from a **different deployment
-or training class** than the standing comparison basis — e.g. training-free
-analytic-barrier arms, or evaluations at non-default deploy rates ($dt_{\text{ctrl}}$,
-$dt_{V_{\mathcal M}}$) — are likewise never SOTA-bolded on `cps` alone; the Executor
-flags such rows for Researcher classification instead. When a new full-pool result
-supersedes the previous SOTA **of the same system**, the previous bold is removed and the new
-row is bolded in the same edit that registers the new row. A system's first full-pool row
-establishes that system's baseline and supersedes nothing.
+**SOTA marking (bold).** Bold marks the current headline of a lineage: **exactly one bold row
+per `system`, across the whole ledger, at any time.** The bold row is that system's highest-scoring
+eligible row; every cell of it is bolded (markdown `**...**`).
+Eligibility is the pool-size condition stated above and nothing else: `n >= 2000`, whatever the
+row type — an eval-only re-evaluation on a 2000-episode pool is eligible, an in-loop best or a
+full-pool final on 500 is not. Ranking is on `cps_v2`, the `04_eval` §1 current definition; a row
+whose `cps_v2` reads `-` is not rankable and is flagged for Researcher classification rather than
+ranked on the legacy `cps` column. A standing bold row that predates the current definition is
+flagged, not un-bolded, until it is re-scored. Rows from a **different deployment or training
+class** than the standing comparison basis — e.g. training-free analytic-barrier arms, or
+evaluations at non-default deploy rates ($dt_{\text{ctrl}}$, $dt_{V_{\mathcal M}}$) — are
+likewise never SOTA-bolded on `cps` alone; the
+Executor flags such rows for Researcher classification instead. When a new full-pool result
+supersedes the previous SOTA **of the same system**, the previous bold is removed in the same
+edit that registers the new row, and the superseded row carries a standing supersession line;
+historical rows never retain bold. A system's first full-pool row establishes that system's
+baseline and supersedes nothing. A bold row is a claim the repository must be able to back:
+its adopted checkpoint is in `data/secured_data/` and committed (§6.3).
 
 **Ledger inclusion and formatting.** Smoke runs and runs that produced no usable
 evaluation row are not registered. Numeric outcome fields (`reach`, `collision`, `oob`,
@@ -203,10 +208,6 @@ distribution, the comparator is re-measured under the new conditions rather than
 prior report: two numbers that were not produced under the same predicates and deploy settings do
 not belong in one column, whatever their names.
 
-**Ledger bold convention.** Bold marks the CURRENT headline of a lineage (system): exactly
-one bold row per lineage at any time. On supersession the previous bold row is un-bolded
-and carries a standing supersession line. Historical rows never retain bold.
-
 ### 2.5 Close
 
 The Researcher authors the results document `docs/versions/v<X>_results.md` (at the `docs/versions/` main level, alongside `v2.0.1_results.md` etc.; the Strategist may draft) — the document that renders the version verdict. Unlike the Executor's build-logs (`docs/versions/vX.Y.Z/<task>.md`), the results document interprets. Both live under the gitignored `docs/versions/` as the local SSOT. It covers at least:
@@ -216,20 +217,23 @@ The Researcher authors the results document `docs/versions/v<X>_results.md` (at 
 3. **Improvement verdict.** Improved / no improvement detected / regressed. For multi-seed versions, by the `04_eval` §5 rule (non-overlapping CIs over the previous secured version); for single-seed, by the headline comparison against the previous secured baseline, flagged as single-seed.
 4. **Next axis.** What the data suggests for the next version. A suggestion, not a commitment.
 
-The Executor copies the chosen final run(s) from `data/<run_id>/` into the secured layout (`04_eval` §7.5), excluding the bulky per-step `metrics.csv`, and writes the `ADOPTED.md` identity record with pinned SHA-256 hashes.
+The Executor copies the chosen final run(s) from `data/runs/vX.Y.Z/` into the secured layout (`04_eval` §7.5), excluding the bulky per-step `metrics.csv`, and writes the `ADOPTED.md` identity record with pinned SHA-256 hashes. The originals are not moved.
 
 **Close checklist (run at every version close).**
 
 1. `v<X>_results.md` authored/finalized at the `docs/versions/` main level.
 2. `docs/ledger.md` row updated. On SOTA change: bold the new row and add the standing
    line; mark the prior SOTA row superseded (keep history).
-3. Run data moved: all of the version's artifact directories (`05_code` §3 — training runs,
-   eval-only diagnostics, dataset/regression/demonstration/registry runs) from `data/` to
-   `data/previous_runs/` (whole directory, as-is; nothing is renamed — §2.1 item 8). The
-   SOTA run is additionally saved to
+3. Run data left in place. The version's artifact directories were written under
+   `data/runs/vX.Y.Z/` at creation time (`05_code` §3) and are not moved, renamed, or
+   archived at close; a closed version's artifacts stay at the path every report already
+   cites. The close's only data operation is promotion: the SOTA run is **copied** to
    `data/secured_data/<version>/seed<N>/` as the standard file set (`checkpoints/`,
    `figures/`, `config.yaml`, `eval_metrics.csv`, `eval_episodes.csv`, `pool_manifest.json`,
-   `git_commit.txt`, `report.md`, `status.json`, `ADOPTED.md`).
+   `git_commit.txt`, `report.md`, `status.json`, `ADOPTED.md`), and the copy is confirmed
+   staged (`05_code` §4). The §6.3 presence check then runs over **every** system's bold row,
+   not only the closing version's, and any bold row whose checkpoint is absent from
+   `secured_data/` is reported before the close proceeds.
 4. Confirmed changes reflected in `docs/protocol/`; all `PROTOCOL FOLLOW-UP` items from
    build-logs resolved.
 5. Close preparation complete (items 1-4 done and reported). The Researcher then performs
@@ -257,8 +261,8 @@ a paused step suspends only its dependents, not the other steps.
    number beside its artifact path; the four parts above; the seed basis stated explicitly
    (single-seed vs pooled). [PAUSE] only if a multi-seed escalation decision is open.
 3. **Close execute** (Strategist authors, Executor runs). Fills the placeholder with the
-   final results text verbatim, then checklist items 2–3: ledger row(s); run moves to
-   `data/previous_runs/`; [PAUSE] secured snapshot(s) + `ADOPTED.md` (the promotion scope is
+   final results text verbatim, then checklist items 2–3: ledger row(s); no run is moved
+   (§2.5 item 3); [PAUSE] secured snapshot(s) + `ADOPTED.md` (the promotion scope is
    an explicit Researcher approval carried in the transmittal, never assumed);
    `docs/index.md` dashboard update; tagging of any untagged `PROTOCOL FOLLOW-UP`. **No git.**
    The STATUS update is the last write of the close, performed after the secured promotion so
@@ -312,6 +316,8 @@ Between version pushes, the Strategist reads the **last pushed state** (commits,
 ## 3. Prompt regime — Strategist → Executor
 
 Two kinds of prompt, and only two.
+
+**Version literals.** A prompt title carries a version literal only if that version is open on disk (`changes.md` exists); before dispatch the Strategist greps the prompt for `v[0-9]+\.[0-9]+\.[0-9]+` and every hit must name the open version. Chat descriptions of a prompt are grounded in its literal text.
 
 ### 3.1 Retrieve prompt — read-only information gathering
 
@@ -384,6 +390,8 @@ backed by a persisted artifact (a file); stdout-only measurements are not citabl
 close. Probe and gate scripts write their results to an artifact (scratchpad JSON at
 minimum) as part of passing.
 
+**Invasive code + long GPU in one dispatch.** Splitting them across a session boundary is the default and needs no re-approval; the ordering constraint (code green before measurement) is kept, and the split is reported, not escalated. The split manages session risk, not parallelism: independent light work runs alongside either half whenever resources allow.
+
 ### 3.3 Prompt authoring authority
 
 The Strategist authors every prompt. The Researcher reviews and approves before the Executor sees it. The Executor must not invent strategy from an under-specified prompt; if the scope is ambiguous in a way that affects results, the Executor stops and asks.
@@ -402,6 +410,8 @@ When a decision is required, the Strategist delivers a four-part brief, never lo
 The Strategist's `00_constitution` §4 problem-analysis discipline (problem / mechanism / fix / trade-off) applies inside §1 and §3. Long prose analyses without this structure are not decision briefs — they are background documents.
 
 ---
+
+**Answer-first (all Strategist → Researcher communication).** A yes/no question is answered yes/no first, unconditionally; then the direct answer as asked; then only as needed: result (numbers, CIs) → cause → solution → interpretation, under explicit headings. Chronological narration is banned from Researcher-facing reports (it belongs in build-logs); key numbers appear first; implications are stated outright; multi-aspect versions are reported per aspect.
 
 ## 5. Conflict resolution
 
@@ -439,17 +449,34 @@ When sources disagree, follow `00_constitution` §2. Specifically:
   `results.md`). These are the development-process record, kept locally as the SSOT
   the Strategist and Executor read, but excluded from the committed repository. The MkDocs
   site (built locally) renders them; the git history does not carry them.
-- Every `data/<run_id>/` directory (in-flight and superseded runs) except what is promoted
-  to `data/secured_data/`. The `.gitignore` pattern enforces this (`data/*` ignored,
-  `data/secured_data/` excepted).
+- The whole `data/runs/` subtree, in-flight and closed alike; only what is copied into
+  `data/secured_data/` is committed. The `.gitignore` pattern ignores `data/*`, so a new
+  file under `data/secured_data/` must be force-added and the staging confirmed
+  (`05_code` §4).
 - TensorBoard event files inside `data/<run_id>/tensorboard/` — large and redundant with
   the CSVs that are secured at close.
 
 ### 6.3 secured_data conventions
 
+**What `secured_data/` is for.** It holds the artifacts behind SOTA claims, so that a claim in
+`ledger.md` can be checked against the checkpoint that produced it. Two rules follow, and the
+second is the one that is checked:
+
+- A snapshot is created when a version's run is that system's SOTA at close. A later version may
+  supersede it; the snapshot stays. `secured_data/` is therefore a record of what was SOTA when,
+  not only of what is SOTA now, and a version holding no current bold row may legitimately hold a
+  snapshot.
+- **Every current bold row's adopted checkpoint is present in `secured_data/` and committed.**
+  This direction admits no exception: a bold row whose checkpoint is not in the repository is a
+  claim the repository cannot back. The presence check runs at every close (§2.5 item 3) and
+  covers every system's bold row, not only the closing version's.
+
 - **Pools.** Generated once via `src/eval/build_pools.py` and committed; they are
   immutable thereafter. Regenerating them is a major-version event because `cps`
-  comparisons across versions assume identical pools.
+  comparisons across versions assume identical pools. **A pool is committed before any number
+  measured on it is reported**: the pool is what makes two numbers comparable, so an
+  uncommitted pool makes every comparison drawn on it unverifiable. Pools are small; the
+  size argument that gates checkpoints does not apply to them.
 - **Version snapshots.** Copied at §2.5 close into `data/secured_data/<version>/seed<N>/`,
   containing the adopted checkpoint, config, eval metrics/episodes, pinned SHA-256 hashes,
   and figures, with an `ADOPTED.md` identity record. Bulky per-step training logs
@@ -507,6 +534,8 @@ Confirm: everything decided is in a tracked file (prompts, briefs, results), and
 
 ## 8. Reporting and recovery discipline
 
+**No mechanism before the record.** A discrepancy gets no proposed mechanism until the recorded values are re-read from their sources (ledger row, results document, persisted artifact) and compared: read-back → agree/disagree → the differing per-episode set → stop. Mechanisms come only after that set is seen.
+
 **Disk-verified reporting (mandatory).** Every number the Executor reports about a run —
 monitoring updates, termination facts, peaks, current steps — is read from the run's
 on-disk artifacts at reporting time and cited as such: the run directory, the verbatim
@@ -524,8 +553,9 @@ ledger row's `eval_source` note record `terminated @<disk-verified step> (extern
 interrupt)`; and the standard close-out (re-selection over all cadence checkpoints,
 full-pool eval of the selected best) proceeds on the surviving artifacts. Optimizer state
 is never spliced to resume a partially lost run; if the full budget is wanted, the run is
-relaunched fresh and the killed run is archived to `previous_runs` with its termination
-note. A `status.json` left stale by a hard kill is recorded as stale, never edited.
+relaunched fresh and the killed run is kept where it was written, with its termination
+note in the build-log and the ledger row; nothing is relocated. A `status.json` left stale
+by a hard kill is recorded as stale, never edited.
 
 **Parallel low-priority work.** Analysis or evaluation may run alongside a live training
 run only under all of: `nice -n 19` with CPU-core pinning away from the trainer's cores;

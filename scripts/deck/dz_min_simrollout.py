@@ -13,7 +13,7 @@ import torch
 from src.eval.run_full import _load_framework
 from src.common.rk4 import rk4_step
 
-JT42 = Path("data/previous_runs/v2.7.6/set__20260725-043415__seed42/v2.7.6__jt__20260725-052127__seed42/checkpoints/step_042000.pt")
+JT42 = Path("data/runs/v2.7.6/set__20260725-043415__seed42/v2.7.6__jt__20260725-052127__seed42/checkpoints/step_042000.pt")
 SCR = Path("/tmp/claude-1000/-home-junhyeok-MIT-jt-pncbf/31d93785-ac11-4206-bf50-a4c3de145dff/scratchpad")
 DT, T, ZLIM, KP, KD = 0.05, 200, 4.0, 400.0, 40.0
 

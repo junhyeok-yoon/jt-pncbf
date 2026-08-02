@@ -22,9 +22,9 @@ SPEC = [
     ("quadrotor_planar", "k5 on no-inject ckpt; CI-sep. SOTA", "42 (single-seed)",
      "docs/ledger.md v2.7.1 (bold, planar SOTA; k5 on secured 3b27d691) · docs/versions/v2.7.1_results.md"),
     ("quadrotor_3d (legacy-scored)", "CANONICAL jt42000 legacy kstep", "42 (single-seed)",
-     "docs/ledger.md v2.7.6 (JT step 42000, 09c33bf4, legacy, kstep k=5) · data/previous_runs/v2.7.6/stage2_eval/canonical_eval.json"),
+     "docs/ledger.md v2.7.6 (JT step 42000, 09c33bf4, legacy, kstep k=5) · data/runs/v2.7.6/stage2_eval/canonical_eval.json"),
     ("quadrotor_3d (band-scored)", "CANONICAL jt42000 banded kstep", "42 (single-seed)",
-     "docs/ledger.md v2.7.6 (JT step 42000, 09c33bf4, banded, kstep k=5) · data/previous_runs/v2.7.6/stage2_eval/canonical_eval.json"),
+     "docs/ledger.md v2.7.6 (JT step 42000, 09c33bf4, banded, kstep k=5) · data/runs/v2.7.6/stage2_eval/canonical_eval.json"),
 ]
 
 

@@ -26,7 +26,7 @@ from src.common.rk4 import rk4_step
 from src.common.maneuver_value import build_safety_h_fn
 
 CK = {"comparator": Path("data/runs/v2.7.4/set__20260720-083533__seed42/v2.7.4__20260720-091830__seed42/checkpoints/best.pt"),
-      "ours": Path("data/previous_runs/v2.7.6/set__20260725-043415__seed42/v2.7.6__jt__20260725-052127__seed42/checkpoints/step_042000.pt")}
+      "ours": Path("data/runs/v2.7.6/set__20260725-043415__seed42/v2.7.6__jt__20260725-052127__seed42/checkpoints/step_042000.pt")}
 POOL = Path("data/eval_pools/eval_full_quadrotor-3d-d2r_n2000_seed23456.pkl")   # CANONICAL 0ef3751b
 T, DT, LIMIT, REACH, CLOSE = 200, 0.05, 4.0, 0.6, 0.6
 CACHE = Path("/tmp/claude-1000/-home-junhyeok-MIT-jt-pncbf/31d93785-ac11-4206-bf50-a4c3de145dff/scratchpad/canonical_scan.npz")

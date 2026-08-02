@@ -10,6 +10,9 @@ env:
   k_obs: 5
   goal_radius: 0.15
   goal_speed_radius: 0.30
+  goal_angrate_radius: 0.48         # v2.8.0: angular reach term ||omega||<=omega_G; ratio-matched to the linear
+                                    # condition v_G/v_max=0.30/2.5=0.12 applied to omega_max=4.0. Absent -> inf
+                                    # (byte-identical); structural 0 angular_rate on DI/unicycle -> vacuous there.
   stuck_window_steps: 60
   stuck_radius: 0.10
   v_init_max: 0.5                  # v2.3.1 fast-approach axis (v_init_max 2.0 + magnitude/angle

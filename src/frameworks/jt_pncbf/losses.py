@@ -22,6 +22,13 @@ from src.frameworks.oc_pncbf.value_target import compute_disc_avoid_terms, pncbf
 
 Tensor = torch.Tensor
 
+# v2.8.0 S3 M3 — P2 instrumentation buffer. OFF BY DEFAULT (populated only when
+# loss.policy.log_jac_classes is true). It is written under torch.no_grad() from detached tensors and
+# never touches the loss, gradient, optimizer, or data path, so it is provably free of any training-path
+# effect when off (the append block is skipped) and even when on (pure observation). The S3 launcher
+# clears it before a run and persists it to jac_classes.csv after.
+_JAC_CLASS_LOG: list[dict[str, Any]] = []
+
 
 @dataclass(frozen=True)
 class ValueLossResult:
@@ -509,9 +516,10 @@ def policy_bptt_loss(
     situational = hasattr(system, "horizontal_velocity")
     w_settle = float(policy_cfg.get("w_settle", 0.0))       # 0 -> no goal-gated settling term
     settle_rho = float(policy_cfg.get("settle_rho", 0.30))
+    w_settle_ang = float(policy_cfg.get("w_settle_ang", 0.0))  # v2.8.0: goal-gated ANGULAR settling (0 -> off)
     w_appr = float(policy_cfg.get("w_appr", 0.0))           # 0 -> no obstacle-approach (braking-envelope) term
     tau_brake = float(policy_cfg.get("tau_brake", 0.6))     # braking-envelope lookahead time (amendment 2)
-    use_situational = situational and (w_settle > 0.0 or w_appr > 0.0)
+    use_situational = situational and (w_settle > 0.0 or w_appr > 0.0 or w_settle_ang > 0.0)
     # v2.4.0 Step 5 (audit C1 fix): when set, detach the CBF coefficients inside the differentiable
     # policy BPTT rollout so the policy gradient does not flow through the projection's state-dependent
     # coefficient Jacobian (the T=60 gradient-explosion source). Default off => byte-identical.
@@ -633,6 +641,12 @@ def policy_bptt_loss(
                 step_cost = d2 + lambda_v * v2 + mu_u * u2
                 if w_settle > 0.0:
                     step_cost = step_cost + w_settle * torch.exp(-(r * r) / (settle_rho * settle_rho)) * v2
+                if w_settle_ang > 0.0:
+                    # v2.8.0: angular settling under the SAME goal gate — supplies the gradient toward
+                    # low angular rate that the (predicate-only) reach condition does not. Structurally
+                    # zero on DI/unicycle (angular_rate == 0), so inert there by construction.
+                    w2 = system.angular_rate(x) * system.angular_rate(x)
+                    step_cost = step_cost + w_settle_ang * torch.exp(-(r * r) / (settle_rho * settle_rho)) * w2
                 if w_appr > 0.0:
                     # v2.6.2 AMENDMENT 2: BRAKING-ENVELOPE obstacle-approach deficit (replaces the fixed-d0
                     # gaussian gate, which was inert — diag Phase-1 B/C: closed 0.018 at 1 m surface, past the
@@ -679,6 +693,29 @@ def policy_bptt_loss(
 
         action_stack = torch.stack(nominal_actions, dim=0)
         safe_stack = torch.stack(safe_actions, dim=0)
+        # v2.8.0 S3 M3: P2 instrumentation (gated, detached; no effect on total/backward). Clip-class
+        # distribution of the filtered BPTT actions = the Jacobian classes S1 used (no-clip / 0<|A|<m /
+        # |A|=m) plus |A|=m-1 (legitimately zero-Jacobian for the dual solve). Appended to _JAC_CLASS_LOG.
+        if bool(policy_cfg.get("log_jac_classes", False)):
+            with torch.no_grad():
+                _b = system.u_bounds.to(device=safe_stack.device, dtype=safe_stack.dtype)
+                _ss = safe_stack.detach().reshape(-1, safe_stack.shape[-1])          # [T*B, m]
+                _m = _ss.shape[-1]
+                _clip = ((_ss - _b[:, 0]).abs() < 1e-6) | ((_ss - _b[:, 1]).abs() < 1e-6)
+                _nclip = _clip.sum(dim=1)
+                _interv = (torch.linalg.norm(safe_stack.detach() - action_stack.detach(), dim=-1)
+                           .reshape(-1) > 1e-3)
+                _JAC_CLASS_LOG.append({
+                    "step": int(step),
+                    "n_rows": int(_ss.shape[0]),
+                    "frac_noclip": float((_nclip == 0).float().mean()),
+                    "frac_partial": float(((_nclip > 0) & (_nclip < _m)).float().mean()),
+                    "frac_vertex": float((_nclip == _m).float().mean()),
+                    "frac_free1": float((_nclip == _m - 1).float().mean()),
+                    "frac_intervention": float(_interv.float().mean()),
+                    "zero_jac_frac_all_real": float((_nclip == _m).float().mean()),
+                    "zero_jac_frac_dual": float((_nclip >= _m - 1).float().mean()),
+                })
         # input-rate regulation (v2.2.2 add-on): DEAD-ZONE penalty on step-to-step change of the
         # APPLIED (post-HardNet) control u_safe. L_rate = mean_t max(0, ||u_t - u_{t-1}|| - delta)^2
         # (delta dead-zone leaves normal control free, only chattering above delta is penalized).

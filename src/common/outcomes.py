@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 import torch
@@ -17,6 +17,12 @@ class StepOutcomeMasks:
     oob: Tensor
     stuck: Tensor
     window_displacement: Tensor
+    # v2.8.0: collision CAUSE channels, recorded alongside `collided` (which stays bit-identical).
+    # obstacle = xy-cylinder contact; band_lower/band_upper = floor/ceiling surface (p_z <= -band / >= +band).
+    # None means the caller did not compute the cause (older/hand-built masks) -> cause "not_recorded".
+    collided_obstacle: Tensor | None = None
+    collided_band_lower: Tensor | None = None
+    collided_band_upper: Tensor | None = None
 
 
 @dataclass(frozen=True)
@@ -24,6 +30,10 @@ class OutcomeResult:
     outcome: list[str]
     event_step: Tensor
     min_window_displacement: Tensor
+    # v2.8.0: per-episode collision cause at the collision step ("" if not a collision; "not_recorded"
+    # if the cause channels were absent). Priority when several fire at the same step, in evaluation order:
+    # obstacle > band_lower > band_upper.
+    collision_cause: list[str] = field(default_factory=list)
 
 
 def step_outcomes(
@@ -33,20 +43,37 @@ def step_outcomes(
     config: Mapping[str, Any],
 ) -> StepOutcomeMasks:
     positions = system.position(states)
-    collided = _collided_exact(positions, scene)
+    obstacle = _collided_exact(positions, scene)
     # v2.7.6 Stage-2: the arena band |p_z| >= band_collision_limit is a collision surface (01_env s1.6
     # priority; collision outranks goal/oob in resolve_outcome). Config-gated: 0.0 = OFF (legacy, pre-Stage-2
     # scoring, keeps the oob predicate as the only z outcome). 3D systems only. xy collision unchanged; the
     # oob predicate (|z|>8) is UNCHANGED (collision at |z|>=4 simply preempts it in z, still live in xy).
+    # v2.8.0: the band surfaces are split at the predicate into lower/upper (floor/ceiling) rather than
+    # inferred later from the sign of p_z (the abs() below would discard which surface was hit). The union
+    # obstacle | band_lower | band_upper is bit-identical to the previous `collided | (|p_z| >= band_z)`.
     band_z = float(config["env"].get("band_collision_limit", 0.0))
+    band_lower = torch.zeros_like(obstacle)
+    band_upper = torch.zeros_like(obstacle)
     if band_z > 0.0 and positions.shape[-1] >= 3:
-        collided = collided | (torch.abs(positions[..., 2]) >= band_z)
+        band_lower = positions[..., 2] <= -band_z
+        band_upper = positions[..., 2] >= band_z
+    # v2.8.0 floor-permissive readout: env.band_terminates (default True) gates whether crossing the band
+    # counts as a collision (and thereby ends the episode). When False, the band surfaces stay in the
+    # dynamics and observation (unchanged system) but a crossing sets neither `collided` nor an
+    # episode-ending condition; the band_lower/band_upper channels are still populated so a per-episode
+    # crossing count remains visible. Default True is bit-identical to the pre-v2.8.0 predicate.
+    band_terminates = bool(config["env"].get("band_terminates", True))
+    collided = (obstacle | band_lower | band_upper) if band_terminates else obstacle
 
     goal = torch.as_tensor(scene.goal, dtype=states.dtype, device=states.device)
     goal_distance = torch.linalg.norm(positions - goal, dim=-1)
     speed = system.speed(states)
-    goal_reached = (goal_distance <= float(config["env"]["goal_radius"])) & (
-        speed <= float(config["env"]["goal_speed_radius"])
+    angrate = system.angular_rate(states)
+    goal_angrate_radius = float(config["env"].get("goal_angrate_radius", float("inf")))
+    goal_reached = (
+        (goal_distance <= float(config["env"]["goal_radius"]))
+        & (speed <= float(config["env"]["goal_speed_radius"]))
+        & (angrate <= goal_angrate_radius)
     )
 
     oob_limit = float(config["env"]["oob_limit"])
@@ -62,6 +89,9 @@ def step_outcomes(
         oob=oob,
         stuck=stuck,
         window_displacement=window_disp,
+        collided_obstacle=obstacle,
+        collided_band_lower=band_lower,
+        collided_band_upper=band_upper,
     )
 
 
@@ -88,7 +118,15 @@ def _collided_exact(positions: Tensor, scene: Any) -> Tensor:
     return ((distance < radii) & active).any(dim=-1)
 
 
-def window_displacement(positions: Tensor, window_steps: int) -> Tensor:
+# v2.8.0 D4/F1: the unfold in window_displacement materializes a [T-W, W+1, B, D] tensor; at a 500 Hz control
+# rate (T=5000, W=1500, B=2000) that single intermediate is ~117 GiB and OOMs the shared eval path
+# (rollout_eval -> _physical_done_mask -> step_outcomes -> here). Because every episode's window statistic is
+# independent, processing the batch in episode chunks is BIT-IDENTICAL to the single-pass computation (proved
+# in tests/test_window_displacement_chunk.py); this budget caps the intermediate's element count per chunk.
+_WINDOW_ELEM_BUDGET = 3.0e8
+
+
+def window_displacement(positions: Tensor, window_steps: int, batch_chunk: int | None = None) -> Tensor:
     if positions.ndim != 3 or positions.shape[-1] < 2:
         raise ValueError(
             "positions must have shape [T, B, D] with D >= 2, "
@@ -97,15 +135,20 @@ def window_displacement(positions: Tensor, window_steps: int) -> Tensor:
     if window_steps < 1:
         raise ValueError(f"window_steps must be positive, got {window_steps}.")
 
-    n_steps, batch_size, _ = positions.shape
+    n_steps, batch_size, dim = positions.shape
     result = positions.new_full((n_steps, batch_size), float("nan"))
     if n_steps <= window_steps:
         return result
 
-    windows = positions.unfold(0, window_steps + 1, 1).permute(0, 3, 1, 2)
-    anchor = windows[:, :1, :, :]
-    displacement = torch.linalg.norm(windows - anchor, dim=-1).amax(dim=1)
-    result[window_steps:] = displacement
+    if batch_chunk is None:
+        elem_per_ep = (n_steps - window_steps) * (window_steps + 1) * dim
+        batch_chunk = int(min(batch_size, max(1, _WINDOW_ELEM_BUDGET // max(elem_per_ep, 1))))
+    batch_chunk = max(1, int(batch_chunk))
+    for start in range(0, batch_size, batch_chunk):
+        stop = min(start + batch_chunk, batch_size)
+        windows = positions[:, start:stop].unfold(0, window_steps + 1, 1).permute(0, 3, 1, 2)
+        anchor = windows[:, :1, :, :]
+        result[window_steps:, start:stop] = torch.linalg.norm(windows - anchor, dim=-1).amax(dim=1)
     return result
 
 
@@ -154,7 +197,37 @@ def resolve_outcome(step_masks: StepOutcomeMasks) -> OutcomeResult:
         outcome=outcomes,
         event_step=event_step,
         min_window_displacement=min_window_disp,
+        collision_cause=_collision_causes(step_masks, outcomes, event_step),
     )
+
+
+def _collision_causes(
+    step_masks: StepOutcomeMasks, outcomes: list[str], event_step: Tensor
+) -> list[str]:
+    """v2.8.0: per-episode collision cause at the resolved collision step. Priority, in the order the
+    predicate evaluates them: obstacle > band_lower > band_upper. "" for non-collision episodes;
+    "not_recorded" when the cause channels were absent."""
+    n = len(outcomes)
+    if step_masks.collided_obstacle is None:
+        return ["not_recorded" if o == "collision" else "" for o in outcomes]
+    rows = torch.arange(n, device=event_step.device)
+    es = event_step.clamp(min=0)
+    obs = step_masks.collided_obstacle[es, rows].cpu().tolist()
+    bl = step_masks.collided_band_lower[es, rows].cpu().tolist()
+    bu = step_masks.collided_band_upper[es, rows].cpu().tolist()
+    causes = []
+    for b in range(n):
+        if outcomes[b] != "collision":
+            causes.append("")
+        elif obs[b]:
+            causes.append("obstacle")
+        elif bl[b]:
+            causes.append("band_lower")
+        elif bu[b]:
+            causes.append("band_upper")
+        else:
+            causes.append("unknown")           # unreachable: collided step always has a cause
+    return causes
 
 
 def _min_window_displacement(window_displacement_value: Tensor) -> Tensor:

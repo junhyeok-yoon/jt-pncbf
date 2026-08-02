@@ -84,6 +84,10 @@ EVAL_EPISODE_COLUMNS = [
     "mean_proj_mag",
     "max_h",
     "traj_path_len",
+    "angrate_at_reach",
+    "collision_cause",
+    "band_crossings",
+    "first_crossing_step",
 ]
 
 
@@ -184,6 +188,20 @@ def evaluate(
                 .cpu()
                 .item()
             )
+            # v2.8.0: per-episode band-crossing count + first crossing step (rising edges of the band
+            # predicate over the active window). Always visible so the floor-permissive readout's use of
+            # the permission is auditable; under band_terminates=true a crossing ends the episode so this
+            # is 0/1, under permissive mode it counts every entry into the band during flight.
+            band_step = (masks.collided_band_lower | masks.collided_band_upper)[:, 0]
+            band_active = band_step[: active_steps] if active_steps > 0 else band_step[:0]
+            if band_active.numel() > 0:
+                prev = torch.cat([torch.zeros(1, dtype=torch.bool, device=band_active.device),
+                                  band_active[:-1]])
+                band_crossings = int((band_active & ~prev).sum().item())
+                nz = torch.nonzero(band_active)
+                first_crossing_step = int(nz[0].item()) if nz.numel() > 0 else -1
+            else:
+                band_crossings, first_crossing_step = 0, -1
             lqr_states = None
             lqr_outcome = None
             lqr_event_step = None
@@ -212,6 +230,9 @@ def evaluate(
                     scene=scene,
                     system=framework.system,
                     config=config,
+                    collision_cause=(resolved.collision_cause[0] if resolved.collision_cause else ""),
+                    band_crossings=band_crossings,
+                    first_crossing_step=first_crossing_step,
                 )
             )
             trajectories.append(
@@ -235,6 +256,12 @@ def evaluate(
         episode_rows=episode_rows,
         config=config,
     )
+    # v2.8.0 W1: dual-scoring in-loop split. When the pool manifest carries a per-IC provenance array
+    # (the mixed pool), add the two provenance-half sub-scores beside the blended cps (which is unchanged
+    # in name and remains the best.pt selection signal). Provenance-free pools add nothing -> today's row.
+    prov = manifest.get("provenance") if hasattr(manifest, "get") else None
+    if prov is not None and max_scenes is None and len(prov) == len(episode_rows):
+        eval_row.update(provenance_half_scores(episode_rows, prov))
     return EvaluationResult(
         eval_row=eval_row,
         episode_rows=episode_rows,
@@ -397,6 +424,9 @@ def _episode_row(
     scene: Scene,
     system: System,
     config: Mapping[str, Any],
+    collision_cause: str = "",
+    band_crossings: int = 0,
+    first_crossing_step: int = -1,
 ) -> dict[str, Any]:
     reach = 1.0 if outcome == "goal" else 0.0
     collision = 1.0 if outcome == "collision" else 0.0
@@ -418,6 +448,11 @@ def _episode_row(
     positions = system.position(result.states)
     h_values = signed_h(positions, scene, float(config["env"]["h_scale"]))
     path_delta = positions[1:] - positions[:-1]
+    # v2.8.0: angular rate at the reach instant (first goal step); nan otherwise.
+    if outcome == "goal" and 0 <= event_step < result.states.shape[0]:
+        angrate_at_reach = float(system.angular_rate(result.states[event_step])[0].item())
+    else:
+        angrate_at_reach = float("nan")
     return {
         "mode": mode,
         "step": int(step),
@@ -439,6 +474,10 @@ def _episode_row(
         "mean_proj_mag": float(projection.mean().item()) if projection.numel() else 0.0,
         "max_h": float(h_values.max().item()),
         "traj_path_len": float(torch.linalg.norm(path_delta, dim=-1).sum().item()),
+        "angrate_at_reach": angrate_at_reach,
+        "collision_cause": collision_cause,
+        "band_crossings": int(band_crossings),
+        "first_crossing_step": int(first_crossing_step),
     }
 
 
@@ -512,6 +551,21 @@ def first_physical_event_step(step_masks: StepOutcomeMasks) -> Tensor:
         if not bool(unresolved.any()):
             break
     return event_step
+
+
+def provenance_half_scores(
+    episode_rows: list[Mapping[str, Any]], provenance: list[str]
+) -> dict[str, float]:
+    """v2.8.0 W1: split per-episode cps by provenance flag into `cps_full_half` / `cps_tilt60_half`.
+    By construction the blended cps (mean over all episodes) equals the episode-weighted mean of the halves,
+    so the two halves and the blended value are consistent. NaN for an absent group."""
+    cps = np.array([float(e["cps_episode"]) for e in episode_rows], dtype=np.float64)
+    prov = np.array(list(provenance))
+    out: dict[str, float] = {}
+    for tag, col in (("full", "cps_full_half"), ("tilt60", "cps_tilt60_half")):
+        m = prov == tag
+        out[col] = float(cps[m].mean()) if bool(m.any()) else float("nan")
+    return out
 
 
 def _eval_row(

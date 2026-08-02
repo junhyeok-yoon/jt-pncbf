@@ -20,7 +20,7 @@ from src.frameworks.jt_pncbf.train import run_training
 
 SP = Path("/tmp/claude-1000/-home-junhyeok-MIT-jt-pncbf/31d93785-ac11-4206-bf50-a4c3de145dff/scratchpad")
 REPO = Path("/home/junhyeok/MIT/jt-pncbf")
-CLONE_SRC = REPO / "data/previous_runs/v2.5.1__20260713-040300__seed42/config.yaml"
+CLONE_SRC = REPO / "data/runs/v2.5.1/v2.5.1__20260713-040300__seed42/config.yaml"
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--seed", type=int, required=True)

@@ -5,6 +5,7 @@ from typing import Any, Callable, Mapping
 
 import torch
 
+from src.common.motor_lag import motor_lag_step
 from src.common.outcomes import step_outcomes
 from src.common.rk4 import rk4_step
 from src.common.system import System
@@ -161,6 +162,13 @@ def rollout_eval(
             f"got ratio {dt_ctrl / dt}."
         )
 
+    # v2.8.0 Phase-2 D4 (C5): optional first-order rotor-thrust lag on the SIM grid, flag-gated and default
+    # off. When eval.actuator_lag_tau <= 0 the applied action IS the commanded action (bit-identical to the
+    # pre-D4 path). When > 0 the plant applies a ZOH-lagged thrust while the barrier is still enforced on the
+    # commanded action — the transfer D4 probes.
+    _lag_tau = float(config.get("eval", {}).get("actuator_lag_tau", 0.0)) if isinstance(config, Mapping) else 0.0
+    _u_applied: Tensor | None = None
+
     states = [x]
     u_nom_steps = []
     u_safe_steps = []
@@ -218,7 +226,13 @@ def rollout_eval(
             infeasible.to(device=x.device, dtype=torch.bool),
         )
 
-        x_next = rk4_step(system, x, u_safe, dt)
+        if _lag_tau > 0.0:                           # plant applies the ZOH-lagged thrust; filter enforced on u_safe
+            _u_applied = u_safe if _u_applied is None else motor_lag_step(_u_applied, u_safe, dt, _lag_tau)
+            _u_applied = torch.where(done_action, torch.zeros_like(_u_applied), _u_applied)
+            u_plant = _u_applied
+        else:
+            u_plant = u_safe
+        x_next = rk4_step(system, x, u_plant, dt)
         _assert_finite("State after RK4 step", x_next)
         # v2.7.5 graph-retention fix (the DOMINANT leak): detach the state carried into the next step.
         # u_nom = policy(obs(x)) graphs back to x, so without this x_{t+1} = rk4(x_t, u_safe) accumulates a

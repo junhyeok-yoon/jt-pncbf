@@ -10,7 +10,7 @@ import numpy as np
 from scripts.deck.deck_style import save, C_CYL, C_FLOOR, C_CEIL, WITHOUT_TERM, WITH_TERM
 import matplotlib.pyplot as plt
 
-SRC = Path("data/previous_runs/v2.7.6/stage2_eval/canonical_eval.json")
+SRC = Path("data/runs/v2.7.6/stage2_eval/canonical_eval.json")
 d = json.load(open(SRC))
 cells = {(c["arm"], c["scoring"], c["mode"]): c for c in d["cells"]}
 pre = cells[("v274", "banded", "kstep")]["split"]

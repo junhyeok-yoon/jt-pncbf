@@ -84,6 +84,10 @@ class Unicycle:
     def speed(self, x: Tensor) -> Tensor:
         return torch.abs(x[..., 3])
 
+    def angular_rate(self, x: Tensor) -> Tensor:
+        # turn rate is a control input (u[1]), not a state -> structural zero (condition vacuous).
+        return torch.zeros_like(x[..., 0])
+
     def lqr_action(self, x: Tensor, goal: Tensor) -> Tensor:
         goal = _batched_goal(goal, x)
         theta = x[:, 2]
