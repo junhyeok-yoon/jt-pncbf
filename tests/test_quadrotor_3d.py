@@ -38,6 +38,13 @@ def _sys(system="quadrotor_3d"):
     return make_system(_cfg(system))
 
 
+def _sys_encoder(encoder, system="quadrotor_3d"):
+    # v2.8.1 S1: build with an explicit obstacle encoder (per-system override).
+    c = _cfg(system)
+    c.setdefault("obs", {}).setdefault(system, {})["encoder"] = encoder
+    return make_system(c)
+
+
 def _rand_quat(n, dtype=torch.float64, seed=0):
     g = torch.Generator().manual_seed(seed)
     q = torch.randn(n, 4, generator=g, dtype=dtype)
@@ -147,9 +154,71 @@ def test_q3_yaw_symmetry_and_tilt_observability():
     assert not torch.allclose(obs0[:, 9:12], obs_tilt[:, 9:12], atol=1e-6), "tilt left g^b unchanged"
 
 
+# ------------------------------------------------------------- G7 (v2.8.1 S1: soft_topk invariance harness)
+def test_g7_soft_topk_group_invariance_and_carried_z():
+    """v2.8.1 S1 G7 (05_code s5.4). q3 / test_band_hazard pin the invariance harness on the hard path (and now
+    run under the soft default only incidentally); this pins it EXPLICITLY on the deployed `soft_topk` encoder.
+    Under soft_topk the dim-34 quadrotor_3d observation must be invariant over the retained symmetry group —
+    horizontal (xy) translation of (state, goal, obstacles) and global world-yaw — even though the broad
+    soft-rank mixing (beta = 1/(0.5 m)) makes the group act on every slot at once, not on a single argmin.
+    Companion POSITIVE assertions: the carried vertical coordinates p_z and v_z (band_hazard left z OUT of the
+    group, 05_code s5.4) stay OBSERVABLE — a state differing only in p_z, or only in v_z, changes the obs."""
+    from src.envs.quadrotor_3d import _quat_mul
+    s = _sys_encoder("soft_topk")
+    assert s.encoder == "soft_topk" and s.obs_dim == 34
+    dt = torch.float64
+    n, K = 8, 5
+    g = torch.Generator().manual_seed(23)
+    p = torch.randn(n, 3, generator=g, dtype=dt)
+    q = _rand_quat(n, dtype=dt, seed=29)
+    v = torch.randn(n, 3, generator=g, dtype=dt)
+    om = torch.randn(n, 3, generator=g, dtype=dt)
+    x = torch.cat([p, q, v, om], dim=1)
+    goal = torch.randn(n, 3, generator=g, dtype=dt)
+    centers = 1.1 * torch.randn(n, K, 2, generator=g, dtype=dt)   # mostly within the d_c=3.0 m kernel -> slots mix
+    radii = 0.3 + 0.2 * torch.rand(n, K, generator=g, dtype=dt)
+    active = torch.ones(n, K, dtype=torch.bool)
+    obs0 = s.observation(x, _ns_scene(goal, centers, radii, active))
+
+    # (a) horizontal translation of the whole scene: obs invariant
+    dxy = torch.tensor([0.7, -1.3, 0.0], dtype=dt)
+    xt = x.clone(); xt[:, :3] += dxy
+    obs_t = s.observation(xt, _ns_scene(goal + dxy, centers + dxy[:2], radii, active))
+    assert torch.allclose(obs0, obs_t, atol=1e-9), \
+        f"soft_topk: horizontal translation is not a symmetry (max {float((obs0 - obs_t).abs().max()):.2e})"
+
+    # (b) global world-yaw by psi: obs invariant (p, v world-rotate; attitude gets the yaw; body rates unchanged)
+    psi = torch.full((n,), 0.6, dtype=dt)
+    cz, sz = torch.cos(psi), torch.sin(psi)
+    Rz = torch.zeros(n, 3, 3, dtype=dt)
+    Rz[:, 0, 0] = cz; Rz[:, 0, 1] = -sz; Rz[:, 1, 0] = sz; Rz[:, 1, 1] = cz; Rz[:, 2, 2] = 1.0
+    xy = x.clone()
+    xy[:, :3] = torch.einsum("bij,bj->bi", Rz, p)
+    xy[:, 3:7] = _quat_mul(_yaw_quat(psi, n, dt), q)
+    xy[:, 7:10] = torch.einsum("bij,bj->bi", Rz, v)
+    goal_y = torch.einsum("bij,bj->bi", Rz, goal)
+    centers_y = torch.einsum("bij,bkj->bki", Rz[:, :2, :2], centers)
+    obs_y = s.observation(xy, _ns_scene(goal_y, centers_y, radii, active))
+    assert torch.allclose(obs0, obs_y, atol=1e-9), \
+        f"soft_topk: world-yaw is not a symmetry (max {float((obs0 - obs_y).abs().max()):.2e})"
+
+    # (c) carried p_z is OBSERVABLE: a pure p_z shift changes the obs
+    xz = x.clone(); xz[:, 2] += 1.6
+    assert not torch.allclose(obs0, s.observation(xz, _ns_scene(goal, centers, radii, active)), atol=1e-6), \
+        "soft_topk: p_z left the observation unchanged"
+    # (d) carried v_z is OBSERVABLE: a pure v_z shift changes the obs
+    xvz = x.clone(); xvz[:, 9] += 0.9
+    assert not torch.allclose(obs0, s.observation(xvz, _ns_scene(goal, centers, radii, active)), atol=1e-6), \
+        "soft_topk: v_z left the observation unchanged"
+
+
 # ---------------------------------------------------------------------------- q4
 def test_q4_obs_layout_indices():
-    s = _sys()
+    # v2.8.1 S1: the exact obstacle-block layout reference is the HARD encoder's slot-0 value (the reference
+    # this assertion was derived from). soft_topk leaves the packing identical and changes only the block's
+    # content; its packing is covered by test_q4b_obs_layout_soft_topk below.
+    s = _sys_encoder("hard_topk")
+    assert s.encoder == "hard_topk"
     assert s.obs_dim == 34                                       # v2.7.6: + p_z, v_z (obs_band_z)
     dt = torch.float64
     n, K = 3, 5
@@ -177,6 +246,52 @@ def test_q4_obs_layout_indices():
     # v2.7.6 obs_band_z: last two slots are absolute p_z, v_z
     assert torch.allclose(obs[:, 32], torch.full((n,), 0.5, dtype=dt), atol=1e-9)   # p_z
     assert torch.allclose(obs[:, 33], torch.full((n,), 0.9, dtype=dt), atol=1e-9)   # v_z
+
+
+# ---------------------------------------------------------------------------- q4b
+def test_q4b_obs_layout_soft_topk():
+    # v2.8.1 S1: packing stays covered under the DEPLOYED encoder. Same obs_dim and block boundaries; the
+    # obstacle block [12:16] responds to the nearest active cylinder. With a SINGLE active cylinder inside the
+    # distance kernel (sigma == 1), the soft-rank slot 0 collapses to that cylinder exactly, so the layout is
+    # asserted without duplicating the soft-mixture test (test_soft_topk_encoder.py).
+    s = _sys_encoder("soft_topk")
+    assert s.encoder == "soft_topk"
+    assert s.obs_dim == 34
+    dt = torch.float64
+    n, K = 3, 5
+    p = torch.tensor([[0.2, -0.1, 0.5]], dtype=dt).repeat(n, 1)
+    q = torch.tensor([[1.0, 0.0, 0.0, 0.0]], dtype=dt).repeat(n, 1)  # identity attitude
+    v = torch.tensor([[0.3, -0.7, 0.9]], dtype=dt).repeat(n, 1)
+    om = torch.tensor([[0.1, 0.2, -0.3]], dtype=dt).repeat(n, 1)
+    x = torch.cat([p, q, v, om], dim=1)
+    goal = torch.tensor([[1.0, 1.0, 2.0]], dtype=dt).repeat(n, 1)
+    centers = torch.zeros(n, K, 2, dtype=dt)
+    centers[:, 0] = torch.tensor([1.2, 0.3])                        # the single active cylinder (surf dist 0.68 < d_c)
+    radii = torch.zeros(n, K, dtype=dt); radii[:, 0] = 0.4
+    active = torch.zeros(n, K, dtype=torch.bool); active[:, 0] = True
+    obs = s.observation(x, _ns_scene(goal, centers, radii, active))
+    assert obs.shape == (n, 34)                                     # layout unchanged
+    assert torch.allclose(obs[:, 0:3], v, atol=1e-9)               # v^b
+    assert torch.allclose(obs[:, 3:6], om, atol=1e-9)              # omega^b
+    assert torch.allclose(obs[:, 6:9], goal - p, atol=1e-9)       # goal^b
+    assert torch.allclose(obs[:, 9:12], torch.tensor([0.0, 0.0, -1.0], dtype=dt).expand(n, 3), atol=1e-9)  # g^b
+    dc = torch.tensor([1.2 - 0.2, 0.3 - (-0.1), 0.0], dtype=dt).expand(n, 3)
+    assert torch.allclose(obs[:, 12:15], dc, atol=1e-9)           # block [12:15] responds to the nearest cylinder
+    assert torch.allclose(obs[:, 15], torch.full((n,), 0.4, dtype=dt), atol=1e-9)  # its radius
+    # empty slots 1..k-1 zero-pad exactly (only one active obstacle)
+    assert torch.allclose(obs[:, 16:32], torch.zeros(n, 16, dtype=dt), atol=1e-9)
+
+
+def test_q4c_encoder_resolves_hard_default_for_predating_checkpoint():
+    # v2.8.1 S1 (checkpoint compatibility, obs_band_z precedent): a system built from a config that PREDATES
+    # the encoder key resolves to hard_topk (so a v2.8.0 checkpoint never silently re-scores under soft_topk);
+    # an explicit per-system override selects soft_topk; a global-only key applies with no per-system override.
+    c_old = _cfg("quadrotor_3d"); c_old.pop("obs", None)
+    assert make_system(c_old).encoder == "hard_topk"
+    c_soft = _cfg("quadrotor_3d"); c_soft.setdefault("obs", {}).setdefault("quadrotor_3d", {})["encoder"] = "soft_topk"
+    assert make_system(c_soft).encoder == "soft_topk"
+    c_glob = _cfg("quadrotor_3d"); c_glob["obs"] = {"encoder": "hard_topk"}
+    assert make_system(c_glob).encoder == "hard_topk"
 
 
 # ---------------------------------------------------------------------------- q5

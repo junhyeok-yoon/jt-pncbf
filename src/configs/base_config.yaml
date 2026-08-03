@@ -10,8 +10,9 @@ env:
   k_obs: 5
   goal_radius: 0.15
   goal_speed_radius: 0.30
-  goal_angrate_radius: 0.48         # v2.8.0: angular reach term ||omega||<=omega_G; ratio-matched to the linear
-                                    # condition v_G/v_max=0.30/2.5=0.12 applied to omega_max=4.0. Absent -> inf
+  goal_angrate_radius: 0.30         # v2.8.1 S1: tightened reach terminal ||omega||<=omega_G (was 0.48). Set = v_G
+                                    # numerically (Researcher directive); the v2.8.0 ratio-match to omega_max is
+                                    # deliberately broken (changes.md v2.8.1 §1). Absent -> inf
                                     # (byte-identical); structural 0 angular_rate on DI/unicycle -> vacuous there.
   stuck_window_steps: 60
   stuck_radius: 0.10
@@ -41,6 +42,15 @@ scene_train:
   min_start_goal_dist: 1.0
   start_goal_clearance: 0.10
   init_feasibility_margin: 0.05
+
+obs:
+  # v2.8.1 S1: obstacle-encoder selector. Global default `hard_topk` (the v2.8.0 argsort/top-k, unchanged for
+  # double_integrator / unicycle / quadrotor_planar). `soft_topk` (continuous soft-rank; observation.py) is the
+  # quadrotor_3d default. obs_dim is unchanged (20-D obstacle block). The soft constants (beta = 1/(0.5 m),
+  # distance kernel d_c = 3.0 m over [2.5, 3.0]) are DERIVED and live in observation.py — not tunable here.
+  encoder: hard_topk
+  quadrotor_3d:
+    encoder: soft_topk
 
 network:
   value:

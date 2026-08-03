@@ -19,6 +19,7 @@ ap.add_argument("--value-init", required=True)                 # Stage-2 OC valu
 ap.add_argument("--collector", default="continuing", choices=["legacy", "continuing"])
 ap.add_argument("--inject-frac", type=float, default=0.0)
 ap.add_argument("--stage", default="full", choices=["smoke", "full"])
+ap.add_argument("--beta", type=float, default=None)     # v2.8.1 S1: soft-rank beta (/m); must match the value-init cell
 a = ap.parse_args()
 
 _orig = T.load_effective_config
@@ -33,6 +34,15 @@ def _patched():
     # v2.7.6 Stage-2: band hazard in h_star (inherited via value-init) + banded in-loop selection.
     c["env"]["band_hazard"] = {"enabled": True, "limit": 4.0}
     c["env"]["band_collision_limit"] = 4.0
+    # v2.8.1 S1 (Researcher item 2): TRAIN at the empty_fallback the v2.7.6/v2.8.0 value was trained at —
+    # {mode:none, k:10}, the value recorded in 043415/015517 config.yaml. The per-system quadrotor_3d
+    # {kstep, phases 1, k 3} block (exp_config B6.4) POSTDATES those launches and is consumed by the training
+    # rollout + BPTT policy loss (_hardnet_params <- collection.py / losses.py), so it is NOT eval-only; only
+    # mode:none is bit-parity with the pre-fallback filter (02_control s4). The shipped {kstep,...} is applied
+    # at SCORING only. Committed exp_config.yaml is left untouched — the pin lives in this patch (whitelisted).
+    c["filter"]["empty_fallback"] = {"mode": "none", "k": 10}
+    if a.beta is not None:                               # v2.8.1 S1: encoder beta must match the value-init cell
+        c.setdefault("obs", {}).setdefault("quadrotor_3d", {})["beta"] = float(a.beta)
     return c
 
 
@@ -45,7 +55,9 @@ def _flat(d, p=""):
 
 base = _flat(_orig()); patched = _flat(_patched())
 allowed = {"run.system", "collection.collector", "collection.inject_frac", "loss.policy.sat_excess_threshold",
-           "env.band_hazard.enabled", "env.band_hazard.limit", "env.band_collision_limit"}
+           "env.band_hazard.enabled", "env.band_hazard.limit", "env.band_collision_limit",
+           "filter.empty_fallback.quadrotor_3d.mode", "filter.empty_fallback.quadrotor_3d.phases",
+           "filter.empty_fallback.quadrotor_3d.k", "obs.quadrotor_3d.beta"}
 bad = []
 print("=== Stage-2 M4(c) JT config diff (registered exp_config -> Stage-2 JT launch) ===", flush=True)
 for k in sorted(set(base) | set(patched)):

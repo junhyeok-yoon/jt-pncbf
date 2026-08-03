@@ -21,7 +21,15 @@ from typing import Any, Mapping
 
 import torch
 
-from src.common.observation import scene_goal_tensor, scene_obstacle_tensors, top_k_obstacles
+from src.common.observation import (
+    SOFT_DC,
+    SOFT_INNER,
+    SOFT_TOPK_BETA,
+    scene_goal_tensor,
+    scene_obstacle_tensors,
+    soft_topk_obstacles,
+    top_k_obstacles,
+)
 
 Tensor = torch.Tensor
 
@@ -40,6 +48,17 @@ class QuadrotorQuad3D:
         # obs_dim is thus determined by the checkpoint's own config (05_code, checkpoint compatibility).
         self.obs_band_z = bool(config.get("env", {}).get("obs_band_z", False))
         self.obs_dim = 3 + 3 + 3 + 3 + 4 * self.k_obs + (2 if self.obs_band_z else 0)
+        # v2.8.1 S1: obstacle encoder selector. Global default `hard_topk`; `soft_topk` (continuous soft-rank)
+        # for quadrotor_3d. Per-system override under obs.<name>.encoder; the soft constants (beta, d_c) are
+        # derived and live in observation.py (NOT config knobs). obs_dim is unchanged either way (20-D block).
+        _obs = config.get("obs", {}) or {}
+        self.encoder = str((_obs.get(self.name, {}) or {}).get("encoder") or _obs.get("encoder", "hard_topk"))
+        # v2.8.1 S1 beta-screen (registered in the S1 dispatch, not changes.md): beta is a per-system override,
+        # DEFAULTING to the registered SOFT_TOPK_BETA=2.0 so a config with no `beta` key (022629 and all prior)
+        # resolves byte-identically. A checkpoint predating the key resolves to 2.0 (obs_band_z/encoder precedent).
+        self.soft_beta = float((_obs.get(self.name, {}) or {}).get("beta", SOFT_TOPK_BETA))
+        self.soft_dc = SOFT_DC
+        self.soft_inner = SOFT_INNER
         phys = config["env"]["quadrotor_3d"]
         self.mass = float(phys["mass"])
         self.gravity = float(phys["gravity"])
@@ -91,7 +110,11 @@ class QuadrotorQuad3D:
         centers, radii, active = scene_obstacle_tensors(scene, x.device, x.dtype)  # centers [B,K,3] or [B,K,2]
         c_xy = centers[..., :2]                              # cylinder xy-centers
         p_xy = p[:, :2]
-        top_rel_xy, top_radii = top_k_obstacles(p_xy, c_xy, radii, active, self.k_obs)   # xy surface-dist Top-K
+        if self.encoder == "soft_topk":                 # v2.8.1 S1: continuous soft-rank encoder
+            top_rel_xy, top_radii = soft_topk_obstacles(p_xy, c_xy, radii, active, self.k_obs,
+                                                        self.soft_beta, self.soft_dc, self.soft_inner)
+        else:
+            top_rel_xy, top_radii = top_k_obstacles(p_xy, c_xy, radii, active, self.k_obs)  # xy surface-dist Top-K
         # cylinder offset feature: (Delta c_xy, 0) rotated into body
         c_off_world = torch.cat([top_rel_xy, torch.zeros_like(top_rel_xy[..., :1])], dim=-1)  # [B,K,3]
         v_b = _rot(Rt, v)                                    # v is WORLD linear velocity -> body

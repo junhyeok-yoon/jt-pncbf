@@ -29,7 +29,7 @@ GOAL_COLOR = "red"
 TRAJECTORY_INACTIVE = "black"
 TRAJECTORY_ACTIVE = (0.5, 0.5, 0.5)
 GRID_COLOR = (0.75, 0.75, 0.75)
-CONTROL_SAFE = ((0.0, 0.31, 0.72), (0.84, 0.19, 0.15))
+CONTROL_SAFE = ((0.0, 0.31, 0.72), (0.84, 0.19, 0.15), (0.0, 0.55, 0.30), (0.90, 0.50, 0.10))
 CONTROL_NOMINAL_ALPHA = 0.38
 BASELINE_ALPHA = 0.4
 FIG_DPI = 150
@@ -139,7 +139,8 @@ def plot_trajectory_control_grid(
             traj_axis.axis("off")
             ctrl_axis.axis("off")
 
-    trajectory_legend, control_legend = _legend_handles()
+    _adim = min(int(_to_numpy(episodes[0].u_safe).shape[1]), len(CONTROL_SAFE)) if episodes else 2
+    trajectory_legend, control_legend = _legend_handles(_adim)
     fig.legend(
         handles=trajectory_legend,
         loc="lower center",
@@ -527,7 +528,10 @@ def _plot_control_panel(
     if u_safe.ndim != 2:
         raise ValueError(f"u_safe must have shape [T, action_dim], got {u_safe.shape}.")
     time = np.arange(u_safe.shape[0])
-    action_dim = min(u_safe.shape[1], 2)
+    # v2.8.1 S1 (V5 fix, 04_eval s3): one line per control component. The former min(...,2) cap hid channels
+    # 3-4 of the m=4 per-rotor plant (the torque-producing rotors); cap now the palette length so all m
+    # components draw. m=2 systems (DI/unicycle/quadrotor_planar) are byte-identical (min(2, 4) == 2).
+    action_dim = min(u_safe.shape[1], len(CONTROL_SAFE))
 
     for idx in range(action_dim):
         color = CONTROL_SAFE[idx]
@@ -700,7 +704,7 @@ def _outcome_word(outcome: str) -> str:
     return words[outcome]
 
 
-def _legend_handles() -> tuple[list[Line2D], list[Line2D]]:
+def _legend_handles(action_dim: int = 2) -> tuple[list[Line2D], list[Line2D]]:
     trajectory = [
         Line2D(
             [0],
@@ -755,36 +759,22 @@ def _legend_handles() -> tuple[list[Line2D], list[Line2D]]:
             label="Collision",
         ),
     ]
-    control = [
-        Line2D([0], [0], color=CONTROL_SAFE[0], linewidth=CONTROL_LINE_WIDTH, label="u₁ safe"),
-        Line2D([0], [0], color=CONTROL_SAFE[1], linewidth=CONTROL_LINE_WIDTH, label="u₂ safe"),
-        Line2D(
-            [0],
-            [0],
-            color=CONTROL_SAFE[0],
-            linewidth=CONTROL_LINE_WIDTH,
-            linestyle="--",
-            alpha=CONTROL_NOMINAL_ALPHA,
-            label="u₁ nominal",
-        ),
-        Line2D(
-            [0],
-            [0],
-            color=CONTROL_SAFE[1],
-            linewidth=CONTROL_LINE_WIDTH,
-            linestyle="--",
-            alpha=CONTROL_NOMINAL_ALPHA,
-            label="u₂ nominal",
-        ),
-        Line2D(
-            [0],
-            [0],
-            color=ARENA_COLOR,
-            linewidth=BOUND_LINE_WIDTH,
-            linestyle="--",
-            label="Control bound",
-        ),
+    # v2.8.1 S1 (V5 fix): one legend entry per control component actually drawn (u₁..u_m), so the m=4 torque
+    # channels are labelled; capped at the palette length. m=2 systems render exactly the prior two-entry legend.
+    _sub = ("₁", "₂", "₃", "₄", "₅", "₆")
+    n = min(max(int(action_dim), 1), len(CONTROL_SAFE))
+    control: list[Line2D] = [
+        Line2D([0], [0], color=CONTROL_SAFE[i], linewidth=CONTROL_LINE_WIDTH, label=f"u{_sub[i]} safe")
+        for i in range(n)
     ]
+    control += [
+        Line2D([0], [0], color=CONTROL_SAFE[i], linewidth=CONTROL_LINE_WIDTH, linestyle="--",
+               alpha=CONTROL_NOMINAL_ALPHA, label=f"u{_sub[i]} nominal")
+        for i in range(n)
+    ]
+    control.append(
+        Line2D([0], [0], color=ARENA_COLOR, linewidth=BOUND_LINE_WIDTH, linestyle="--", label="Control bound")
+    )
     return trajectory, control
 
 

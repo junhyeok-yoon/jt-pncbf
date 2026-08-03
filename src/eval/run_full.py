@@ -89,9 +89,9 @@ def dual_scoring_ledger_rows(
     to the header's cell count under the R-audit parser."""
     def _row(cell, cps_tilt60_cell, cps_bandopen_cell, src, verdict):
         o = cell
-        return ("| v2.8.0 | quadrotor_3d | %s | %s | %s | %.4f | %s | %s | %s | %.4f | %.4f | %.4f | %.4f | "
+        return ("| %s | quadrotor_3d | %s | %s | %s | %.4f | %s | %s | %s | %.4f | %.4f | %.4f | %.4f | "
                 "%.4f | %.4f | %.4f | %.4f | %s |" % (
-                    date, parent, seeds, blended_cps, cps_tilt60_cell, cps_bandopen_cell, src,
+                    __version__, date, parent, seeds, blended_cps, cps_tilt60_cell, cps_bandopen_cell, src,
                     o["reach"], o["collision"], o["oob"], o["stuck"], o["timeout"], o["infeasibility"],
                     o["saturation_rate"], o["cps"], verdict))
     src = "eval_only(dual-scoring final, run %s; mixed blended cps %.4f)" % (run_id, blended_cps)
