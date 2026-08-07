@@ -2,7 +2,7 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.8.1"
+  version: "v2.8.3"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
   system: quadrotor_planar          # double_integrator | unicycle | quadrotor_planar  (v2.6.0: direct-input planar quadrotor)
@@ -82,13 +82,13 @@ lqr:                                # v2.6.0 nominal cascaded PD (A1: admissible
 
 training:
   jt:
-    n_steps: 42000                  # match v2.0.1 SOTA budget (same as the Sobolev run)
+    n_steps: 30000                  # v2.8.2 S1: four-condition mechanism study budget (was 42000)
     vs_warmup_steps: 2000
     K_V: 3
     K_pi: 1
     bptt_T: 30                      # v2.7.0 iter-5: reverted 60->30 (iter-3 bptt_T=60 refuted as unstable, training
                                     # collapse @~28.5k; see phase_v270_report Iteration 3). 30 = v2.3.0 baseline.
-    schedule_n_steps: 42000         # match v2.0.1 SOTA schedule budget (UNCHANGED for the 80k extension)
+    schedule_n_steps: 30000         # v2.8.2 S1: matches n_steps for the four-condition study (was 42000)
     pi_init_ckpt: null              # v2.5.1 A2(a): policy warm-start (pi_state-only init); null => fresh run
     horizon_critic:                 # v2.5.1 A2(b): horizon-summary critic W (performance channel only)
       enabled: false                # false => bit-identical to baseline (critic_net=None, no W-step)
@@ -259,6 +259,9 @@ loss:
     deficit_cap: 4.0                # v2.4.1: norm cap (= 2*u_max) on the raw box-free deficit delta_u (bounds the alpha_unsafe=100 ask)
     deficit_form: "sq_cap"          # v2.4.1: "sq_cap" (squared, zero-grad above cap) | "huber" (bounded nonzero grad above cap)
     obs_deficit_feedback: false     # v2.4.1 Exp 2: feed delta_u_{t-1} as a policy input (dim +2); false = dim-19 baseline
+    w_infeas: 0.0                   # v2.8.2 M2: infeasibility-margin cost weight on relu(s_inf+delta) (default OFF; S5-derived when on)
+    infeas_delta: null              # v2.8.2 M2: relu headroom delta — NO default (S5-derived, changes.md R6.1); REQUIRED iff w_infeas>0
+    w_du: 0.0                       # v2.8.2 M3: filtered-command rate weight ||Δu^filt||^2/h^2 (default OFF; S5-derived when on)
     lambda_v: 0.01                  # task-cost velocity weight
     mu_u: 0.001                     # task-cost action weight
     tau_gate: 0.05
@@ -304,6 +307,9 @@ filter:
   projection: dual_solve            # v2.8.0 S1: dual_solve = exact single-scalar dual root (prop:lambda-solve,
                                     # exact + continuous at any action dim) | enumerate = legacy finite-candidate
                                     # selection (prop:sel; exact only for action dim <= 2). S4 keeps enumerate.
+  empty_mode: argmin                # v2.8.2 M1 (prop:empty-prox): argmin (v2.8.0 discrete least-violating, DEFAULT)
+                                    # | prox (continuous softmin over the SAME candidates; carries the empty-branch gradient)
+  empty_prox_temp: null             # v2.8.2 M1: prox continuity scale gamma — NO default (S5-derived); REQUIRED iff empty_mode=prox
   lg_reg_eps: 0.0                   # INERT with box_aware=true (box-aware enumerates the exact feasible region,
                                     # bypassing the base-projection blow-up -> smoke confirmed identical corrections
                                     # eps=0 vs 0.005 at ||L_g h||=0 states). Kept at 0; only goal_speed_radius changed.
@@ -324,6 +330,9 @@ filter:
 
 eval:
   cadence: 1500                     # v2.3.0 DI run: in-loop eval + step_NNNNNN.pt cadence checkpoints every 1500 macro steps (n2000 re-selection)
+  gate:                             # v2.8.2: cross-process in-loop-eval serialization (concurrent JT conditions)
+    enabled: true                  # default ON; single run is bit-identical (lock taken instantly, wait ~0)
+    timeout_s: 300.0               # bounded acquire wait; on timeout the eval proceeds UNGATED (never deadlocks)
   # NOTE: eval.full.n stays 500 here (base default) so the trainer's automated final eval finds the
   # secured_data n500 pool. N=2000 is the reporting standard but is run via the manual in-RAM eval path
   # (data/eval_pools/eval_full_di_n2000_seed23456.pkl), since run_full reads the read-only secured_data/pools.

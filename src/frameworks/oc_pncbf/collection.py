@@ -81,13 +81,21 @@ class TensorTransitionBatch:
     h_sequence: Tensor
     tail_states: Tensor
     tail_scene: BatchedScene
+    # v2.8.2 candidate-set label (flag-gated): [T+1, B, state_dim] trajectory states aligned with
+    # h_sequence. None unless the buffer was built with store_state_seq=True. Existing consumers
+    # never read it, so flag-off behaviour is unchanged.
+    state_sequence: Tensor | None = None
 
 
 class OCReplayBuffer:
-    def __init__(self, capacity: int) -> None:
+    def __init__(self, capacity: int, store_state_seq: bool = False) -> None:
         if capacity <= 0:
             raise ValueError(f"capacity must be positive, got {capacity}.")
         self.capacity = int(capacity)
+        # v2.8.2: store the padded per-trajectory STATE sequence alongside _tensor_traj_h. Off by
+        # default -> no extra memory and no behaviour change.
+        self.store_state_seq = bool(store_state_seq)
+        self._tensor_traj_states: Tensor | None = None
         self._trajectories: list[TrajectoryRecord] = []
         self._transitions: list[TransitionRecord] = []
         self._tensor_states: Tensor | None = None
@@ -288,6 +296,8 @@ class OCReplayBuffer:
             step_indices=self._tensor_step_indices.index_select(0, indices),
             scene=transition_scene,
             h_sequence=self._tensor_traj_h.index_select(0, trajectory_rows).transpose(0, 1),
+            state_sequence=(self._tensor_traj_states.index_select(0, trajectory_rows).transpose(0, 1)
+                            if self._tensor_traj_states is not None else None),
             tail_states=self._tensor_traj_tail_states.index_select(0, trajectory_rows),
             tail_scene=tail_scene,
         )
@@ -350,6 +360,8 @@ class OCReplayBuffer:
             trajectory_count,
         )
         self._tensor_traj_h = _slice_front(self._tensor_traj_h, trajectory_count)
+        if self._tensor_traj_states is not None:
+            self._tensor_traj_states = _slice_front(self._tensor_traj_states, trajectory_count)
         self._tensor_traj_tail_states = _slice_front(
             self._tensor_traj_tail_states,
             trajectory_count,
@@ -418,6 +430,13 @@ class OCReplayBuffer:
             self._tensor_traj_tail_states,
             states[-1],
         )
+        if self.store_state_seq:
+            # v2.8.2 FIX: per-trajectory layout is [n, T, state_dim] (same permute as flat_states above),
+            # and variable-length segments must be time-padded exactly as _cat_pad_time pads h.
+            self._tensor_traj_states = _cat_pad_time_states(
+                self._tensor_traj_states,
+                states[:-1].permute(1, 0, 2).contiguous().to(dtype=self._tensor_traj_h.dtype),
+            )
         self._tensor_traj_centers = _cat_optional(
             self._tensor_traj_centers,
             scene.obstacle_centers,
@@ -489,6 +508,8 @@ class OCReplayBuffer:
             device=device,
         )
         self._tensor_traj_h = _pad_record_h(self._trajectories, dtype, device)
+        self._tensor_traj_states = (_pad_record_states(self._trajectories, dtype, device)
+                                    if self.store_state_seq else None)
         self._tensor_traj_tail_states = torch.stack(
             [trajectory.states[-1] for trajectory in self._trajectories],
             dim=0,
@@ -825,6 +846,39 @@ def _cat_pad_time(existing: Tensor | None, new: Tensor) -> Tensor:
 
     width = max(existing.shape[1], new.shape[1])
     return torch.cat([_pad_to(existing, width), _pad_to(new, width)], dim=0)
+
+
+def _cat_pad_time_states(existing: Tensor | None, new: Tensor) -> Tensor:
+    """3-D analogue of _cat_pad_time for per-trajectory STATE sequences [n, T, state_dim]: cat along dim 0,
+    padding the time dim by repeating the last state, so states stay index-aligned with h_sequence."""
+    new = new.detach().clone()
+    if existing is None:
+        return new
+
+    def _pad_to(t: Tensor, width: int) -> Tensor:
+        if t.shape[1] >= width:
+            return t
+        return torch.cat([t, t[:, -1:, :].expand(t.shape[0], width - t.shape[1], t.shape[2])], dim=1)
+
+    width = max(existing.shape[1], new.shape[1])
+    return torch.cat([_pad_to(existing, width), _pad_to(new, width)], dim=0)
+
+
+def _pad_record_states(
+    trajectories: list[TrajectoryRecord],
+    dtype: torch.dtype,
+    device: torch.device,
+) -> Tensor:
+    """v2.8.2: per-trajectory STATE sequence padded exactly as _pad_record_h pads h, so index idx of
+    state_sequence is the state whose cost is h_sequence[idx]. Edge-padded with the last state."""
+    max_len = max(max(0, t.states.shape[0] - 1) for t in trajectories)
+    padded = []
+    for t in trajectories:
+        st = t.states[:-1].to(device=device, dtype=dtype)
+        if st.shape[0] < max_len:
+            st = torch.cat([st, st[-1:].expand(max_len - st.shape[0], st.shape[1])], dim=0)
+        padded.append(st)
+    return torch.stack(padded, dim=0)
 
 
 def _pad_record_h(

@@ -333,6 +333,13 @@ The checkpoint contains `step`, `pi_state`, `v_s_state`, `v_s_target_state`, `ar
 - **Imports** ordered: stdlib, third-party, project. One blank line between groups.
 - **Type hints** on public functions. `typing.Protocol` for the framework interface (§2).
 - **No global mutable state** — `src/configs/` is read by `src/common/config_io.py:load_configs()` exactly once per run; the result is passed in.
+- **Flag-gated changes are gated on both sides of the flag.** A change shipped behind a
+  config flag proves two things before any launch: (i) flag-off is byte-identical to the
+  prior path on a fixed input (labels, losses, or outputs as appropriate); and (ii) flag-on
+  has executed **the real code path at least once** — the actual collection loop, buffer
+  append, or batch construction the run will use, not a hand-built batch or a synthetic
+  bench. A gate suite in which every flag-on check runs on constructed inputs while the
+  live path runs only flag-off has a hole exactly where the run will break.
 - **Determinism flag** `torch.use_deterministic_algorithms(True)` is **not** set by default (it disables some fast paths). Determinism is recovered via seed control; bit-exact determinism is reserved as a future need.
 - **Naming.** `cps` everywhere for the headline metric. `V_S` for the value network, `pi` for the policy network, `u_nom` for pre-projection action, `u_safe` for post-projection action.
 - **Lint and format.** `ruff` for lint; `black` for format. Both are run by `scripts/format.sh`.

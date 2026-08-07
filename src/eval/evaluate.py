@@ -78,6 +78,7 @@ EVAL_EPISODE_COLUMNS = [
     "timeout",
     "infeasible_step_frac",
     "empty_step_frac",
+    "empty_source",
     "singular_step_frac",
     "saturation_step_frac",
     "min_window_displacement",
@@ -170,29 +171,37 @@ def evaluate(
                     config=config,
                 )
 
+        # v2.8.2 B1: outcome predicates computed ONCE per chunk on the batched [T,B,.] states
+        # (step_outcomes / resolve_outcome / first_physical_event_step already accept the batch
+        # dim; batched_scene carries per-scene obstacles + goal). ONE host transfer per chunk;
+        # masks are sliced per scene in the loop. Bit-identical to the former per-scene calls (C1).
+        chunk_masks = step_outcomes(filtered.states, batched_scene, framework.system, config)
+        chunk_resolved = resolve_outcome(chunk_masks)
+        chunk_phys = first_physical_event_step(chunk_masks)
+        chunk_min_wd = eval_min_window_displacement_batched(chunk_masks, chunk_phys)
+        chunk_band_step = chunk_masks.collided_band_lower | chunk_masks.collided_band_upper  # [T,B]
+        event_step_cpu = chunk_resolved.event_step.detach().cpu()
+        phys_cpu = chunk_phys.detach().cpu()
+        min_wd_cpu = chunk_min_wd.detach().cpu()
+        band_step_cpu = chunk_band_step.detach().cpu()
+        causes_all = chunk_resolved.collision_cause
+
         for local_idx, scene in enumerate(batch_scenes):
             episode_idx = batch_start + local_idx
             filtered_i = _slice_rollout(filtered, local_idx)
-            masks = step_outcomes(filtered_i.states, scene, framework.system, config)
-            resolved = resolve_outcome(masks)
-            outcome = resolved.outcome[0]
-            event_step = int(resolved.event_step[0].item())
-            physical_event_step = int(first_physical_event_step(masks)[0].item())
+            outcome = chunk_resolved.outcome[local_idx]
+            event_step = int(event_step_cpu[local_idx].item())
+            physical_event_step = int(phys_cpu[local_idx].item())
             active_steps = active_action_steps(
                 physical_event_step,
                 filtered_i.u_safe.shape[0],
             )
-            min_window_displacement = float(
-                eval_min_window_displacement(masks, physical_event_step)[0]
-                .detach()
-                .cpu()
-                .item()
-            )
+            min_window_displacement = float(min_wd_cpu[local_idx].item())
             # v2.8.0: per-episode band-crossing count + first crossing step (rising edges of the band
             # predicate over the active window). Always visible so the floor-permissive readout's use of
             # the permission is auditable; under band_terminates=true a crossing ends the episode so this
             # is 0/1, under permissive mode it counts every entry into the band during flight.
-            band_step = (masks.collided_band_lower | masks.collided_band_upper)[:, 0]
+            band_step = band_step_cpu[:, local_idx]
             band_active = band_step[: active_steps] if active_steps > 0 else band_step[:0]
             if band_active.numel() > 0:
                 prev = torch.cat([torch.zeros(1, dtype=torch.bool, device=band_active.device),
@@ -230,7 +239,7 @@ def evaluate(
                     scene=scene,
                     system=framework.system,
                     config=config,
-                    collision_cause=(resolved.collision_cause[0] if resolved.collision_cause else ""),
+                    collision_cause=(causes_all[local_idx] if causes_all else ""),
                     band_crossings=band_crossings,
                     first_crossing_step=first_crossing_step,
                 )
@@ -328,6 +337,9 @@ def _slice_rollout(result: RolloutResult, batch_index: int) -> RolloutResult:
         infeasible=result.infeasible[:, batch_index : batch_index + 1],
         empty=None if result.empty is None else result.empty[:, batch_index : batch_index + 1],
         singular=None if result.singular is None else result.singular[:, batch_index : batch_index + 1],
+        # v2.8.3 D1: the provenance flag must survive the per-episode slice, or every episode row
+        # reports "alias" no matter what the batch rollout actually captured.
+        empty_is_native=getattr(result, "empty_is_native", False),
     )
 
 
@@ -398,6 +410,12 @@ def _filter_adapter(
             raise ValueError("framework.filter must return at least (u_safe, infeasible).")
         return filtered[0], filtered[1].to(device=x.device, dtype=torch.bool)
 
+    # v2.8.3 D1 ROOT REPAIR. rollout_eval resolves the filter object as
+    # `filter_fn.__self__._filter` to read last_empty / last_singular. This adapter is a plain closure,
+    # so `__self__` does not exist, the lookup returned None, and empty_steps fell back to `infeasible`
+    # -- which is why empty_step_frac has been a strict ALIAS of infeasible_step_frac (D1). Attaching
+    # the filter here restores the intended source without changing what the adapter computes.
+    wrapped._filter = getattr(framework, "_filter", None)
     return wrapped
 
 
@@ -434,6 +452,10 @@ def _episode_row(
     stuck = 1.0 if outcome == "stuck" else 0.0
     timeout = 1.0 if outcome == "timeout" else 0.0
     infeasible_step_frac = active_bool_fraction(result.infeasible, active_steps)
+    # v2.8.3 D1: provenance is explicit. `last_empty` = the filter's own empty_intersection flag;
+    # `alias` = the legacy fallback where empty is indistinguishable from infeasible and the
+    # empty leg of any prediction is NOT scoreable from this column.
+    empty_source = "last_empty" if getattr(result, "empty_is_native", False) else "alias"
     empty_step_frac = active_bool_fraction(result.empty, active_steps) if result.empty is not None else infeasible_step_frac
     singular_step_frac = active_bool_fraction(result.singular, active_steps) if result.singular is not None else 0.0
     saturation_frac = saturation_step_fraction(result, system, active_steps=active_steps)
@@ -468,6 +490,7 @@ def _episode_row(
         "timeout": timeout,
         "infeasible_step_frac": infeasible_step_frac,
         "empty_step_frac": empty_step_frac,
+        "empty_source": empty_source,
         "singular_step_frac": singular_step_frac,
         "saturation_step_frac": saturation_frac,
         "min_window_displacement": min_window_displacement,
@@ -524,6 +547,35 @@ def eval_min_window_displacement(
         torch.full_like(window, float("inf")),
     )
     min_value = finite_values.amin(dim=0)
+    return torch.where(
+        torch.isinf(min_value),
+        torch.full_like(min_value, float("nan")),
+        min_value,
+    )
+
+
+def eval_min_window_displacement_batched(
+    step_masks: StepOutcomeMasks,
+    physical_event_steps: Tensor,
+) -> Tensor:
+    """v2.8.2 B1: batched equivalent of eval_min_window_displacement over all B columns at once.
+    Each column is cut at its OWN physical_event_step (>=0) or uses the full window (<0), then the
+    finite min over the kept rows is taken -- bit-identical, per column, to the scalar-cut version."""
+    window = step_masks.window_displacement                                  # [T, B]
+    n_steps, _ = window.shape
+    row = torch.arange(n_steps, device=window.device).unsqueeze(1)           # [T, 1]
+    cut = torch.where(
+        physical_event_steps >= 0,
+        physical_event_steps.to(row.dtype),
+        torch.full_like(physical_event_steps, n_steps - 1, dtype=row.dtype),
+    )                                                                        # [B] (<0 -> full window)
+    keep = row <= cut.unsqueeze(0)                                           # [T, B]
+    finite_values = torch.where(
+        torch.isfinite(window) & keep,
+        window,
+        torch.full_like(window, float("inf")),
+    )
+    min_value = finite_values.amin(dim=0)                                    # [B]
     return torch.where(
         torch.isinf(min_value),
         torch.full_like(min_value, float("nan")),

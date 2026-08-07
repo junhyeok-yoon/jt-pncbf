@@ -55,3 +55,6 @@ data/*
 
 # Close-out tooling: the manifest + staging script that BUILD the commit, not artifacts of it.
 .close_tooling/
+tests/
+scripts/analysis/
+scripts/deck/

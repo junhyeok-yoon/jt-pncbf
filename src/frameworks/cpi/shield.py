@@ -22,7 +22,7 @@ from typing import Any
 
 import torch
 
-from src.common.filter_hardnet import (_base_alpha, _base_projection, _box_aware_projection, _cbf_terms,
+from src.common.filter_hardnet import (_base_alpha, _row_upper, _base_projection, _box_aware_projection, _cbf_terms,
                                         _hardnet_params, _SINGULAR_LG_THRESHOLD)
 from src.common.rk4 import rk4_step
 from src.frameworks.cpi.backup import deadband_brake, speed_max
@@ -96,7 +96,7 @@ def shield_eval(scenes, policy_net, config, h_fn, system, device, *, dt_check=No
                 un = policy_net(system.observation(x, bs))
                 h, lf, lg = _cbf_terms(system, h_fn, x, bs, un, create_graph=False)
                 h, lf, lg = h.detach(), lf.detach(), lg.detach()
-                alpha = _base_alpha(h, params); row = -lf - alpha * h
+                alpha = _base_alpha(h, params); row = _row_upper(lf, alpha, h, params)
                 proj = _base_projection(un, lg, row, bounds, params)
                 u_cand, _ = _box_aware_projection(un, proj, lg, row, bounds)
                 ok = verify_plan(x, u_cand, C, R, A, system, config, dt, dt_check, t_brake, thresh)

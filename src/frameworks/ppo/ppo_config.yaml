@@ -1,0 +1,106 @@
+# v2.8.2 PPO baseline hyperparameters — OWN top-level block, deep-merged ONTO load_effective_config().
+# This file adds ONLY the `ppo:` key; it never touches env/network/obstacle/scene/eval/lqr (those flow from
+# base_config + exp_config unchanged, so the environment is identical to the JT/OC group by construction).
+#
+# FIXED by the mission: gamma=0.99, gae_lambda=0.95. Everything else is a sound standard PPO setting; each
+# provenance is recorded in the build-log (docs/versions/v2.8.2/ppo_baseline.md).
+
+ppo:
+  # --- returns / advantages (FIXED) ---
+  gamma: 0.99                # reward discount (mission-fixed)
+  gae_lambda: 0.95           # GAE lambda (mission-fixed)
+
+  # --- PPO objective (standard: Schulman 2017 / SB3 / CleanRL continuous-control defaults) ---
+  clip_ratio: 0.2            # PPO clip epsilon
+  clip_vloss: true           # clipped value loss (SB3/CleanRL)
+  vf_coef: 0.5               # value-loss coefficient
+  ent_coef: 0.0              # entropy bonus (SB3 PPO default; exploration carried by the learned diagonal std)
+  normalize_adv: true        # per-batch advantage normalization
+  max_grad_norm: 0.5         # global grad-norm clip
+
+  # --- optimizer (Adam, no weight decay — standard PPO; separate policy/value optimizers, no shared trunk) ---
+  lr_pi: 3.0e-4
+  lr_vf: 3.0e-4
+  adam_eps: 1.0e-5
+  init_log_std: -0.5         # diagonal Gaussian log-std init (~0.61 pre-tanh std)
+
+  # --- update accounting ---
+  # One PPO "policy update step" == one policy-gradient minibatch update. epochs * n_minibatches updates per
+  # iteration; total updates = n_iterations * epochs * n_minibatches. The quadrotor budget is set so total
+  # updates == 30000 (matching the JT group's 30000 policy gradient steps). See build-log for the equivalence.
+  epochs: 4
+  n_minibatches: 25          # fallback only; superseded by minibatch_size when that is set
+  minibatch_size: 16384      # minibatch follows from the batch: n_minibatches = ceil(N/16384) per iteration
+
+  # --- rollout / budget (defaults are the quadrotor_3d full-budget run; the launcher overrides for DI) ---
+  num_envs: 2048             # RE-SIZED for the ITERATIONS objective (addendum 6): the policy sees fresh data once
+                             # per iteration, so a smaller batch buys ~4x more iterations/wall than 8192 (and less
+                             # per-batch reuse => lower approx_kl). NOT the env-steps/s knee.
+  horizon: null              # READ from config (eval.max_steps); resolves to 200.
+  n_iterations: 3000         # ~10x the previous 300 (addendum 6): iterations of fresh data are what limit learning
+                             # here, not env-steps/s. Report interactions / iterations / updates / wall + approx_kl.
+  eval_cadence_iters: 150    # in-loop eval + per-eval trajectory grids + settling diagnostics every N iterations
+
+  # --- reward (registered by the Researcher; implemented verbatim in train.py) ---
+  reward:
+    # v2.8.2 REVISION 12 (Researcher terminal rescale): collision -30 -> -100 (obstacle AND band alike). Everything
+    # else stands from rev-11: reach +30, stuck/oob/timeout -10. train.py reads terminals from this block.
+    reach: 30.0              # reach terminal
+    collision: -100.0        # collision terminal (obstacle AND band: floor OR ceiling alike) — rev-11 -30 -> rev-12 -100
+    oob: -10.0               # out-of-bounds terminal — was -1.0
+    stuck: -10.0             # stuck terminal — was -1.0
+    timeout: -10.0           # timeout terminal (episode ends at horizon) — was -1.0
+    # per-step penalty = -1/max_steps (accumulates to -1 over a full episode); derived from env, not set here.
+    # dense goal shaping k*(dist_{t-1}-dist_t), potential-based, FULL 3-D distance; k = 5 / E[||p0-g||] is
+    # MEASURED on the training distribution at launch and stamped into k_shaping (+ measured_E_p0_goal).
+    k_shaping: null
+    # v2.8.2 addendum (Researcher): attitude deadband penalty (QUADROTOR ONLY; OFF where there is no thrust axis,
+    # e.g. the DI gate). r_att = -(w_att/max_steps) * relu(cos(theta_hold) - e3^T R e3). cos(theta_hold)=1/TWR is
+    # DERIVED from config (mass, gravity, rotor bound, n_rotors) and stamped as _TWR/_cos_theta_hold/_theta_hold_deg
+    # at launch; do NOT hard-code it. w_att=1.0 => a sustained fully-inverted episode accumulates ~-1.5. Inside the
+    # cone (tilt <= theta_hold, where g*tan(theta) peaks) the term is EXACTLY 0 so the policy banks freely. NO z
+    # term (the 3-D potential already penalizes altitude error), NO band/floor/ceiling term (per-scene geometry is
+    # the certificate's job), NO angular-rate term (omega is the means of righting; the reach predicate already
+    # requires ||omega||<=0.30 and the attitude term penalizes a spinning vehicle via oscillating cos(theta)).
+    w_att: 1.0
+    # v2.8.2 REVISION 9 (Researcher): the settling PENALTY (addenda 3/6) and the yaw-rate penalty (addendum 8) are
+    # REMOVED — they taxed the approach (tax >= potential gain => rational optimum at d~2m, the measured closest
+    # approach) and made everything near the goal a cost while the reach terminal was never sampled. REPLACED by a
+    # dense POSITIVE goal-proximity bonus on the JOINT predicate:
+    #   r_goal = (w_goal/max_steps) * exp(-[(d/d_ref)^2 + (||v||/v_G)^2 + (||omega||/omega_G)^2])
+    # maximal exactly where the reach predicate holds, decaying smoothly outward => a gradient in all three
+    # channels at once, never taxing the approach, covering the full ||omega||. v_G/omega_G READ from the terminal.
+    # d_ref=1.0. w_goal=10.0. Farming is bounded: reach ends the episode so the bonus is collected only just
+    # outside the predicate (<=~0.4*w_goal=4/episode) << reach 30; the accumulated bonus/episode is logged.
+    # REVISION 10 B1: SUM of per-channel bonuses (rev-9 product exp was identically zero — one off-channel zeroed
+    # the whole term and every gradient). r_goal = (w_goal/T_max)*[exp(-(d/d_ref)^2) + exp(-(||v||/v_ref)^2) +
+    # exp(-(||omega||/om_ref)^2)]. v_ref=om_ref = goal_ref_mult * terminal bound = 3*0.30 = 0.90 (gradient at the
+    # measured operating point omega~3, not 100 widths out). d_ref=1.0. Per-channel accumulation logged.
+    w_goal: 10.0
+    d_ref: 1.0
+    goal_ref_mult: 3.0        # v_ref/om_ref = 3x the terminal bounds (0.90) so the bonus has gradient at omega~3
+
+    # v2.8.2 addendum 5 (Researcher): control-smoothness on the SAMPLED action. d1=||u_t-u_{t-1}||/(sqrt(m)*range)
+    # (1 at a full simultaneous swing), d2=||u_t-2u_{t-1}+u_{t-2}||/(2*sqrt(m)*range) (1 at a full alternating
+    # swing); range=f_rotor_max-f_rotor_min, m=rotor count. r_smooth=-(1/max_steps)*(w_du*d1^2 + w_d2u*d2^2),
+    # squared (JT w_du form). w_du=w_d2u=0.5 => maximal chatter accumulates ~-1. NB high-tilt recovery needs
+    # aggressive control, so an over-weighted smoothness term reproduces hazard-reallocation (watch the diagnostics).
+    w_du: 0.5
+    w_d2u: 0.5
+
+  # REVISION 10 B3: training-IC CURRICULUM (PPO training sampler ONLY; eval pools + scene_init.py untouched =>
+  # Gate 2 safe). Reach was never sampled (Part A: 27 goal episodes total; no IC near the predicate at t=0), and
+  # model-free RL cannot learn a terminal it never experiences. Mix easy near-goal / low-v / low-omega / upright
+  # starts so the +30 terminal fires and enters the value function, annealed to 0 so the policy finishes on the
+  # true distribution. Deliberate asymmetry vs JT (which gets analytic settling gradient via w_settle/w_settle_ang
+  # through BPTT and never needs to sample a reach) — recorded in the build-log.
+  curriculum:
+    enabled: true
+    easy_frac0: 0.5          # half the batch easy at iter 0 (thousands of reach opportunities/iter) while half
+                             # stays on the true distribution so navigation is still learned
+    anneal_frac: 0.7         # linear f0 -> 0 by 70% of iterations; last 30% is pure true distribution
+    d_lo: 0.15               # easy start-goal distance ~ U[0.15, 0.8] m: past the reach ball (not born-reached),
+    d_hi: 0.8                # close enough to reach in a few steps so the terminal actually fires
+    v_max: 0.25              # ||v0|| ~ U[0, 0.25] (below v_G=0.30) so a settled arrival is reachable
+    om_max: 0.25             # ||omega0|| ~ U[0, 0.25] (below omega_G=0.30)
+    max_tilt: 0.35           # near-upright attitude (tilt ~ U[0, 0.35 rad ~ 20 deg]) so the vehicle can hover

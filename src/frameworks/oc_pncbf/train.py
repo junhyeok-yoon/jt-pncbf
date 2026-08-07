@@ -17,6 +17,8 @@ from torch import nn, optim
 import yaml
 
 from src._version import __version__
+from src.common.train_instrument import PhaseTimers   # v2.8.2 per-phase wall-clock + peak-VRAM instrumentation
+from src.common.eval_gate import eval_gate            # v2.8.2 cross-process in-loop-eval serialization gate
 from src.common.filter_cbfqp import CBFQPFilter
 from src.common.system import System
 from src.common.quadrotor_barrier import lg_authority_loss
@@ -83,6 +85,12 @@ METRIC_COLUMNS = [
     "abs_action_mean",
     "abs_action_max",
     "satfrac_a_phi",
+    "t_collect",            # v2.8.2 instrumentation (changes.md §4): per-phase wall-clock (s) since last log
+    "t_bptt",
+    "t_eval",
+    "t_eval_wait",          # v2.8.2: cross-process eval-gate queueing (never billed to training)
+    "t_ckpt",
+    "cuda_max_mem_mb",      # v2.8.2: torch.cuda.max_memory_allocated()/1e6 at write time
 ]
 
 
@@ -194,6 +202,11 @@ def run_training(
     _initialize_run_dir(run_dir, config)
     writer = _make_summary_writer(run_dir / "tensorboard")
     start_time = time.time()
+    timers = PhaseTimers()   # v2.8.2: per-phase wall-clock, reset after each logged metrics row
+    _eg = (config.get("eval", {}) or {}).get("gate", {}) or {}       # v2.8.2 eval gate (shared across concurrent runs)
+    _eg_enabled = bool(_eg.get("enabled", True)); _eg_timeout = float(_eg.get("timeout_s", 300.0))
+    _ver = str(config["run"]["version"])
+    _eg_lock = next((p for p in [run_dir, *run_dir.parents] if p.name == _ver), run_dir.parent) / "eval_gate.lock"
 
     train_cfg = config["training"]["oc_pncbf"]
     collection_cfg = config["collection"]["oc_pncbf"]
@@ -255,6 +268,7 @@ def run_training(
             schedule_epoch,
             schedule_epochs,
         )
+        _t = time.time()
         collect(
             system=system,
             scene_sampler=lambda rng: scene_sampler(rng, config, system.name),
@@ -268,8 +282,10 @@ def run_training(
             storage_dtype=train_dtype,
             config=config,
         )
+        timers.t_collect += time.time() - _t
 
         for _ in range(grad_steps_per_epoch):
+            _t = time.time()
             step_result = _value_step(
                 system=system,
                 value_net=value_net,
@@ -297,6 +313,7 @@ def run_training(
                 value_net,
                 tau=float(config["optim"]["tau_polyak"]),
             )
+            timers.t_bptt += time.time() - _t
             global_step += 1
             metrics_row = _metrics_row(
                 step=global_step,
@@ -306,38 +323,46 @@ def run_training(
                 gamma_disc=gamma_disc,
                 target_rhs=target_rhs,
                 step_result=value_scalars,
+                **timers.as_row(),
             )
             last_metrics_row = metrics_row
             if global_step % metrics_log_every == 0:
                 _append_csv(run_dir / "metrics.csv", METRIC_COLUMNS, [metrics_row])
                 _write_tb_scalars(writer, "train", metrics_row, global_step)
                 last_logged_metrics_step = global_step
+                timers.reset()   # v2.8.2: per-interval phase split
         if halt_reason is not None:
             break
 
         should_eval = epoch == epochs or epoch % max(1, eval_every_epochs) == 0
         if should_eval:
-            framework = OCPNCBFFramework(system, value_net, config)
-            eval_result = evaluate(
-                framework,
-                inloop_pool_path,
-                config,
-                mode="in_loop",
-                step=global_step,
-                ckpt_name=f"step_{global_step:06d}.pt",
-                max_scenes=eval_max_scenes,
-                include_lqr_baseline=True,
-            )
-            _record_eval(
-                run_dir,
-                writer,
-                eval_result,
-                global_step,
-                config,
-                system,
-                value_net,
-            )
+            with eval_gate(_eg_lock, enabled=_eg_enabled, timeout_s=_eg_timeout,
+                           log=lambda m: print(m, flush=True)) as _gate_wait:   # v2.8.2: at most one eval across runs
+                timers.t_eval_wait += _gate_wait
+                _t = time.time()
+                framework = OCPNCBFFramework(system, value_net, config)
+                eval_result = evaluate(
+                    framework,
+                    inloop_pool_path,
+                    config,
+                    mode="in_loop",
+                    step=global_step,
+                    ckpt_name=f"step_{global_step:06d}.pt",
+                    max_scenes=eval_max_scenes,
+                    include_lqr_baseline=True,
+                )
+                _record_eval(
+                    run_dir,
+                    writer,
+                    eval_result,
+                    global_step,
+                    config,
+                    system,
+                    value_net,
+                )
+                timers.t_eval += time.time() - _t
             cps = float(eval_result.eval_row["cps"])
+            _t = time.time()
             if cps > best_cps + float(config["halt"]["early_stop_min_delta"]):
                 best_cps = cps
                 best_step = global_step
@@ -363,6 +388,7 @@ def run_training(
                 best_cps,
                 best_step,
             )
+            timers.t_ckpt += time.time() - _t
             if (
                 stage != "smoke"
                 and epoch >= max(1, eval_every_epochs)
@@ -609,12 +635,24 @@ def _metrics_row(
     gamma_disc: float,
     target_rhs: float,
     step_result: Mapping[str, float],
+    t_collect: float = 0.0,
+    t_bptt: float = 0.0,
+    t_eval: float = 0.0,
+    t_eval_wait: float = 0.0,
+    t_ckpt: float = 0.0,
+    cuda_max_mem_mb: float = 0.0,
 ) -> dict[str, Any]:
     row = {column: 0.0 for column in METRIC_COLUMNS}
     row.update(
         {
             "step": int(step),
             "wallclock_s": float(wallclock_s),
+            "t_collect": float(t_collect),
+            "t_bptt": float(t_bptt),
+            "t_eval": float(t_eval),
+            "t_eval_wait": float(t_eval_wait),
+            "t_ckpt": float(t_ckpt),
+            "cuda_max_mem_mb": float(cuda_max_mem_mb),
             "n_sched": int(n_sched),
             "lambda_disc_active": float(lambda_disc),
             "gamma_disc": float(gamma_disc),

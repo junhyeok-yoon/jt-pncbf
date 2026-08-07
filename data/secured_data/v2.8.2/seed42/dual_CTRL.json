@@ -1,0 +1,149 @@
+{
+  "label": "CTRL",
+  "ckpt": "data/runs/v2.8.2/set__20260803-063606__seed42/v2.8.2__jt__20260803-063606__seed42/checkpoints/best.pt",
+  "terminal_goal_angrate": 0.3,
+  "pool_gate": "0ef3751b (canonical, band-terminate)",
+  "pool_cps_tilt60": "navcone_seed34567 (tilt<=60)",
+  "pool_cps_bandopen": "0ef3751b (canonical, band-open)",
+  "gate": {
+    "outcome": {
+      "cps": 0.7785385042204443,
+      "reach": 0.9205,
+      "collision": 0.0455,
+      "oob": 0.0,
+      "stuck": 0.0015,
+      "timeout": 0.0325,
+      "infeasibility": 0.11070498593185216,
+      "saturation_rate": 0.4477981975906267,
+      "cps_ci_lo": 0.7459961911052846,
+      "cps_ci_hi": 0.8104909222532501,
+      "reach_ci_lo": 0.908,
+      "reach_ci_hi": 0.9325,
+      "collision_ci_lo": 0.0364875,
+      "collision_ci_hi": 0.0545,
+      "stuck_ci_lo": 0.0,
+      "stuck_ci_hi": 0.0035,
+      "infeasibility_ci_lo": 0.10173711747432433,
+      "infeasibility_ci_hi": 0.1199274115546494
+    },
+    "collision_decomposition": {
+      "obstacle": 0.0115,
+      "obstacle_ci": [
+        0.0065,
+        0.0165
+      ],
+      "band_lower": 0.0335,
+      "band_lower_ci": [
+        0.026,
+        0.0415
+      ],
+      "band_upper": 0.0005,
+      "band_upper_ci": [
+        0.0,
+        0.0015
+      ]
+    },
+    "band": {
+      "crossing_rate": 0.0,
+      "n_crossed": 0,
+      "reach_after_crossing_frac": 0.0
+    },
+    "n": 2000,
+    "encoder": "hard_topk",
+    "beta": 2.0
+  },
+  "cps_tilt60": {
+    "outcome": {
+      "cps": 0.9046406258275757,
+      "reach": 0.9595,
+      "collision": 0.009,
+      "oob": 0.0,
+      "stuck": 0.0005,
+      "timeout": 0.031,
+      "infeasibility": 0.06953124724141463,
+      "saturation_rate": 0.4058062307057082,
+      "cps_ci_lo": 0.88610844788698,
+      "cps_ci_hi": 0.9219891633802831,
+      "reach_ci_lo": 0.951,
+      "reach_ci_hi": 0.968,
+      "collision_ci_lo": 0.005,
+      "collision_ci_hi": 0.0135,
+      "stuck_ci_lo": 0.0,
+      "stuck_ci_hi": 0.0015,
+      "infeasibility_ci_lo": 0.06477865540005277,
+      "infeasibility_ci_hi": 0.07444098600206685
+    },
+    "collision_decomposition": {
+      "obstacle": 0.0065,
+      "obstacle_ci": [
+        0.003,
+        0.010012499999999988
+      ],
+      "band_lower": 0.0015,
+      "band_lower_ci": [
+        0.0,
+        0.0035
+      ],
+      "band_upper": 0.001,
+      "band_upper_ci": [
+        0.0,
+        0.0025
+      ]
+    },
+    "band": {
+      "crossing_rate": 0.0,
+      "n_crossed": 0,
+      "reach_after_crossing_frac": 0.0
+    },
+    "n": 2000,
+    "encoder": "hard_topk",
+    "beta": 2.0
+  },
+  "cps_bandopen": {
+    "outcome": {
+      "cps": 0.8562610215042362,
+      "reach": 0.9415,
+      "collision": 0.018,
+      "oob": 0.006,
+      "stuck": 0.0015,
+      "timeout": 0.033,
+      "infeasibility": 0.0941299283192128,
+      "saturation_rate": 0.4363925268794453,
+      "cps_ci_lo": 0.8329325374848607,
+      "cps_ci_hi": 0.8792144583923353,
+      "reach_ci_lo": 0.931,
+      "reach_ci_hi": 0.9515,
+      "collision_ci_lo": 0.012,
+      "collision_ci_hi": 0.024,
+      "stuck_ci_lo": 0.0,
+      "stuck_ci_hi": 0.0035,
+      "infeasibility_ci_lo": 0.08750456540146721,
+      "infeasibility_ci_hi": 0.10077110675707454
+    },
+    "collision_decomposition": {
+      "obstacle": 0.018,
+      "obstacle_ci": [
+        0.012,
+        0.0245
+      ],
+      "band_lower": 0.0,
+      "band_lower_ci": [
+        0.0,
+        0.0
+      ],
+      "band_upper": 0.0,
+      "band_upper_ci": [
+        0.0,
+        0.0
+      ]
+    },
+    "band": {
+      "crossing_rate": 0.034,
+      "n_crossed": 68,
+      "reach_after_crossing_frac": 0.6176470588235294
+    },
+    "n": 2000,
+    "encoder": "hard_topk",
+    "beta": 2.0
+  }
+}

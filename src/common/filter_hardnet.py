@@ -33,6 +33,13 @@ class _HardNetParams:
     empty_fallback_k: int = 10
     empty_fallback_phases: int = 2          # v2.7.6 M8.1: 2 = two-phase (default, unchanged) | 1 = single-phase
     projection: str = "dual_solve"          # v2.8.0 S1: dual_solve (exact, prop:lambda-solve) | enumerate (legacy)
+    empty_mode: str = "argmin"              # v2.8.2 M1 (prop:empty-prox): argmin (v2.8.0 discrete least-violating,
+                                            # DEFAULT) | prox (continuous softmin over the SAME candidates)
+    empty_prox_temp: float | None = None    # v2.8.2: prox continuity scale gamma; NO default (S5-derived; required iff prox)
+    gamma_margin: float = 0.0               # v2.8.2: ROW-ONLY safety retreat (02_control §6.1). b = -L_f h - alpha*(h+gamma).
+                                            # DEFAULT 0.0 => byte-identical to the pre-v2.8.2 row (guarded in _row_upper).
+                                            # Deliberately NOT installed at h_fn level: h+gamma would move _base_alpha's
+                                            # `h <= 0` region test, flipping alpha 2.0 -> 100.0 on h in (-gamma, 0].
 
 
 class HardNetFilter:
@@ -70,6 +77,8 @@ class HardNetFilter:
             u_nom,
             create_graph=True,
         )
+        _lg_live, _h_live, _lf_live = lg_h, h, lf_h   # v2.8.2 M2: pre-detach LIVE coeffs (box-aware stash below);
+        #                                               survives detach_filter_coeffs so s_inf keeps its policy grad
         if detach_coeffs:
             # v2.4.0 Step 5 (audit C1 fix): treat the CBF coefficients (h, L_f h, L_g h and every
             # projection/box-argmin quantity derived from them) as CONSTANTS w.r.t. the state in
@@ -95,7 +104,7 @@ class HardNetFilter:
             )
             gap = torch.relu((h_peak - h.detach()) / self.params.lookahead_delta)
             alpha = alpha * (1.0 + self.params.lookahead_beta * gap)
-        row_upper = -lf_h - alpha * h
+        row_upper = _row_upper(lf_h, alpha, h, self.params)
         bounds = self.system.u_bounds.to(device=u_nom.device, dtype=u_nom.dtype)
 
         projected = _base_projection(u_nom, lg_h, row_upper, bounds, self.params)
@@ -123,6 +132,8 @@ class HardNetFilter:
             lg_h,
             row_upper,
             bounds,
+            empty_mode=self.params.empty_mode,
+            empty_prox_temp=self.params.empty_prox_temp,
         )
         # v2.8.0 Phase-2 C1 instrumentation (additive; does NOT change the returned action or flag): stash the
         # constraint row a=L_g h, the RHS b=row_upper, and the geometric box projection (pre-fallback) so the
@@ -130,6 +141,15 @@ class HardNetFilter:
         self.last_a = lg_h.detach()
         self.last_b = row_upper.detach()
         self.last_box_projected = box_projected.detach()
+        # v2.8.2 M2 (prop:sinfty-decomp): also expose the LIVE (non-detached) row a=L_g h and RHS b=row_upper so
+        # the policy loss can form the empty-branch depth s_inf = a·min_corner(box) − b with the policy/state
+        # gradient intact. value_net is frozen in the policy loss (theta_V detached => zero theta_V grad, G4),
+        # and s_inf is linear in a,b so grad(s_inf) carries no 1/||a|| homogeneity (unlike v2.2.1/v2.4.1). These
+        # references are overwritten every step; with w_infeas=0 the loss never reads them (zero extra cost).
+        # Built from the PRE-detach coeffs (so detach_filter_coeffs, which detaches the projection row, does not
+        # also kill s_inf's policy gradient). Uses the base alpha (lookahead, off by default, is not folded in).
+        self.last_a_live = _lg_live
+        self.last_b_live = _row_upper(_lf_live, _base_alpha(_h_live, self.params), _h_live, self.params)
         # v2.7.1 Stage-1: k-step empty-branch ACTION fallback (eval-only, default off). On rows where the
         # geometric intersection is empty, replace the least-violating action with the first-phase control of
         # the two-phase k-step argmin. INVARIANT: the returned flag `singular | empty_intersection` is NOT
@@ -207,6 +227,8 @@ def _box_aware_projection(
     halfspace_normal: Tensor,
     row_upper: Tensor,
     bounds: Tensor,
+    empty_mode: str = "argmin",
+    empty_prox_temp: float | None = None,
 ) -> tuple[Tensor, Tensor]:
     candidates = _candidate_actions(
         u_nom,
@@ -228,9 +250,21 @@ def _box_aware_projection(
     least_bad_idx = torch.argmin(least_bad_scores, dim=1)
 
     has_feasible = torch.any(feasible, dim=1)
-    selected_idx = torch.where(has_feasible, feasible_idx, least_bad_idx)
     batch_idx = torch.arange(u_nom.shape[0], device=u_nom.device)
-    selected = candidates[batch_idx, selected_idx]
+    if empty_mode == "prox":
+        # v2.8.2 M1 (prop:empty-prox): continuous, gradient-carrying empty-branch map. Replace the discrete
+        # least-violating argmin with a softmin-weighted blend of the SAME candidate set (temperature = the
+        # S5-derived continuity scale gamma; gamma -> 0 recovers argmin). Feasible rows keep the exact
+        # min-distance feasible candidate; only empty rows take the smooth prox map, so the empty branch
+        # carries d(u_safe)/d(state) instead of a zero/argmin Jacobian.
+        if empty_prox_temp is None:
+            raise ValueError("filter.empty_prox_temp must be set (no default) when empty_mode='prox'.")
+        weights = torch.softmax(-least_bad_scores / float(empty_prox_temp), dim=1)   # [B, n_cand]
+        prox_action = torch.sum(weights.unsqueeze(-1) * candidates, dim=1)           # [B, A]
+        selected = torch.where(has_feasible.unsqueeze(1), candidates[batch_idx, feasible_idx], prox_action)
+    else:                                                          # "argmin" (default) — v2.8.0 behaviour, bit-for-bit
+        selected_idx = torch.where(has_feasible, feasible_idx, least_bad_idx)
+        selected = candidates[batch_idx, selected_idx]
 
     empty_intersection = _empty_halfspace_box(
         halfspace_normal,
@@ -247,6 +281,8 @@ def _select_projection(
     halfspace_normal: Tensor,
     row_upper: Tensor,
     bounds: Tensor,
+    empty_mode: str = "argmin",
+    empty_prox_temp: float | None = None,
 ) -> tuple[Tensor, Tensor]:
     """v2.8.0 S1: dispatch the box-aware projection realization behind filter.projection.
 
@@ -255,9 +291,11 @@ def _select_projection(
     action dim <= 2, prop:enum-exact(b)). `dual_solve` = the exact single-scalar dual root of
     prop:lambda-solve (exact and continuous in every dimension)."""
     if projection == "enumerate":
-        return _box_aware_projection(u_nom, base_projected, halfspace_normal, row_upper, bounds)
+        return _box_aware_projection(u_nom, base_projected, halfspace_normal, row_upper, bounds,
+                                     empty_mode, empty_prox_temp)
     if projection == "dual_solve":
-        return _dual_solve_projection(u_nom, base_projected, halfspace_normal, row_upper, bounds)
+        return _dual_solve_projection(u_nom, base_projected, halfspace_normal, row_upper, bounds,
+                                      empty_mode, empty_prox_temp)
     raise ValueError(
         f"Unknown filter.projection {projection!r}; expected 'dual_solve' or 'enumerate'."
     )
@@ -269,6 +307,8 @@ def _dual_solve_projection(
     halfspace_normal: Tensor,
     row_upper: Tensor,
     bounds: Tensor,
+    empty_mode: str = "argmin",
+    empty_prox_temp: float | None = None,
 ) -> tuple[Tensor, Tensor]:
     """Exact projection of prop:lambda-solve: the Euclidean projection of u_nom onto the single
     row {a^T u <= b} intersected with the box U, computed as the unique nonnegative root of the
@@ -285,9 +325,35 @@ def _dual_solve_projection(
             halfspace_normal[mask],
             row_upper[mask],
             bounds,
+            empty_mode,
+            empty_prox_temp,
         )
         projected = projected.clone()
         projected[mask] = enum_sub.to(projected.dtype)
+    return projected, empty
+
+
+def _dual_solve_projection_branchless(
+    u_nom: Tensor,
+    base_projected: Tensor,
+    halfspace_normal: Tensor,
+    row_upper: Tensor,
+    bounds: Tensor,
+    empty_mode: str = "argmin",
+    empty_prox_temp: float | None = None,
+) -> tuple[Tensor, Tensor]:
+    """v2.8.2 MISSION probe — BRANCHLESS equivalent of `_dual_solve_projection`. Computes the enumerate path for
+    ALL rows and selects with `torch.where(empty, enum, dual)` instead of masking empty rows behind
+    `if bool(empty.any())`. Output is byte-identical to `_dual_solve_projection` (the box-aware selection is
+    row-independent, so `enum_all[empty] == enum_sub`). ADDITIVE and NOT wired into any deployed path — measurement
+    only. Removes the sole host sync in the projection so the filter forward can be CUDA-graph captured. Cost: the
+    enumerate path now runs on the ~88% non-empty rows too; the probe measures whether the launch-overhead saved by
+    graph capture outweighs that."""
+    empty = _empty_halfspace_box(halfspace_normal, row_upper, bounds)
+    dual = _exact_dual(u_nom, halfspace_normal, row_upper, bounds)
+    enum_all, _ = _box_aware_projection(u_nom, base_projected, halfspace_normal, row_upper, bounds,
+                                        empty_mode, empty_prox_temp)
+    projected = torch.where(empty.unsqueeze(1), enum_all.to(dual.dtype), dual)
     return projected, empty
 
 
@@ -442,6 +508,12 @@ def _hardnet_params(config: Mapping[str, Any]) -> _HardNetParams:
     _per_sys = ef_cfg.get(_sys)
     if isinstance(_per_sys, dict):
         ef_cfg = {**ef_cfg, **_per_sys}
+    # v2.8.2: gamma_margin (row-only). Same per-system override path as empty_fallback: a scalar is
+    # global; a dict may carry a per-system key (falling back to "default", then 0.0). Absent => 0.0,
+    # which takes _row_upper's guarded branch and is byte-identical to the pre-v2.8.2 row.
+    _gm = config["filter"].get("gamma_margin", 0.0)
+    if isinstance(_gm, dict):
+        _gm = _gm.get(_sys, _gm.get("default", 0.0))
     return _HardNetParams(
         epsilon=float(hardnet_cfg["epsilon"]),
         lg_reg_eps=float(config["filter"].get("lg_reg_eps", 0.0)),
@@ -457,7 +529,27 @@ def _hardnet_params(config: Mapping[str, Any]) -> _HardNetParams:
         empty_fallback_k=int(ef_cfg.get("k", 10)),
         empty_fallback_phases=int(ef_cfg.get("phases", 2)),
         projection=str(config["filter"].get("projection", "dual_solve")),
+        empty_mode=str(config["filter"].get("empty_mode", "argmin")),   # v2.8.2 M1; default argmin = v2.8.0 behaviour
+        empty_prox_temp=(None if config["filter"].get("empty_prox_temp") is None
+                         else float(config["filter"]["empty_prox_temp"])),   # NO silent default (S5-derived)
+        gamma_margin=float(_gm),
     )
+
+
+def _row_upper(lf_h: Tensor, alpha: Tensor, h: Tensor, params: _HardNetParams) -> Tensor:
+    """THE single constructor for the deployed CBF row RHS b (02_control §6.1).
+
+        b = -L_f h - alpha * (h + gamma_margin)
+
+    gamma_margin = 0.0 (default) takes the guarded branch and is BYTE-IDENTICAL to the pre-v2.8.2
+    expression `-lf_h - alpha * h` (not merely numerically equal). Row-only by construction: alpha is
+    passed in already selected by _base_alpha(h, ...) on the RAW h, so the margin never moves the
+    safe/unsafe region test. NOTE: 02_control §6.1 also specifies a V_SHIFT = 1e-3 term in h_eff which
+    the shipped row has never carried; V_SHIFT is deliberately NOT added here (recorded divergence)."""
+    g = float(params.gamma_margin)
+    if g == 0.0:
+        return -lf_h - alpha * h
+    return -lf_h - alpha * (h + g)
 
 
 def _base_alpha(h: Tensor, params: _HardNetParams) -> Tensor:
@@ -495,7 +587,7 @@ def _lookahead_peak_h(
             create_graph=False,
         )
         alpha = _base_alpha(h, params)
-        row_upper = -lf_h - alpha * h
+        row_upper = _row_upper(lf_h, alpha, h, params)
         projected = _base_projection(u_nom, lg_h, row_upper, bounds, params)
         if params.box_aware:
             projected, _ = _select_projection(
@@ -505,6 +597,8 @@ def _lookahead_peak_h(
                 lg_h,
                 row_upper,
                 bounds,
+                empty_mode=params.empty_mode,
+                empty_prox_temp=params.empty_prox_temp,
             )
         with torch.no_grad():
             x_la = rk4_step(system, x_la, projected.detach(), params.dt)

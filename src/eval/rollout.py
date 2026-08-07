@@ -22,6 +22,7 @@ class RolloutResult:
     intervention_mask: Tensor
     infeasible: Tensor
     empty: Tensor | None = None          # v2.7.1 S1d: per-step empty_intersection (split from infeasible)
+    empty_is_native: bool = False        # v2.8.3 D1: True iff `empty` came from the filter's last_empty
     singular: Tensor | None = None       # v2.7.1 S1d: per-step singular (split); additive, not the combined flag
 
 
@@ -48,7 +49,10 @@ def rollout(
     infeasible_steps = []
     empty_steps: list[Tensor] = []          # v2.7.1 S1d: split empty/singular (HardNet filter, if present)
     singular_steps: list[Tensor] = []
-    _fobj = getattr(getattr(filter_fn, "__self__", None), "_filter", None)
+    # v2.8.3 D1: resolve the filter object from EITHER a bound method (__self__._filter) or a closure
+    # carrying it explicitly (adapter._filter). The eval path uses the latter; before this the lookup
+    # silently failed and `empty` fell back to `infeasible`, making empty_step_frac a strict alias.
+    _fobj = getattr(filter_fn, "_filter", None) or getattr(getattr(filter_fn, "__self__", None), "_filter", None)
 
     for _ in range(max_steps):
         u_nom = policy_fn(x, scene)
@@ -106,6 +110,7 @@ def rollout(
         intervention_mask=intervention,
         infeasible=torch.stack(infeasible_steps, dim=0),
         empty=torch.stack(empty_steps, dim=0),
+        empty_is_native=_fobj is not None,
         singular=torch.stack(singular_steps, dim=0),
     )
 
@@ -175,7 +180,10 @@ def rollout_eval(
     infeasible_steps = []
     empty_steps: list[Tensor] = []          # v2.7.1 S1d: split empty/singular from the HardNet filter, if present
     singular_steps: list[Tensor] = []
-    _fobj = getattr(getattr(filter_fn, "__self__", None), "_filter", None)
+    # v2.8.3 D1: resolve the filter object from EITHER a bound method (__self__._filter) or a closure
+    # carrying it explicitly (adapter._filter). The eval path uses the latter; before this the lookup
+    # silently failed and `empty` fell back to `infeasible`, making empty_step_frac a strict alias.
+    _fobj = getattr(filter_fn, "_filter", None) or getattr(getattr(filter_fn, "__self__", None), "_filter", None)
     physical_done = _physical_done_mask(system, scene, torch.stack(states, dim=0), config)
 
     _held: tuple[Tensor, Tensor, Tensor, Tensor, Tensor] | None = None
@@ -278,6 +286,7 @@ def rollout_eval(
         intervention_mask=intervention,
         infeasible=torch.stack(infeasible_steps, dim=0),
         empty=torch.stack(empty_steps, dim=0),
+        empty_is_native=_fobj is not None,
         singular=torch.stack(singular_steps, dim=0),
     )
 

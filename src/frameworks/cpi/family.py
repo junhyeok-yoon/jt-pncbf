@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import torch
 
-from src.common.filter_hardnet import (_base_alpha, _base_projection, _box_aware_projection, _cbf_terms,
+from src.common.filter_hardnet import (_base_alpha, _row_upper, _base_projection, _box_aware_projection, _cbf_terms,
                                         _hardnet_params)
 from src.frameworks.cpi.labels import h_raw_position, m0_value_raw
 
@@ -74,7 +74,7 @@ def family_value(states, C, R, A, G, transports, system, config, *, t_bailout=40
                     un = policy_net(system.observation(x, scn))
                     h, lf, lg = _cbf_terms(system, h_fn, x, scn, un, create_graph=False)
                     h, lf, lg = h.detach(), lf.detach(), lg.detach()
-                    alpha = _base_alpha(h, params); row = -lf - alpha * h
+                    alpha = _base_alpha(h, params); row = _row_upper(lf, alpha, h, params)
                     proj = _base_projection(un, lg, row, bounds, params)
                     u, _ = _box_aware_projection(un, proj, lg, row, bounds)   # deployed transport action
                     from src.common.rk4 import rk4_step

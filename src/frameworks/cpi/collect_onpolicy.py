@@ -21,7 +21,7 @@ import numpy as np
 import torch
 
 from src.common.control_net import ControlNet
-from src.common.filter_hardnet import (_base_alpha, _base_projection, _box_aware_projection, _cbf_terms,
+from src.common.filter_hardnet import (_base_alpha, _row_upper, _base_projection, _box_aware_projection, _cbf_terms,
                                         _hardnet_params)
 from src.common.rk4 import rk4_step
 from src.envs.scene_batch import batch_scenes, initial_states_from_batch
@@ -75,7 +75,7 @@ def collect_onpolicy(config, out_dir, system, device, vhat_ckpt, pi_ckpt, *, n_s
                 un = pol(obs)
                 h, lf, lg = _cbf_terms(system, h_fn, x, bs, un, create_graph=False)
                 h, lf, lg = h.detach(), lf.detach(), lg.detach()
-                alpha = _base_alpha(h, params); row = -lf - alpha * h
+                alpha = _base_alpha(h, params); row = _row_upper(lf, alpha, h, params)
                 proj = _base_projection(un, lg, row, bounds, params)
                 us, _ = _box_aware_projection(un, proj, lg, row, bounds)
                 x = rk4_step(system, x, us, dt)

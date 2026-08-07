@@ -23,7 +23,7 @@ from typing import Any, Callable
 import numpy as np
 import torch
 
-from src.common.filter_hardnet import (_base_alpha, _base_projection, _box_aware_projection, _cbf_terms,
+from src.common.filter_hardnet import (_base_alpha, _row_upper, _base_projection, _box_aware_projection, _cbf_terms,
                                         _hardnet_params, _SINGULAR_LG_THRESHOLD)
 from src.common.maneuver_value import build_safety_h_fn
 from src.common.outcomes import resolve_outcome, step_outcomes
@@ -75,7 +75,7 @@ def _rollout(scenes, un_fn: Callable[[Tensor, Any], Tensor], config, h_fn, syste
                 if filtered:
                     h, lf, lg = _cbf_terms(system, h_fn, x, bs, un, create_graph=False)
                     h, lf, lg = h.detach(), lf.detach(), lg.detach()
-                    alpha = _base_alpha(h, params); row = -lf - alpha * h
+                    alpha = _base_alpha(h, params); row = _row_upper(lf, alpha, h, params)
                     proj = _base_projection(un, lg, row, bounds, params)
                     sing = torch.linalg.norm(lg, dim=1) < _SINGULAR_LG_THRESHOLD
                     u, empty = _box_aware_projection(un, proj, lg, row, bounds)

@@ -228,14 +228,13 @@ Decision vector $[u, r]$ with slack $r$:
   (proxsuite dense QP).
 - CBF row:
   $L_g h \cdot u - r \;\leq\; -L_f h \;-\; \alpha\, h_{\text{eff}}$,
-  with $h_{\text{eff}} = h + V_{\text{SHIFT}} + \gamma_{\text{margin}}$. Here
+  with $h_{\text{eff}} = h + \gamma_{\text{margin}}$. Here
   $\gamma_{\text{margin}}$ is the **agent safety margin** (how conservative the agent is),
-  in `base_config.filter.gamma_margin` (default 0.0); $V_{\text{SHIFT}} = 10^{-3}$ is a
-  numerical offset.
+  in `base_config.filter.gamma_margin` (default 0.0). It is a pure additive shift of $h$;
+  it does not change $\alpha$ or the $\alpha$-region test's input beyond that shift.
   $\gamma_{\text{margin}}$ applies to **every** filter identically, as a constant shift
   of $h$ into $h_{\text{eff}}$: the HardNet row (§6.1) is built from the same
-  $h_{\text{eff}}$, and the shift leaves $\nabla h$ (hence $L_f h$, $L_g h$) unchanged —
-  only the class-K term and the $\alpha$-region test move. **Scope of the margin
+  $h_{\text{eff}}$, and the shift leaves $\nabla h$ (hence $L_f h$, $L_g h$) unchanged. **Scope of the margin
   (measured limitation):** the margin absorbs value-level error; it cannot repair
   certificate mis-ranking. For rollout-based barriers the certified-start collision floor
   is margin-invariant and scales with the certificate's internal integration grid
@@ -289,7 +288,13 @@ also deploys through HardNet so deployment matches training.
 ### 6.1 Closed-form projection
 
 Half-space $A \cdot u \leq b$ with $A = L_g h$, $b = -L_f h - \alpha\, h_{\text{eff}}$
-(the same $h_{\text{eff}} = h + V_{\text{SHIFT}} + \gamma_{\text{margin}}$ as §5.1). Base projection:
+(the same $h_{\text{eff}} = h + \gamma_{\text{margin}}$ as §5.1; default
+$\gamma_{\text{margin}} = 0$, so the shipped row reads $b = -L_f h - \alpha\, h$). The
+$h_{\text{eff}}$ shift is injected only through the single row constructor
+(`_row_upper`); an $h$-function-level shift (`h + \gamma`) is **not** an equivalent
+installation — it moves the $\alpha$-region test $h \le 0$ and flips
+$\alpha_{\text{safe}} \to \alpha_{\text{unsafe}}$ on $h \in (-\gamma, 0]$ — and is
+therefore not used. Base projection:
 
 $$
 u^{\text{safe}} = u^{\text{nom}} \;-\; \frac{A}{\|A\|^2 + \varepsilon^2}\,
@@ -320,19 +325,18 @@ selection is non-differentiable, but gradients flow through the selected candida
 Numerical tolerances ($10^{-9}$ for feasibility, $10^{-12}$ for degenerate edges) are
 local constants.
 
-**Scope, and its current status.** The enumeration above is exhaustive — and therefore exact —
-only for 2-D action spaces. At action dimension $m$ the closest point of the half-space–box
-intersection generically has between $1$ and $m-1$ box faces active, while the family enumerated
-carries only the cardinality-$1$ class (fix one coordinate at a bound, solve one on the
-half-space) and the cardinality-$m$ class (the $2^m$ corners; four of them at $m = 2$, where the
-two classes together happen to cover every case). For $m > 2$ the intermediate cardinalities are
-absent, so the selection is a finite argmin over a family that need not contain the optimum, not
-a projection. `quadrotor_3d` runs at $m = 4$ with this enumerator, so the exactness claim above
-does **not** hold for it; the deployed behaviour is an approximation whose gap is unmeasured and
-whose gradient vanishes wherever a corner wins. Replacing it with a dimension-general exact
-box/half-space projection — an active-set or multiplier-root solve — is a standing one-axis
-prerequisite, outstanding for `quadrotor_3d` and required before any further high-dimensional
-system.
+**Projection realization.** The deployed projection is the dimension-general exact
+multiplier-root solve (`filter.projection = dual_solve`): $\varphi(\lambda) = A \cdot
+\mathrm{clip}(u^{\text{nom}} - \lambda A, \text{bounds})$ is continuous, piecewise linear
+and non-increasing in the single scalar $\lambda \ge 0$, and the root of
+$\varphi(\lambda) = b$ gives the exact closest point of the half-space--box intersection in
+every action dimension, with no regularizer. The finite candidate enumeration described
+above is exhaustive — and therefore exact — only for 2-D action spaces; at $m > 2$ it is a
+selection over a family that need not contain the optimum and its gradient vanishes
+wherever a corner wins. It is retained as a config option and as the feasibility
+cross-check (a vertex satisfying the row iff the intersection is non-empty), not as the
+deployed projection. Empty intersection is detected in closed form as
+$\min_{u \in \text{box}} A \cdot u > b$ and routed to the fallback of §4.
 
 ### 6.2 Main control network (learned policy)
 

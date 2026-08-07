@@ -50,7 +50,9 @@ obs:
   # distance kernel d_c = 3.0 m over [2.5, 3.0]) are DERIVED and live in observation.py — not tunable here.
   encoder: hard_topk
   quadrotor_3d:
-    encoder: soft_topk
+    encoder: hard_topk               # v2.8.2: reverted soft_topk -> hard_topk (v2.8.0 observation function).
+                                      # soft_topk_obstacles + constants + masked-logsumexp repair remain in
+                                      # observation.py, selected off by config; flip back to soft_topk to re-run.
 
 network:
   value:

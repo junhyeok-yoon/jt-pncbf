@@ -24,6 +24,8 @@ Implements code, runs training, runs evaluation, handles tactical decisions duri
 
 The Executor's deliverables are: code commits, run outputs (`data/<run_id>/`), per-version build-logs (`docs/versions/vX.Y.Z/<task>.md` — design decisions, conflicts and their resolution, factual task/training results; facts not verdicts), and concise status updates in chat.
 
+**Subagents.** A subagent holds only the authority of the prompt that delegates to it, never more. Its scope is additive: creating new files, run directories, and analyses, and reading anything. Modifying or removing what another run or record depends on is outside it — the test is whether the prior state can be reconstructed exactly afterwards. Launching training, registering a condition, lifting a guard, and restarting a run stay with the Executor. A subagent's output enters a report only after the Executor confirms it on disk. A launch must be stoppable by a single `kill` of a PID recorded in the build-log at launch time; under that condition a session-detached launch form is permitted. A launch whose stop procedure is not recorded is not permitted in any form.
+
 ### 1.4 Session boundary
 
 A "session" is a chat conversation. Continuity across sessions is provided by the **repository**, not by any session's memory. A new Strategist instance must be able to read the repository and resume work without further context. Therefore every decision and every result lands in a tracked file (or, for local-only working artifacts such as `docs/versions/`, in the corresponding local file) before the session ends.
@@ -136,6 +138,17 @@ trained with a plant or observation configuration since found to be wrong — a 
 component, a mis-specified action space — its numbers describe a system that is not the one
 under study. Such a run may be deleted outright; it is not registered, and an already-registered
 row for it is removed rather than annotated.
+
+**Uninformative run directories are deleted without approval.** A data directory whose run
+terminated before producing any information — a smoke or launch attempt killed by a defect
+before its first scored eval, a crashed segment superseded by a clean relaunch, a partial
+collection with no conclusion, lesson, or registered reading attached — is deleted by the
+Executor directly, recording only the run-id and one line of reason in the active version's
+build-log. This keeps `data/` from accumulating meaningless trees. The rule is one-sided:
+any run that produced information stays — a completed run, a run stopped by a registered
+falsifier or halt, a failed run whose failure carries a recorded conclusion or lesson, and
+anything a document cites, are records and are never deleted under this clause. When in
+doubt, keep.
 
 **`cps` is not commensurable across systems.** Systems differ in dynamics, control bounds, and
 evaluation pools, so a `cps` measured on one system is never compared with, ranked against, or
@@ -315,7 +328,9 @@ Between version pushes, the Strategist reads the **last pushed state** (commits,
 
 ## 3. Prompt regime — Strategist → Executor
 
-Two kinds of prompt, and only two.
+Three kinds of prompt, and only three.
+
+**Carry-forward.** Every prompt opens with the items from earlier dispatches that remain unanswered. An item is closed only by an answer, by a retrieve that obtains it, or by a stated reason it is no longer needed — never by omission. Where an item cannot be answered as asked, the Executor reports it as unanswered and says what would answer it.
 
 **Version literals.** A prompt title carries a version literal only if that version is open on disk (`changes.md` exists); before dispatch the Strategist greps the prompt for `v[0-9]+\.[0-9]+\.[0-9]+` and every hit must name the open version. Chat descriptions of a prompt are grounded in its literal text.
 
@@ -392,9 +407,29 @@ minimum) as part of passing.
 
 **Invasive code + long GPU in one dispatch.** Splitting them across a session boundary is the default and needs no re-approval; the ordering constraint (code green before measurement) is kept, and the split is reported, not escalated. The split manages session risk, not parallelism: independent light work runs alongside either half whenever resources allow.
 
-### 3.3 Prompt authoring authority
+### 3.3 Mission prompt — objective and invariants, method delegated
+
+Used when the objective is settled but the method is not. Format:
+
+- **Objective** (what must be determined or achieved, not how).
+- **Invariants.** The properties any admissible method must satisfy. These are the mission.
+- **Stop-and-report conditions.** Including the case where the objective cannot be met soundly.
+- **Governance boundary.** What may be created, what may not be touched.
+- **Candidates (optional), marked as such.** A Strategist suggestion is a starting point, never an instruction.
+
+A recorded departure from a candidate is a better outcome than following it; an unrecorded departure is not, because it makes the result unattributable. The build-log therefore carries the approach taken **and the approaches rejected, with the reason for each**.
+
+A mission prompt is chosen over an execute prompt when the Strategist's method rests on a premise the repository can refute — the Executor reads the code and the data, and a fixed procedure forecloses that check.
+
+### 3.4 Prompt authoring authority
 
 The Strategist authors every prompt. The Researcher reviews and approves before the Executor sees it. The Executor must not invent strategy from an under-specified prompt; if the scope is ambiguous in a way that affects results, the Executor stops and asks.
+
+**Prompts are written on request.** The Strategist produces a prompt when the Researcher asks for one. Analysis, review, and reporting are answered as such; an unrequested prompt appended to them pre-empts a decision that is the Researcher's.
+
+**A prompt is presented with its intent.** Every prompt is preceded by a short statement of what it will cause to happen. The prompt addresses the Executor; what the Researcher approves is the effect, and an effect stated only inside the prompt body cannot be reviewed.
+
+**Corrections are amendments.** A change to a dispatched prompt is issued as an amendment stating what is added or withdrawn — never as a rewritten prompt the Executor must diff against the one already in hand.
 
 ---
 
@@ -520,7 +555,7 @@ second is the one that is checked:
 
 ### 7.2 Before sending a prompt
 
-Confirm: which type (retrieve vs execute) — scope — safeguards — done-when (retrieve) or pass/fail (execute) — reference patterns. If any are missing, fill before sending.
+Confirm: it was requested — its intent is stated — unanswered items are carried forward — which type (retrieve / execute / mission) — scope — safeguards — done-when (retrieve), pass/fail (execute), or invariants and stop conditions (mission) — reference patterns. If any are missing, fill before sending.
 
 ### 7.3 Before closing a version
 
@@ -545,6 +580,16 @@ that does not appear on disk is not reported. Recovery and resume prompts re-ver
 run state against disk before recording any termination fact; framing supplied from
 outside the disk (a step count, a peak, a "terminated at") is treated as unverified until
 the artifacts confirm it.
+
+**Completion is evidenced by its artifact.** "Fixed", "running", "written" is recorded only with
+the artifact's path and mtime. A repair proves its artifact on disk before the run that depends on
+it starts. Process liveness is judged by the actual child PID, never by a wrapper.
+
+**A causal claim carries its control.** A statement that one change produced one outcome is
+reported with the comparison that isolates it, and the conclusion sits beside whatever in the same
+data would contradict it. Where no control is available the claim is recorded as unattributed —
+this is a labelling obligation, not a bar on reporting: an observation without a control is still
+reported, as an observation.
 
 **External-interruption handling (standing decision, "Option A").** When a training run
 is killed by an external event (session teardown, machine contention) rather than by an

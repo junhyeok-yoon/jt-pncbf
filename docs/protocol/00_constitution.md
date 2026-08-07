@@ -167,6 +167,10 @@ The engineering disciplines that keep results attributable and the codebase main
   move the proxy; a band placed outside the proxy's reachable range on that axis is then a
   specification error, not a result. The remedy is never to relax the band to fit the data:
   the proxy is retired for that axis and the property it stood for is measured directly.
+- **Instrumentation is audited before it is cited.** The first time a measured quantity is used
+  as grounds for a judgement, how it is produced is confirmed in code. A silently wrong
+  instrument invalidates every conclusion built on it, and its values look plausible, so
+  frequency of use does not detect it.
 - **Frozen core, swappable learner.** Environment, dynamics, evaluation, metrics, pools,
   plotting, and monitoring live once in `src/common`, `src/envs`, and `src/eval` and are
   imported, never re-implemented per framework. Only `src/frameworks/<name>` changes across

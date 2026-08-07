@@ -517,12 +517,17 @@ plain cost — DI/Unicycle parity):
   replacement for the sparse velocity terminal below; the two should not be active together.
 - **Braking-envelope approach** ($w_a = $ `w_appr`, $\tau_b = $ `tau_brake`): with
   $s_k = \mathrm{relu}(-v^\top n_k)$ the inward closure speed toward obstacle $k$ and $d_k$ its
-  **surface** distance, the deficit $s_k \tau_b - d_k$ is the distance the current inward speed
-  covers in $\tau_b$ beyond what remains — a soft stopping-distance constraint, exactly $0$ when
-  receding or outside the envelope, engaging **earlier the faster the approach** (a
-  fixed-distance gate cannot do this). It shapes the demand side of filter feasibility (the
-  required correction grows with the approach rate) so the policy keeps the filter feasible
-  rather than entering states no admissible action can save.
+  **surface** distance, the per-obstacle deficit is
+  $m_k \cdot \mathrm{relu}(s_k \tau_b - d_k)$, where $m_k$ is the **active-obstacle mask**
+  (obstacles present and enabled in the scene; padded or inactive slots carry $m_k = 0$). The
+  mask is part of the term's definition, not an implementation detail: an unmasked sum over
+  padded slots contributes phantom deficit several times the real signal. The deficit
+  $s_k \tau_b - d_k$ is the distance the current inward speed covers in $\tau_b$ beyond what
+  remains — a soft stopping-distance constraint, exactly $0$ when receding or outside the
+  envelope, engaging **earlier the faster the approach** (a fixed-distance gate cannot do
+  this). It shapes the demand side of filter feasibility (the required correction grows with
+  the approach rate) so the policy keeps the filter feasible rather than entering states no
+  admissible action can save.
 
 The discounted return is
 

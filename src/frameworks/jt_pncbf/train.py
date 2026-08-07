@@ -17,8 +17,10 @@ from torch import nn, optim
 import yaml
 
 from src._version import __version__
+from src.common.train_instrument import PhaseTimers   # v2.8.2 per-phase wall-clock + peak-VRAM instrumentation
+from src.common.eval_gate import eval_gate            # v2.8.2 cross-process in-loop-eval serialization gate
 from src.common.control_net import ControlNet
-from src.common.filter_hardnet import HardNetFilter
+from src.common.filter_hardnet import HardNetFilter, _row_upper
 from src.common.system import System
 from src.common.value_net import ValueNetEnsemble, make_h_fn
 from src.common.quadrotor_barrier import lg_authority_loss
@@ -133,9 +135,24 @@ METRIC_COLUMNS = [
     "mean_abs_deficit_feature",
     "L_friction",
     "proj_mag_bptt",
+    "L_du_raw",              # v2.8.2 M3: ||Δu^filt||^2/h^2 monitor (weighted 0 unless w_du>0)
+    "L_du_weighted",
+    "L_infeas_raw",         # v2.8.2 M2: mean relu(s_inf+delta) (0 unless w_infeas>0)
+    "L_infeas_weighted",
+    "infeas_band_ratio",    # v2.8.2 I3: w_infeas term / collision term (= L_infeas_weighted / (w_outside*L_out))
+    "L_floor_recov_raw",    # v2.8.2 cond(c): mean prox-weighted tilt excess (0 unless w_floor_recov>0)
+    "L_floor_recov_weighted",
+    "L_agree_raw",          # v2.8.2 agree: E[mask_nonempty*||pi-sg(u_filt)||^2] (0 unless w_agree>0)
+    "L_agree_weighted",     # v2.8.2 agree: w_agree * L_agree_raw
     "probe_h_min",
     "probe_h_max",
     "probe_h_mean",
+    "t_collect",            # v2.8.2 instrumentation (changes.md §4): per-phase wall-clock (s) since last log
+    "t_bptt",
+    "t_eval",
+    "t_eval_wait",          # v2.8.2: cross-process eval-gate queueing (never billed to training)
+    "t_ckpt",
+    "cuda_max_mem_mb",      # v2.8.2: torch.cuda.max_memory_allocated()/1e6 at write time
 ]
 
 
@@ -253,7 +270,7 @@ class _ManeuverEvalFramework:
         h, lf, lg = h.detach(), lf.detach(), lg.detach()
         with torch.no_grad():
             alpha = _base_alpha(h, self.params)
-            row_upper = -lf - alpha * h
+            row_upper = _row_upper(lf, alpha, h, self.params)
             bounds = self.system.u_bounds.to(device=u_nom.device, dtype=u_nom.dtype)
             projected = _base_projection(u_nom, lg, row_upper, bounds, self.params)
             singular = torch.linalg.norm(lg, dim=1) < _SINGULAR_LG_THRESHOLD
@@ -530,6 +547,8 @@ def run_training(
     buffers = make_replay_buffers(
         capacity=int(collection_cfg["buffer_cap"]),
         policy_capacity=int(policy_buffer_cap) if policy_buffer_cap is not None else None,
+        store_state_seq=bool(((config.get('value_target') or {}).get('candidate_set') or {}).get('enabled', False)
+                             or ((config.get('value_target') or {}).get('sigma_hazard') or {}).get('enabled', False)),
     )
     run_dir = _create_run_dir(output_root, config, run_seed, stage=stage)
     _initialize_run_dir(run_dir, config)
@@ -539,6 +558,10 @@ def run_training(
     sigma = float(config["schedules"]["sigma"]["init"])
     sigma_pi_base = float(config["schedules"]["sigma_pi"]["init"])
     start_time = time.time()
+    timers = PhaseTimers()   # v2.8.2: per-phase wall-clock, reset after each logged metrics row
+    _eg = (config.get("eval", {}) or {}).get("gate", {}) or {}       # v2.8.2 eval gate (shared across concurrent runs)
+    _eg_enabled = bool(_eg.get("enabled", True)); _eg_timeout = float(_eg.get("timeout_s", 300.0))
+    _eg_lock = Path(output_root) / "runs" / str(config["run"]["version"]) / "eval_gate.lock"
     best_cps = -float("inf")
     best_step = 0
     halt_reason = None
@@ -565,6 +588,7 @@ def run_training(
     for step in range(start_step + 1, n_steps + 1):
         if step == start_step + 1 or step % max(1, collect_every) == 0:
             sigma_pi = _sigma_pi_at(config, sigma_pi_base, step)
+            _t = time.time()
             last_v_stats, last_pi_stats = collect_jt(
                 system=system,
                 policy_net=policy_net,
@@ -582,6 +606,7 @@ def run_training(
                 storage_device=train_device,
                 storage_dtype=train_dtype,
             )
+            timers.t_collect += time.time() - _t
             sigma = last_v_stats.sigma_after
 
         schedule_step = max(0, step - vs_warmup_steps)
@@ -607,6 +632,7 @@ def run_training(
         # / _policy_updates), so they fire on the same step as before.
         do_log = (step % metrics_log_every == 0) or (step == n_steps)
 
+        _t = time.time()
         if maneuver_mode:
             # Stage B: no value learning (K_V=0). Skip the value update entirely (K_V=0 would break the
             # empty-loop mean); emit zeroed value scalars so the metrics schema is unchanged (value cols
@@ -713,6 +739,7 @@ def run_training(
             if do_log:
                 value_scalars.update(critic_scalars)
 
+        timers.t_bptt += time.time() - _t
         if do_log:
             last_value_loss = value_scalars["L_V_total"]
             last_vs_grad = value_scalars["grad_norm_VS"]
@@ -730,13 +757,15 @@ def run_training(
                 value_stats=last_v_stats,
                 policy_stats=last_pi_stats,
                 probe_spread=_probe_h_spread(system, value_net, probe_scene),
+                **timers.as_row(),
             )
             last_row = row
             if step % metrics_log_every == 0:
-                _append_csv(run_dir / "metrics.csv", METRIC_COLUMNS, [row])
+                _append_csv(run_dir / "metrics.csv", METRIC_COLUMNS, [row], extend_header=True)
                 _write_tb_scalars(writer, "train", row, step)
                 _flush_jac_classes(run_dir)          # v2.8.0 S3 R1: crash-safe incremental P2 flush
                 last_logged_step = step
+                timers.reset()   # v2.8.2: per-interval phase split
 
         if step == n_steps or step % max(1, eval_cadence) == 0:
             # v2.5.0 Stage B: the deployed HardNetFilter uses create_graph=True (for training BPTT); over
@@ -744,27 +773,41 @@ def run_training(
             # to OOM (|M|=17 rollout). Eval only needs u_safe VALUES, identical under create_graph=False,
             # so maneuver-mode eval uses a first-order framework (no graph accumulation; the exact path
             # validated in Stage A). Value mode unchanged.
-            eval_framework = (_ManeuverEvalFramework(system, policy_net, config) if maneuver_mode
-                              else JTPNCBFFramework(system, value_net, policy_net, config))
-            eval_result = evaluate(
-                eval_framework,
-                _pool_path("inloop", config, system.name),
-                config,
-                mode="in_loop",
-                step=step,
-                ckpt_name=f"step_{step:06d}.pt",
-                max_scenes=eval_max_scenes,
-                include_lqr_baseline=True,
-            )
-            _record_eval(
-                run_dir,
-                writer,
-                eval_result,
-                step,
-                config,
-                system,
-                value_net,
-            )
+            with eval_gate(_eg_lock, enabled=_eg_enabled, timeout_s=_eg_timeout,
+                           log=lambda m: print(m, flush=True)) as _gate_wait:   # v2.8.2: at most one eval across runs
+                timers.t_eval_wait += _gate_wait
+                _t = time.time()
+                eval_framework = (_ManeuverEvalFramework(system, policy_net, config) if maneuver_mode
+                                  else JTPNCBFFramework(system, value_net, policy_net, config))
+                eval_result = evaluate(
+                    eval_framework,
+                    _pool_path("inloop", config, system.name),
+                    config,
+                    mode="in_loop",
+                    step=step,
+                    ckpt_name=f"step_{step:06d}.pt",
+                    max_scenes=eval_max_scenes,
+                    include_lqr_baseline=True,
+                )
+                _record_eval(
+                    run_dir,
+                    writer,
+                    eval_result,
+                    step,
+                    config,
+                    system,
+                    value_net,
+                )
+            # v2.8.3 AMENDMENT-4 §3: STRUCTURAL halt on sigma-label runaway. Distinct in kind from the
+            # OUTCOME readings (REALLOCATION, v2.2.2 signature), which score and close an axis but never
+            # kill mid-run. This one halts, because a label recursion whose uniform-inflation gain exceeds
+            # 1 has a degenerate fixed point at the label ceiling and every later step is wasted -- as the
+            # first sigma arm demonstrated (E[h~-h] 0.041 -> 1.167 by step 1500, reach 0.0).
+            _sh_halt = _sigma_probe_halt_check(system, target_value_net, config, step, run_dir)
+            if _sh_halt is not None:
+                halt_reason = _sh_halt
+                break
+                timers.t_eval += time.time() - _t
             # v2.7.3 M5 amendment: durable guard — the CBF contour must be written at every in-loop eval.
             # In smoke, fail hard if the first in-loop contour is missing/empty (a swallowed render error must
             # never let a 50k run start without the figure path proven).
@@ -774,6 +817,7 @@ def run_training(
                     halt_reason = "smoke_contour_missing"
                     break
             cps = float(eval_result.eval_row["cps"])
+            _t = time.time()
             if cps > best_cps + float(config["halt"]["early_stop_min_delta"]):
                 best_cps = cps
                 best_step = step
@@ -801,6 +845,7 @@ def run_training(
                 best_cps,
                 best_step,
             )
+            timers.t_ckpt += time.time() - _t
         _write_status(
             run_dir,
             stage=stage,
@@ -813,7 +858,7 @@ def run_training(
 
     final_step = step if "step" in locals() else 0
     if last_row is not None and last_logged_step != final_step:
-        _append_csv(run_dir / "metrics.csv", METRIC_COLUMNS, [last_row])
+        _append_csv(run_dir / "metrics.csv", METRIC_COLUMNS, [last_row], extend_header=True)
         _write_tb_scalars(writer, "train", last_row, final_step)
     _save_checkpoint(
         run_dir / "checkpoints/final.pt",
@@ -992,6 +1037,8 @@ def run_value_refinement(
     buffers = make_replay_buffers(
         capacity=int(collection_cfg["buffer_cap"]),
         policy_capacity=int(policy_buffer_cap) if policy_buffer_cap is not None else None,
+        store_state_seq=bool(((config.get('value_target') or {}).get('candidate_set') or {}).get('enabled', False)
+                             or ((config.get('value_target') or {}).get('sigma_hazard') or {}).get('enabled', False)),
     )
     run_dir = _create_run_dir(output_root, config, run_seed, stage=stage)
     _initialize_run_dir(run_dir, config)
@@ -1005,6 +1052,10 @@ def run_value_refinement(
     )
     sigma_pi = 0.0
     start_time = time.time()
+    timers = PhaseTimers()   # v2.8.2: per-phase wall-clock, reset after each logged metrics row
+    _eg = (config.get("eval", {}) or {}).get("gate", {}) or {}       # v2.8.2 eval gate (shared across concurrent runs)
+    _eg_enabled = bool(_eg.get("enabled", True)); _eg_timeout = float(_eg.get("timeout_s", 300.0))
+    _eg_lock = Path(output_root) / "runs" / str(config["run"]["version"]) / "eval_gate.lock"
     best_cps = -float("inf")
     best_step = 0
     halt_reason = None
@@ -1028,6 +1079,7 @@ def run_value_refinement(
     for local_step in range(1, refine_steps + 1):
         global_step = source_step + local_step
         if local_step == 1 or local_step % max(1, collect_every) == 0:
+            _t = time.time()
             last_v_stats = collect_policy_rollouts(
                 system=system,
                 policy_net=policy_net,
@@ -1045,6 +1097,7 @@ def run_value_refinement(
                 storage_dtype=train_dtype,
                 collection_filter=collection_filter,
             )
+            timers.t_collect += time.time() - _t
             if sigma_mode == "fixed":
                 sigma = float(fixed_sigma)
                 last_v_stats = CollectionStats(
@@ -1073,6 +1126,7 @@ def run_value_refinement(
             effective_steps,
         )
 
+        _t = time.time()
         value_scalars = _value_updates(
             system=system,
             value_net=value_net,
@@ -1091,6 +1145,7 @@ def run_value_refinement(
         value_scalars.pop("value_finite", None)
         last_value_loss = value_scalars["L_V_total"]
         last_vs_grad = value_scalars["grad_norm_VS"]
+        timers.t_bptt += time.time() - _t
         if not np.isfinite(last_value_loss):
             halt_reason = "nan_or_inf_L_V"
             break
@@ -1109,33 +1164,41 @@ def run_value_refinement(
             value_stats=last_v_stats,
             policy_stats=policy_stats,
             probe_spread=_probe_h_spread(system, value_net, probe_scene),
+            **timers.as_row(),
         )
         last_row = row
         if global_step % metrics_log_every == 0:
-            _append_csv(run_dir / "metrics.csv", METRIC_COLUMNS, [row])
+            _append_csv(run_dir / "metrics.csv", METRIC_COLUMNS, [row], extend_header=True)
             _write_tb_scalars(writer, "train", row, global_step)
             last_logged_step = global_step
+            timers.reset()   # v2.8.2: per-interval phase split
 
         if local_step == refine_steps or global_step % max(1, eval_cadence) == 0:
-            eval_result = evaluate(
-                JTPNCBFFramework(system, value_net, policy_net, config),
-                _pool_path("inloop", config, system.name),
-                config,
-                mode="in_loop",
-                step=global_step,
-                ckpt_name=f"step_{global_step:06d}.pt",
-                include_lqr_baseline=True,
-            )
-            _record_eval(
-                run_dir,
-                writer,
-                eval_result,
-                global_step,
-                config,
-                system,
-                value_net,
-            )
+            with eval_gate(_eg_lock, enabled=_eg_enabled, timeout_s=_eg_timeout,
+                           log=lambda m: print(m, flush=True)) as _gate_wait:   # v2.8.2: at most one eval across runs
+                timers.t_eval_wait += _gate_wait
+                _t = time.time()
+                eval_result = evaluate(
+                    JTPNCBFFramework(system, value_net, policy_net, config),
+                    _pool_path("inloop", config, system.name),
+                    config,
+                    mode="in_loop",
+                    step=global_step,
+                    ckpt_name=f"step_{global_step:06d}.pt",
+                    include_lqr_baseline=True,
+                )
+                _record_eval(
+                    run_dir,
+                    writer,
+                    eval_result,
+                    global_step,
+                    config,
+                    system,
+                    value_net,
+                )
+                timers.t_eval += time.time() - _t
             cps = float(eval_result.eval_row["cps"])
+            _t = time.time()
             if cps > best_cps + float(config["halt"]["early_stop_min_delta"]):
                 best_cps = cps
                 best_step = global_step
@@ -1163,6 +1226,7 @@ def run_value_refinement(
                 best_cps,
                 best_step,
             )
+            timers.t_ckpt += time.time() - _t
         _write_status(
             run_dir,
             stage="value_refine",
@@ -1175,7 +1239,7 @@ def run_value_refinement(
 
     final_step = source_step + local_step if "local_step" in locals() else source_step
     if last_row is not None and last_logged_step != final_step:
-        _append_csv(run_dir / "metrics.csv", METRIC_COLUMNS, [last_row])
+        _append_csv(run_dir / "metrics.csv", METRIC_COLUMNS, [last_row], extend_header=True)
         _write_tb_scalars(writer, "train", last_row, final_step)
     _save_checkpoint(
         run_dir / "checkpoints/final.pt",
@@ -1295,6 +1359,7 @@ def _value_updates(
     vt_unsafe: list[float] = []          # v2.4.0: fraction of value-minibatch targets y > 0
     vt_mean: list[float] = []            # v2.4.2: mean value-minibatch label y (label_mean)
     tp_push: list[float] = []            # v2.4.2 Exp 2: tail_push_mean (raw_lagged only; 0 otherwise)
+    aux_logs: dict[str, list[float]] = {}   # v2.8.3 D9: every key the label path's aux dict carries
     tp_exceed: list[float] = []          # v2.4.2 Exp 2: tail_exceed_frac
     for _ in range(n_updates):
         if inj_enabled:
@@ -1335,6 +1400,10 @@ def _value_updates(
                 vt_mean.append(float(vt.mean().item()))
                 tp_push.append(float(result.tail_push_mean))
                 tp_exceed.append(float(result.tail_exceed_frac))
+                # v2.8.3 D9: carry EVERY aux key the label path produced (cs_*, sh_*, and anything a
+                # future branch adds). Generic by construction -- no per-key registry.
+                for _k, _v in (result.aux or {}).items():
+                    aux_logs.setdefault(_k, []).append(float(_v))
         if feas_enabled:
             feas = cbf_deriv_feasibility_loss(
                 system=system,
@@ -1426,6 +1495,8 @@ def _value_updates(
         out["label_mean"] = float(np.mean(vt_mean)) if vt_mean else 0.0
         out["tail_push_mean"] = float(np.mean(tp_push)) if tp_push else 0.0
         out["tail_exceed_frac"] = float(np.mean(tp_exceed)) if tp_exceed else 0.0
+        for _k, _vals in aux_logs.items():          # v2.8.3 D9 aux passthrough
+            out[_k] = float(np.mean(_vals))
     return out
 
 
@@ -1514,6 +1585,14 @@ def _policy_updates(
         "mean_abs_deficit_feature": [],
         "L_friction": [],
         "proj_mag_bptt": [],
+        "L_du_raw": [],
+        "L_du_weighted": [],
+        "L_infeas_raw": [],
+        "L_infeas_weighted": [],
+        "L_floor_recov_raw": [],
+        "L_floor_recov_weighted": [],
+        "L_agree_raw": [],
+        "L_agree_weighted": [],
     }
     pi_totals: list[Tensor] = []
     leak_sqs: list[Tensor] = []
@@ -1563,6 +1642,14 @@ def _policy_updates(
             accum["mean_abs_deficit_feature"].append(result.mean_abs_deficit_feature)
             accum["L_friction"].append(result.friction_loss)
             accum["proj_mag_bptt"].append(result.proj_mag_bptt)
+            accum["L_du_raw"].append(result.l_du_raw)
+            accum["L_du_weighted"].append(result.l_du_weighted)
+            accum["L_infeas_raw"].append(result.l_infeas_raw)
+            accum["L_infeas_weighted"].append(result.l_infeas_weighted)
+            accum["L_floor_recov_raw"].append(result.l_floor_recov_raw)
+            accum["L_floor_recov_weighted"].append(result.l_floor_recov_weighted)
+            accum["L_agree_raw"].append(result.l_agree_raw)
+            accum["L_agree_weighted"].append(result.l_agree_weighted)
 
     leak_sq_max = torch.stack(leak_sqs).max()
     threshold = float(config["halt"]["vs_grad_leak_threshold"])
@@ -1574,6 +1661,9 @@ def _policy_updates(
     if log:
         out.update(_host_scalars({key: torch.stack(values).mean() for key, values in accum.items()}))
         out["grad_leak_VS_from_Lpi"] = float(leak_sq_max.sqrt().item())
+        _wout = float(config["loss"]["policy"].get("w_outside", 0.0))           # v2.8.2 I3: band ratio, logged
+        _coll = _wout * float(out.get("L_out", 0.0))
+        out["infeas_band_ratio"] = float(out.get("L_infeas_weighted", 0.0) / _coll) if _coll > 0 else 0.0
     return out
 
 
@@ -1647,6 +1737,7 @@ def _zero_policy_scalars() -> dict[str, float]:
         "L_satex": 0.0,
         "L_pretanh": 0.0,
         "L_out": 0.0,
+        "infeas_band_ratio": 0.0,
         "L_pi_total": 0.0,
         "grad_norm_pi": 0.0,
         "grad_leak_VS_from_Lpi": 0.0,
@@ -1665,6 +1756,14 @@ def _zero_policy_scalars() -> dict[str, float]:
         "mean_abs_deficit_feature": 0.0,
         "L_friction": 0.0,
         "proj_mag_bptt": 0.0,
+        "L_du_raw": 0.0,
+        "L_du_weighted": 0.0,
+        "L_infeas_raw": 0.0,
+        "L_infeas_weighted": 0.0,
+        "L_floor_recov_raw": 0.0,
+        "L_floor_recov_weighted": 0.0,
+        "L_agree_raw": 0.0,
+        "L_agree_weighted": 0.0,
     }
 
 
@@ -1764,12 +1863,24 @@ def _metrics_row(
     value_stats: CollectionStats,
     policy_stats: CollectionStats,
     probe_spread: Mapping[str, float],
+    t_collect: float = 0.0,
+    t_bptt: float = 0.0,
+    t_eval: float = 0.0,
+    t_eval_wait: float = 0.0,
+    t_ckpt: float = 0.0,
+    cuda_max_mem_mb: float = 0.0,
 ) -> dict[str, Any]:
     row = {column: 0.0 for column in METRIC_COLUMNS}
     row.update(
         {
             "step": int(step),
             "wallclock_s": float(wallclock_s),
+            "t_collect": float(t_collect),
+            "t_bptt": float(t_bptt),
+            "t_eval": float(t_eval),
+            "t_eval_wait": float(t_eval_wait),
+            "t_ckpt": float(t_ckpt),
+            "cuda_max_mem_mb": float(cuda_max_mem_mb),
             "schedule_step": int(schedule_step),
             "lambda_disc_active": float(lambda_disc),
             "gamma_disc_active": float(gamma_disc),
@@ -2156,9 +2267,95 @@ def _init_csv(path: Path, columns: list[str]) -> None:
         csv.DictWriter(file_obj, fieldnames=columns).writeheader()
 
 
-def _append_csv(path: Path, columns: list[str], rows: list[Mapping[str, Any]]) -> None:
+
+_SH_PROBE_STATE = {"consecutive": 0, "series": []}
+
+
+def _sigma_probe_halt_check(system, target_value_net, config, step, run_dir):
+    """v2.8.3 AMENDMENT-4 §3 — registered STRUCTURAL halt.
+
+    Recomputes E[h_tilde - h] on the FROZEN probe batch (the fixed-sample checkpoint-recomputation
+    variant defined in sigma_monitor_series.md -- never the in-training batch quantity) and halts the
+    run when it exceeds `halt_probe_shift` at `halt_consecutive` consecutive evals.
+
+    Returns a halt_reason string, or None. No-op unless value_target.sigma_hazard.enabled.
+    """
+    sh = (config.get("value_target") or {}).get("sigma_hazard") or {}
+    if not bool(sh.get("enabled", False)):
+        return None
+    probe = Path(sh.get("probe_path", "data/runs/v2.8.3/sigma_hazard/probe_states.npz"))
+    if not probe.exists():
+        return None
+    thresh = float(sh.get("halt_probe_shift", 0.123))
+    need = int(sh.get("halt_consecutive", 2))
+    try:
+        import types as _types
+        import numpy as _np
+        from src.eval.build_pools import load_pool as _load_pool
+        from src.envs.scene_batch import batch_scenes as _bscenes
+        from src.frameworks.jt_pncbf.losses import _sigma_hazard_sequence
+        d = _np.load(probe)
+        dev = next(target_value_net.parameters()).device
+        pool = _load_pool(Path(sh["probe_pool"])) if sh.get("probe_pool") else None
+        if pool is None:
+            return None
+        scn = [pool.scenes[i] for i in d["scene_idx"].tolist()]
+        bs = _bscenes(scn, device=dev, dtype=torch.float32)
+        batch = _types.SimpleNamespace(
+            state_sequence=torch.as_tensor(d["states"], device=dev, dtype=torch.float32),
+            h_sequence=torch.as_tensor(d["h"], device=dev, dtype=torch.float32), scene=bs)
+        aux = {}
+        _sigma_hazard_sequence(system=system, target_value_net=target_value_net, batch=batch,
+                               config=config, sh_cfg=sh, aux=aux)
+        shift = float(aux.get("sh_label_mass_shift", 0.0))
+    except Exception as exc:                       # a monitor must never take the run down by failing
+        print(f"[sigma-probe] monitor error at step {step}: {type(exc).__name__}: {exc}", flush=True)
+        return None
+    _SH_PROBE_STATE["series"].append((step, shift))
+    _SH_PROBE_STATE["consecutive"] = _SH_PROBE_STATE["consecutive"] + 1 if shift > thresh else 0
+    print(f"[sigma-probe] step {step} E[h_tilde-h]={shift:+.6f} thresh={thresh} "
+          f"consecutive={_SH_PROBE_STATE['consecutive']}/{need}", flush=True)
+    try:
+        _cols = ["step", "probe_shift", "threshold", "consecutive"]
+        _fp = run_dir / "sigma_probe.csv"
+        if not _fp.exists():                      # self-describing, same principle as the D1 repair
+            _init_csv(_fp, _cols)
+        _append_csv(_fp, _cols,
+                    [{"step": step, "probe_shift": shift, "threshold": thresh,
+                      "consecutive": _SH_PROBE_STATE["consecutive"]}])
+    except Exception:
+        pass
+    if _SH_PROBE_STATE["consecutive"] >= need:
+        print(f"[sigma-probe] HALT: E[h_tilde-h] exceeded {thresh} at {need} consecutive evals", flush=True)
+        return "sigma_label_runaway"
+    return None
+
+
+def _append_csv(path: Path, columns: list[str], rows: list[Mapping[str, Any]],
+                *, extend_header: bool = False) -> None:
+    """Append rows under `columns`. Extra keys are dropped (extrasaction="ignore"), so a reader that
+    selects by name can never be broken by an unknown key.
+
+    v2.8.3 D9: with extend_header=True, if the file still has ONLY its header line (no data rows yet),
+    keys present in the row but absent from `columns` are APPENDED to the header. Existing columns keep
+    their names, order and values exactly; new columns can only appear at the end. This is what lets a
+    label-path aux key reach metrics.csv without a per-key registry. Once any data row exists the header
+    is frozen for the rest of the run, so a schema never changes mid-file.
+    """
     if not rows:
         return
+    if extend_header and path.exists():
+        with path.open(newline="", encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+        if len(lines) == 1:                                  # header only, no data yet
+            header = next(csv.reader([lines[0]]))
+            extra = [k for k in rows[0] if k not in header]
+            if extra:
+                columns = header + sorted(extra)
+                with path.open("w", newline="", encoding="utf-8") as fh:
+                    csv.DictWriter(fh, fieldnames=columns).writeheader()
+        else:
+            columns = next(csv.reader([lines[0]]))
     with path.open("a", newline="", encoding="utf-8") as file_obj:
         writer = csv.DictWriter(file_obj, fieldnames=columns, extrasaction="ignore")
         for row in rows:
@@ -2180,7 +2377,22 @@ def _auto_run_final_eval(run_dir: Path, *, max_scenes: int | None = None) -> Non
 
     from src.eval.run_full import run_full_eval
 
-    run_full_eval(run_dir, ckpt_path=best_ckpt, max_scenes=max_scenes)
+    # v2.8.2: the end-of-run full eval holds ~13 GB (RSS decomposition, param_probe §9) OUTSIDE the in-loop gated
+    # site; serialize it across concurrent runs with the SAME cross-process lock so overlapping finals cannot OOM
+    # the host. UNBOUNDED wait here (timeout_s=None): unlike the in-loop fire (~17 MB, must not stall training so it
+    # degrades to ungated on timeout), a ~13 GB final that degrades to ungated is exactly the OOM path that killed
+    # the 4x probe — so it waits without a deadline (flock still auto-releases on holder death, no deadlock). The
+    # config eval.gate.timeout_s governs ONLY the in-loop sites. Wait is logged post-loop (t_eval_wait, never training).
+    import yaml as _yaml
+    _cfg = _yaml.safe_load((run_dir / "config.yaml").read_text(encoding="utf-8"))
+    _eg = (_cfg.get("eval", {}) or {}).get("gate", {}) or {}
+    _ver = str(_cfg.get("run", {}).get("version", ""))
+    _lock = next((p for p in [run_dir, *run_dir.parents] if p.name == _ver), run_dir.parent) / "eval_gate.lock"
+    with eval_gate(_lock, enabled=bool(_eg.get("enabled", True)), timeout_s=None,
+                   log=lambda m: print(m, flush=True)) as _gate_wait:
+        if _gate_wait > 0.0:
+            print(f"final-eval gate: t_eval_wait {_gate_wait:.1f}s (serialized behind another run's eval)", flush=True)
+        run_full_eval(run_dir, ckpt_path=best_ckpt, max_scenes=max_scenes)
 
 
 def _has_final_eval_row(path: Path, ckpt_name: str) -> bool:

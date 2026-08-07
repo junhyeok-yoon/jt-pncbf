@@ -256,6 +256,20 @@ This option exists so that a clearly-marked single-seed result is not categorica
 The aggregated multi-seed table lives in `data/secured_data/<version>/aggregate/multi_seed_metrics.json` and is summarized in `multi_seed_report.md`.
 
 **Seed economy.** New configurations screen on a single seed (42). Escalation to the
+**A gating metric is qualified before it gates.** Before an in-loop or deployed reading is
+registered as the falsifier for an axis, three properties are confirmed with existing data,
+not assumed: (i) the metric responds to the axis — if the axis targets one collision class,
+an aggregate that another class dominates does not qualify; (ii) the pool and checkpoint
+expose the axis — a failure mixture far from the regime the axis targets, or a mask that
+switches the conditioned term off on the targeted episodes, disqualifies the reading;
+(iii) the registered threshold is inside the reachable range — at the gate's $n$, the
+two-condition separation threshold is $\sqrt{2}\times$ the CI half-width, and a band
+narrower than that cannot be met. A prediction that fails these checks is still scored as
+registered, recorded as uninformative with the failing check named, and its informative
+form is registered before the next data. Qualification is a check against measurements in
+hand — it is not a license to delay registration until results look favourable, and it
+never re-fits a threshold after data.
+
 canonical multi-seed set `{42, 99, 12345}` occurs only for verdict-grade results — a
 CI-separated improvement claim, or a registered multi-seed commitment — and the seed count
 is decided at registration time, never after seeing the data. Eval-only measurements
@@ -307,6 +321,16 @@ Each pool ships with a manifest JSON containing:
 The pool generation script is `src/eval/build_pools.py`, which accepts `system` so per-system pools are added without code change. Re-running it must produce a byte-identical pool `.pkl` given the same seed and sampler params (verified by SHA).
 
 ---
+
+**The evaluation cell includes the batch size.** Gate-cell outcomes are not invariant to
+`eval_batch_size`: at a fixed checkpoint, pool, seed and filter config, changing only the
+batch size moves individual episodes across outcome boundaries (GPU GEMM tiling changes
+float32 summation order; onset at the first step, ~1e-7, amplified over the RK4 horizon
+until a predicate flips). A cell is therefore the tuple (pool, pool seed, $n$, filter
+config, **`eval_batch_size`**), and every gate CSV, build-log and results table records the
+batch size it was scored under. Per-episode joins across artifacts are valid only within
+one cell. The measured cross-batch-size spread at a fixed checkpoint is 0.0083 in `cps`;
+**no `cps` claim below 0.0083 is admissible regardless of its confidence interval.**
 
 **Reproducibility is a lineage property.** Bit-reproduction of an n≥2000 GPU eval is demanded only within a lineage (same first-eval order, same algorithm selection). Across processes or lineages, single values carry a ±0.005 equivalence band; a difference inside the band is not an effect, and claims below it require a paired or same-process design. Every reproduction gate names its target's lineage; per-episode claims are lineage-dependent and stated as such.
 

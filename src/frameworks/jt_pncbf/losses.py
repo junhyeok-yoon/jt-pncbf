@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Iterator, Mapping
 
 import torch
@@ -37,6 +37,13 @@ class ValueLossResult:
     targets: Tensor
     tail_push_mean: float = 0.0        # v2.4.2 Exp 2: mean target_rhs*relu(rhs_full-lhs) (raw_lagged only)
     tail_exceed_frac: float = 0.0      # v2.4.2 Exp 2: frac rhs_full>lhs (bootstrap tail exceeds avoid)
+    # v2.8.3 D9 ROOT REPAIR. `value_loss` builds an aux dict and passes it into `value_targets`; label-path
+    # branches populate it (candidate_set: cs_*; sigma_hazard: sh_*). Before this field existed the dict was
+    # dropped on return and only two keys were cherry-picked into named fields above, so EVERY other
+    # diagnostic was computed and discarded -- it hid the candidate-set instrumentation for the whole v2.8.2
+    # CAND run and the sigma-hazard monitors at v2.8.3 launch. Carrying the whole dict fixes it at the root:
+    # any future label branch that writes a key gets it logged with no further plumbing.
+    aux: Mapping[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -64,6 +71,14 @@ class PolicyLossResult:
     mean_abs_deficit_feature: Tensor
     friction_loss: Tensor          # v2.5.0 B-2: weighted filter-friction term w_friction*||u_safe-u_nom||^2
     proj_mag_bptt: Tensor          # mean ||u_safe - u_nom|| over the BPTT window (all-active gauge diagnostic)
+    l_du_raw: Tensor               # v2.8.2 M3: raw ||Δu^filt||^2/h^2 (logged even when w_du=0 — a monitor)
+    l_du_weighted: Tensor          # v2.8.2 M3: w_du * l_du (0 when off)
+    l_infeas_raw: Tensor           # v2.8.2 M2: mean relu(s_inf+delta) (0 when w_infeas=0; computed only when on)
+    l_infeas_weighted: Tensor      # v2.8.2 M2: w_infeas * l_infeas (0 when off)
+    l_floor_recov_raw: Tensor      # v2.8.2 cond(c): mean proximity-weighted tilt excess (0 when w_floor_recov=0)
+    l_floor_recov_weighted: Tensor # v2.8.2 cond(c): w_floor_recov * L_floor_recov (0 when off)
+    l_agree_raw: Tensor            # v2.8.2 agree: E[mask_nonempty * ||pi - sg(u_filt)||^2] (0 when w_agree=0)
+    l_agree_weighted: Tensor       # v2.8.2 agree: w_agree * l_agree_raw (0 when off)
 
 
 def value_loss(
@@ -96,7 +111,8 @@ def value_loss(
     total = float(config["loss"]["value"]["lambda_R"]) * reach
     return ValueLossResult(total=total, reach=reach, targets=targets,
                            tail_push_mean=aux.get("tail_push_mean", 0.0),
-                           tail_exceed_frac=aux.get("tail_exceed_frac", 0.0))
+                           tail_exceed_frac=aux.get("tail_exceed_frac", 0.0),
+                           aux=dict(aux))
 
 
 def value_targets(
@@ -225,14 +241,194 @@ def value_targets(
     with torch.no_grad():
         tail_obs = system.observation(batch.tail_states, batch.tail_scene)
         bootstrap_tail = target_value_net.target_h(tail_obs)
+    # v2.8.2 CANDIDATE-SET LABEL (theory.tex def:cand), behind value_target.candidate_set.enabled
+    # (DEFAULT FALSE => the shipped path below runs untouched and byte-identically).
+    _cs = (config["value_target"].get("candidate_set") or {})
+    if bool(_cs.get("enabled", False)):
+        return _candidate_set_target(
+            system=system, target_value_net=target_value_net, batch=batch,
+            lambda_disc=lambda_disc, target_rhs=target_rhs, config=config,
+            bootstrap_tail=bootstrap_tail, cs_cfg=_cs, aux=aux,
+        )
+    # v2.8.3 SIGMA-AUGMENTED HAZARD, behind value_target.sigma_hazard.enabled (DEFAULT FALSE => the
+    # shipped call below runs untouched and byte-identically; the h_sequence handed to pncbf_target is
+    # the same object).
+    _sh = (config["value_target"].get("sigma_hazard") or {})
+    h_seq = batch.h_sequence
+    if bool(_sh.get("enabled", False)):
+        h_seq = _sigma_hazard_sequence(
+            system=system, target_value_net=target_value_net, batch=batch,
+            config=config, sh_cfg=_sh, aux=aux,
+        )
     targets = pncbf_target(
-        batch.h_sequence,
+        h_seq,
         lambda_disc,
         float(config["env"]["dt"]),
         target_rhs,
         bootstrap_tail,
     ).detach()
     return targets.gather(0, batch.step_indices.unsqueeze(0)).squeeze(0)
+
+
+def _sigma_hazard_sequence(*, system, target_value_net, batch, config, sh_cfg, aux=None):
+    """v2.8.3 — h_tilde = max(h, beta * psi(sigma)) on the value target's hazard ONLY.
+
+        sigma(x) = alpha_eff(x)*V_t(x) + Lf_V_t(x) - u_max * ||(Lg V_t(x))^-||_1
+        psi(s)   = clip(s / s_scale, -1, 1)          (TWO-SIDED; the one-sided variant is rejected)
+
+    sigma is recomputed FRESH here from batch.state_sequence with the TARGET net -- never from the
+    collection stash last_b_live, which is one target-net update stale.
+
+    CLIP MASK (prop:ceiling): on {|V_t| >= 1 - clip_tol} sigma = alpha*V_max is a parameterisation
+    artifact, not a feasibility fact, so psi is not applied and h_tilde = h there.
+
+    sigma is ONE backward of V_t per state. Time is FLATTENED into the batch (B-major, matching
+    _tile_scene's repeat_interleave) so the whole [T+1, B] block costs one backward per chunk rather
+    than one per index.
+    """
+    from src.common.filter_hardnet import _cbf_terms, _base_alpha, _hardnet_params
+    from src.common.kstep_fallback import _tile_scene
+
+    xs = batch.state_sequence
+    if xs is None:
+        raise ValueError("sigma_hazard requires batch.state_sequence (buffer store_state_seq=True).")
+    beta = float(sh_cfg["beta"]); m = float(sh_cfg["m"]); s_scale = float(sh_cfg["s_scale"])
+    clip_tol = float(sh_cfg.get("clip_tol", 1.0e-6))
+    # v2.8.3 AMENDMENT-4 REPAIR A. `sigma_alpha_rule` selects the alpha used to form the LABEL's sigma.
+    #   "deployed"     -- the two-valued filter rule (alpha_safe if V<=0 else alpha_unsafe). This is what
+    #                     the first arm ran, and it COLLAPSED: alpha jumps 2 -> 100 the instant V crosses
+    #                     0, so the label recursion's uniform-inflation gain is
+    #                     beta*alpha_unsafe/s_scale = 1.0*100/2.4284 = 41.2 >> 1 -- a runaway with a
+    #                     degenerate fixed point at the label ceiling (E[h~-h] 0.041 -> 1.22, P(sigma>0)
+    #                     0.068 -> 0.998, reach 0.0).
+    #   "uniform_safe" -- alpha_ref = alpha_safe = 2.0 everywhere. On {V<=0}, the sliding band this axis
+    #                     targets, the deployed alpha_eff IS 2.0, so sigma_label equals the deployed
+    #                     sigma EXACTLY there; divergence is confined to {V>0}, where the alpha=100
+    #                     demand is the cor:alpha-thresh pathology this deliberately declines to import.
+    #                     Gain becomes alpha_ref/s_scale = 0.824 < 1: a contraction.
+    # The DEPLOYED filter, its row and its empty test are untouched by this switch.
+    alpha_rule = str(sh_cfg.get("sigma_alpha_rule", "deployed"))
+    if alpha_rule not in ("deployed", "uniform_safe"):
+        raise ValueError(f"sigma_hazard.sigma_alpha_rule must be 'deployed' or 'uniform_safe', got {alpha_rule!r}.")
+    chunk_rows = int(sh_cfg.get("chunk_rows", 65536))
+    if s_scale <= 0.0:
+        raise ValueError(f"sigma_hazard.s_scale must be positive, got {s_scale}.")
+    params = _hardnet_params(config)
+    costs = torch.clamp(batch.h_sequence, min=-1.0, max=1.0)          # [T+1, B]
+    Tp1, B = costs.shape
+    sdim = xs.shape[2]
+    u_hi = system.u_bounds.to(device=xs.device, dtype=xs.dtype)[:, 1]
+    adim = int(system.u_bounds.shape[0])
+
+    X = xs.permute(1, 0, 2).reshape(B * Tp1, sdim)                    # B-major, matches _tile_scene
+    sc = _tile_scene(batch.scene, Tp1, B)
+    sig = torch.empty(B * Tp1, dtype=xs.dtype, device=xs.device)
+    vv = torch.empty(B * Tp1, dtype=xs.dtype, device=xs.device)
+
+    def h_t(xx, scene):
+        return target_value_net.target_h(system.observation(xx, scene)).reshape(-1)
+
+    for i in range(0, B * Tp1, chunk_rows):
+        j = min(i + chunk_rows, B * Tp1)
+        sl = slice(i, j)
+        sc_i = _slice_scene_rows(sc, sl)
+        v, lf_v, lg_v = _cbf_terms(system, h_t, X[sl], sc_i,
+                                   torch.zeros((j - i, adim), device=xs.device, dtype=xs.dtype),
+                                   create_graph=False)
+        supply = torch.sum(torch.clamp(lg_v, max=0.0).abs() * u_hi.unsqueeze(0), dim=1)
+        a_eff = (_base_alpha(v, params) if alpha_rule == "deployed"
+                 else torch.full_like(v, float(params.alpha_safe)))
+        sig[sl] = (a_eff * v + lf_v - supply).detach()
+        vv[sl] = v.detach()
+
+    sigma = sig.reshape(B, Tp1).t().contiguous()                      # [T+1, B]
+    vval = vv.reshape(B, Tp1).t().contiguous()
+    psi = torch.clamp((sigma + m) / s_scale, min=-1.0, max=1.0)
+    off_clip = vval.abs() < (1.0 - clip_tol)
+    h_tilde = torch.where(off_clip, torch.maximum(costs, beta * psi), costs)
+    if aux is not None:
+        d = (h_tilde - costs)
+        aux["sh_label_mass_shift"] = float(d.mean().item())
+        aux["sh_raised_frac"] = float((d > 1e-9).to(costs.dtype).mean().item())
+        aux["sh_clip_masked_frac"] = float((~off_clip).to(costs.dtype).mean().item())
+        aux["sh_sigma_p50"] = float(sigma.median().item())
+        aux["sh_sigma_pos_frac"] = float((sigma > 0).to(costs.dtype).mean().item())
+        aux["sh_alpha_rule_uniform"] = 1.0 if alpha_rule == "uniform_safe" else 0.0
+    return h_tilde
+
+
+def _slice_scene_rows(scene, sl):
+    import dataclasses
+    upd = {}
+    for f in dataclasses.fields(scene):
+        v = getattr(scene, f.name)
+        if isinstance(v, torch.Tensor) and v.ndim >= 1:
+            upd[f.name] = v[sl]
+    return dataclasses.replace(scene, **upd)
+
+
+def _candidate_set_target(*, system, target_value_net, batch, lambda_disc, target_rhs, config,
+                          bootstrap_tail, cs_cfg, aux=None):
+    """v2.8.2 AMENDMENT-2 — IN-RECURSION def:cand label. The min is installed INSIDE the shipped
+    T-step recursion at the SAME depth, with the SAME push and clamp:
+
+        lhs[idx] = max( h_idx, (1-g)*h_idx + g*min( lhs[idx+1], min_{u in grid} V_targ(Phi_dt(x_idx,u)) ) )
+
+    lhs[idx+1] IS the pi_f branch: it is the continuation of the trajectory the DEPLOYED filtered loop
+    produced, so pi_f is in Q by construction and needs no separate evaluation (prop:label-order(a)).
+    Grid successors are batched over candidates; the loop is over TIME only (memory-bound), never over
+    candidates (05_code). With an EMPTY grid this reduces to the shipped recursion exactly."""
+    from src.common.kstep_fallback import grid_controls, _tile_scene
+    from src.common.rk4 import rk4_step
+    dt = float(config["env"]["dt"])
+    xs = batch.state_sequence
+    if xs is None:
+        raise ValueError("candidate_set requires batch.state_sequence (buffer store_state_seq=True).")
+    include_grid = bool(cs_cfg.get("include_grid", True))
+    with torch.no_grad():
+        costs = torch.clamp(batch.h_sequence, min=-1.0, max=1.0)          # [T+1, B]
+        Tp1, B = costs.shape
+        dev, dty = costs.device, costs.dtype
+        gamma = torch.exp(-torch.as_tensor(lambda_disc, dtype=dty, device=dev) * dt)
+        one_minus = 1.0 - gamma
+        # --- per-index grid minimum, batched over candidates, looped over time ---
+        gmin = None
+        if include_grid:
+            Gc = grid_controls(system, dev, dty)
+            ng, adim = int(Gc.shape[0]), int(Gc.shape[1])
+            sc = _tile_scene(batch.scene, ng, B)
+            Uf = Gc.unsqueeze(0).expand(B, ng, adim).reshape(B * ng, adim)
+            gmin = torch.empty((Tp1, B), dtype=dty, device=dev)
+            for t in range(Tp1):
+                X = xs[t].unsqueeze(1).expand(B, ng, xs.shape[2]).reshape(B * ng, xs.shape[2])
+                Xn = system.wrap_state(rk4_step(system, X, Uf, dt))
+                gmin[t] = target_value_net.target_h(system.observation(Xn, sc)).reshape(B, ng).min(dim=1).values
+        # --- the shipped recursion, with the min folded into the continuation ---
+        lhs = torch.zeros_like(costs)
+        lhs[-1] = costs[-1]
+        n_disp = torch.zeros((), dtype=dty, device=dev); n_tot = 0.0
+        gaps = []
+        for idx in range(Tp1 - 2, -1, -1):
+            cont = lhs[idx + 1]
+            if gmin is not None:
+                g_t = gmin[idx]
+                if aux is not None:
+                    n_disp = n_disp + (g_t < cont).to(dty).sum(); n_tot += B
+                    gaps.append(g_t - cont)
+                cont = torch.minimum(cont, g_t)
+            lhs[idx] = torch.maximum(costs[idx], one_minus * costs[idx] + gamma * cont)
+        # --- push + clamp, EXACTLY as pncbf_target ships them (I2) ---
+        _, int_rhs, disc_rhs = compute_disc_avoid_terms(costs, lambda_disc, dt)
+        rhs_full = int_rhs + disc_rhs * bootstrap_tail.unsqueeze(0)
+        mixed = lhs + torch.as_tensor(target_rhs, dtype=dty, device=dev) * torch.relu(rhs_full - lhs)
+        out = torch.clamp(mixed, min=-1.0, max=1.0)
+        if aux is not None and gmin is not None and n_tot > 0:
+            aux["cs_argmin_not_pif_frac"] = float((n_disp / n_tot).item())
+            gp = torch.cat(gaps)
+            for p in (10, 50, 90):
+                aux[f"cs_gap_p{p}"] = float(torch.quantile(gp.double(), p / 100.0).item())
+            aux["cs_n_candidates"] = float(1 + (0 if gmin is None else int(grid_controls(system, dev, dty).shape[0])))
+    return out.detach().gather(0, batch.step_indices.unsqueeze(0)).squeeze(0)
 
 
 @dataclass(frozen=True)
@@ -538,6 +734,56 @@ def policy_bptt_loss(
     # the deficit reaches the policy only through the ordinary task-return BPTT gradient, NOT through the
     # filter coefficient Jacobian. Independent of w_deficit (the loss channel).
     obs_deficit = bool(policy_cfg.get("obs_deficit_feedback", False))
+    # v2.8.2 M2 (prop:sinfty-decomp / rem:sinfty-signal): live loss on relu(s_inf + delta), the empty-branch
+    # depth made visible to training. DEFAULT OFF (w_infeas=0 -> not added -> byte-identical, G3). delta has NO
+    # default: it is the S5-derived headroom (changes.md R6.1) and must never be silently consumed.
+    w_infeas = float(policy_cfg.get("w_infeas", 0.0))
+    infeas_delta = policy_cfg.get("infeas_delta", None)
+    if w_infeas > 0.0:
+        if infeas_delta is None:
+            raise ValueError("loss.policy.infeas_delta must be set (S5-derived; no default) when w_infeas>0.")
+        infeas_delta = float(infeas_delta)
+    # v2.8.2 I3 (within-version iter, changes.md NOT amended): clip the term to min(relu(s_inf+delta), delta) so the
+    # gradient is nonzero ONLY on the boundary layer {-delta<=s_inf<=0} (where feasible actions still exist,
+    # rem:sinfty-signal iii) and flat inside E. The cap = delta is DERIVED (ends the ramp at the feasibility
+    # boundary), not tuned. DEFAULT False -> unclipped relu (M2/I2 behavior byte-identical).
+    infeas_clip = bool(policy_cfg.get("infeas_clip", False))
+    # v2.8.2 M3: rate penalty on the filtered command, w_du * ||u_t^filt - u_{t-1}^filt||^2 / h^2. DEFAULT OFF
+    # (w_du=0). Distinct from L_rate (dead-zoned, un-normalized): this is un-dead-zoned and /h^2.
+    w_du = float(policy_cfg.get("w_du", 0.0))
+    # v2.8.2 agree (prop:pi-filter-agreement): policy-filter agreement term L_agree =
+    # w_agree * E[ mask_nonempty * || pi_theta(x_t) - sg(u_filt_t) ||^2 ], sg = stop-grad on the filtered
+    # action (certificate untouched; the gradient reaches theta ONLY through u_nom=pi_theta). EMPTY steps
+    # (filter box empty; last_empty) are MASKED OUT — no agreement target where no feasible action exists.
+    # DEFAULT OFF (w_agree=0 -> the per-step mask collection and the term are both skipped -> `total`
+    # byte-identical to baseline; mirrors the w_infeas / w_floor_recov gates). u_safe is already in the BPTT
+    # rollout so the marginal forward cost is ~0.
+    w_agree = float(policy_cfg.get("w_agree", 0.0))
+    # v2.8.2 cond(c) (FLOOR-recovery shaping; coordinator-gated coefficient/launch): a per-rollout-step
+    # penalty acting on the recovery DYNAMICS of the floor-failing near-inverted FEASIBLE set —
+    # proximity-weighted tilt excess above the recoverable-hold angle. The floor-failing 67-set is
+    # near-inverted (tilt ~127 deg, |omega| ~2.35) at ~0.18 m above the floor: feasible actions exist,
+    # the policy is just too SLOW to level out before drifting in. L_floor_recov =
+    # mean_t [ relu(1 - alt_above_floor_t / z_thr) * relu(cos(theta_hold) - R[2,2]_t) ]. DEFAULT OFF
+    # (w_floor_recov=0 -> not added -> byte-identical; mirrors the w_infeas gate). Differentiable in
+    # theta_pi through the rollout state (theta_pi -> u -> x), matching the task-cost gradient path. The
+    # per-step block below is entered ONLY when w_floor_recov>0, so nothing new runs on the default path.
+    w_floor_recov = float(policy_cfg.get("w_floor_recov", 0.0))
+    floor_recov_zthr = float(policy_cfg.get("floor_recov_zthr", 0.5))
+    if w_floor_recov > 0.0:
+        from src.envs.quadrotor_3d import _quat_to_R as _floor_quat_to_R
+        # theta_hold = arccos(min(1/TWR, 1)), TWR = 4*f_rotor_max/(m*g). All provenance from config (no
+        # hardcoded 60 deg): the shipped quadrotor_3d set gives TWR=2 -> theta_hold=60 deg=1.047 rad.
+        _fb = config["env"]["bounds"][system.name]
+        _fp = config["env"][system.name]
+        _twr = 4.0 * float(_fb["f_rotor_max"]) / (float(_fp["mass"]) * float(_fp["gravity"]))
+        # v2.8.2 halt-fix: use cos(theta_hold) directly, not the angle. Since R[2,2]=cos(tilt), the smooth
+        # excess relu(cos_theta_hold - R[2,2]) replaces the singular relu(arccos(R[2,2]) - theta_hold)
+        # (arccos'(x)=-1/sqrt(1-x^2) -> inf grad at R[2,2]=+/-1, which NaN'd L_pi). cos(arccos(min(1/TWR,1)))
+        # = min(1/TWR,1), so cos_theta_hold = min(1/TWR,1) = 0.5 for TWR=2 (no arccos, no clamp needed).
+        floor_cos_theta_hold = min(1.0 / _twr, 1.0)
+        # floor at p_z = -band_collision_limit (config, not a hardcode); alt_above_floor = p_z + limit.
+        floor_band_limit = float(config["env"]["band_collision_limit"])
     # v2.5.0 Stage B: safety channel = analytic V_M (maneuver) or learned make_h_fn (value, default) —
     # the SAME builder as the collection filter (one builder, two call sites).
     from src.common.maneuver_value import build_safety_h_fn
@@ -567,6 +813,9 @@ def policy_bptt_loss(
         deficit_active_cnt: list[Tensor] = []   # per-step count of active steps
         deficit_clip_cnt: list[Tensor] = []     # per-step count of active steps hitting the cap
         deficit_feat_terms: list[Tensor] = []   # v2.4.1 Exp 2: per-step mean ||delta_u_{t-1}|| fed to policy
+        sinf_terms: list[Tensor] = []           # v2.8.2 M2: per-step relu(s_inf + delta) mean (empty-branch depth)
+        floor_recov_terms: list[Tensor] = []    # v2.8.2 cond(c): per-step prox-weighted tilt excess (floor recovery)
+        agree_nonempty_masks: list[Tensor] = [] # v2.8.2 agree: per-step ~last_empty (only collected when w_agree>0)
         prev_deficit = x.new_zeros((x.shape[0], system.action_dim)) if obs_deficit else None
 
         for _ in range(bptt_t):
@@ -623,7 +872,35 @@ def policy_bptt_loss(
             else:
                 u_safe, _ = hardnet(x, scene, u_nom, detach_coeffs=detach_coeffs)
             safe_actions.append(u_safe)
+            if w_agree > 0.0 and getattr(hardnet, "last_empty", None) is not None:
+                # v2.8.2 agree: capture the filter's OWN empty indicator at this step (box_aware path sets it).
+                # Detached: the mask gates the term but carries no gradient. Only runs when w_agree>0.
+                agree_nonempty_masks.append(~hardnet.last_empty.detach())
+            if w_infeas > 0.0 and getattr(hardnet, "last_a_live", None) is not None:
+                # v2.8.2 M2: empty-branch depth from the LIVE filter row (a=L_g h, b=row_upper). theta_V frozen
+                # => zero theta_V grad (G4); s_inf linear in a,b => grad carries no 1/||a||; delta pre-relu.
+                a_live = hardnet.last_a_live
+                b_live = hardnet.last_b_live
+                _bnd = system.u_bounds.to(a_live.device, a_live.dtype)
+                min_corner = torch.where(a_live >= 0.0, _bnd[:, 0], _bnd[:, 1])
+                s_inf = (a_live * min_corner).sum(dim=1) - b_live               # [B] empty-branch depth
+                _pen = torch.relu(s_inf + infeas_delta)                         # ramp 0 at s_inf=-delta
+                if infeas_clip:                                                 # I3: cap at delta -> flat inside E,
+                    _pen = torch.clamp(_pen, max=infeas_delta)                  # gradient only on {-delta<=s_inf<=0}
+                sinf_terms.append(_pen.mean())
             x = rk4_step(system, x, u_safe, dt)
+            if w_floor_recov > 0.0:
+                # v2.8.2 cond(c): proximity-weighted tilt-excess on the REACHED rollout state x_{t+1}
+                # (same states the task cost scores). alt_above_floor = p_z + band_collision_limit.
+                # SMOOTH tilt excess (v2.8.2 halt-fix): R[2,2] = cos(tilt), so relu(cos_theta_hold - R[2,2])
+                # is > 0 exactly when cos(tilt) < cos(theta_hold), i.e. tilt > theta_hold; it is monotone
+                # increasing in tilt and SINGULARITY-FREE (no arccos => no 1/sqrt(1-R22^2) inf grad at
+                # R[2,2]=+/-1, no clamp). prox weight is 0 at/above z_thr and ramps to 1 at the floor.
+                _alt = x[:, 2] + floor_band_limit
+                _R22 = _floor_quat_to_R(x[:, 3:7])[:, 2, 2]
+                _prox = torch.relu(1.0 - _alt / floor_recov_zthr)
+                _excess = torch.relu(floor_cos_theta_hold - _R22)
+                floor_recov_terms.append((_prox * _excess).mean())
             goal = _scene_goal(scene, x)
             pos_error = system.position(x) - goal
             v2 = system.speed(x) * system.speed(x)
@@ -736,9 +1013,11 @@ def policy_bptt_loss(
             excess = (du_norm - rate_delta).clamp_min(0.0)              # dead-zone: free below delta
             l_rate = torch.mean(excess * excess)
             mean_abs_du = du_norm.mean()
+            l_du = torch.mean(torch.sum(du * du, dim=2)) / (dt * dt)    # v2.8.2 M3: ||Δu^filt||^2 / h^2 (un-dead-zoned)
         else:
             l_rate = safe_stack.new_zeros(())
             mean_abs_du = safe_stack.new_zeros(())
+            l_du = safe_stack.new_zeros(())
         # input control-magnitude regularization (v2.2.2 add-on): LQR-style R term on the APPLIED
         # control, L_u = mean_t ||u_safe_t||^2 (ungated, undiscounted). u is the control whose integral
         # is speed, so penalizing |u| curbs accumulated approach speed (the over-speed-entry cause).
@@ -787,6 +1066,31 @@ def policy_bptt_loss(
             l_u_weighted = (ureg_weight * l_u).detach()
         else:
             l_u_weighted = l_u.new_zeros(())
+        # v2.8.2 M3 filtered-command rate (default off; w_du==0 leaves `total` byte-identical to baseline).
+        if w_du > 0.0:
+            total = total + w_du * l_du
+            l_du_weighted = (w_du * l_du).detach()
+        else:
+            l_du_weighted = l_du.new_zeros(())
+        # v2.8.2 M2 infeasibility-margin cost (default off; w_infeas==0 leaves `total` byte-identical, G3). The
+        # policy gradient flows through s_inf via the rollout state; theta_V is frozen -> zero theta_V grad (G4).
+        if w_infeas > 0.0 and sinf_terms:
+            l_infeas_raw = torch.stack(sinf_terms).mean()
+            total = total + w_infeas * l_infeas_raw
+            l_infeas_weighted = (w_infeas * l_infeas_raw).detach()
+        else:
+            l_infeas_raw = total.new_zeros(())
+            l_infeas_weighted = total.new_zeros(())
+        # v2.8.2 cond(c) floor-recovery shaping (default off; w_floor_recov==0 leaves `total` byte-identical).
+        # The policy gradient flows through the tilt/altitude of the rollout state x (theta_pi -> u -> x);
+        # no new op runs when off (the per-step block is skipped entirely, mirroring w_infeas).
+        if w_floor_recov > 0.0 and floor_recov_terms:
+            l_floor_recov_raw = torch.stack(floor_recov_terms).mean()
+            total = total + w_floor_recov * l_floor_recov_raw
+            l_floor_recov_weighted = (w_floor_recov * l_floor_recov_raw).detach()
+        else:
+            l_floor_recov_raw = total.new_zeros(())
+            l_floor_recov_weighted = total.new_zeros(())
         # v2.4.1 control-deficit term (flag-off / w_deficit==0 leaves `total` byte-identical to baseline).
         if w_deficit > 0.0:
             l_deficit_raw = torch.stack(deficit_terms).mean()                  # mean over batch, t
@@ -825,6 +1129,24 @@ def policy_bptt_loss(
         else:
             friction_weighted = total.new_zeros(())
 
+        # v2.8.2 agree (prop:pi-filter-agreement): policy-filter agreement term. L_agree =
+        # w_agree * E[ mask_nonempty * ||pi - sg(u_filt)||^2 ]. pi = action_stack (u_nom, carries theta-grad);
+        # sg(u_filt) = safe_stack.detach() (stop-grad -> the certificate/filter is untouched, gradient reaches
+        # theta ONLY through the policy). mask_nonempty = ~last_empty per step (empty rows carry no feasible
+        # target, so they are excluded; this is the S1-verified TRUE empty flag, not the aliased infeasible).
+        # E[] = mean over the [T,B] window (friction convention). Flag-off (w_agree=0) => `total` byte-identical
+        # to baseline (the mask list is empty and this block is skipped), mirroring the w_infeas / friction gates.
+        if w_agree > 0.0 and agree_nonempty_masks:
+            nonempty = torch.stack(agree_nonempty_masks, dim=0).to(safe_stack.dtype)   # [T,B]
+            agree_sq = torch.sum((action_stack - safe_stack.detach()) ** 2, dim=2)      # [T,B] ||pi - sg(u_filt)||^2
+            l_agree_raw = (nonempty * agree_sq).mean()
+            total = total + w_agree * l_agree_raw
+            l_agree_weighted = (w_agree * l_agree_raw).detach()
+            l_agree_raw = l_agree_raw.detach()
+        else:
+            l_agree_raw = total.new_zeros(())
+            l_agree_weighted = total.new_zeros(())
+
         # v2.5.1 A2(b): horizon-summary critic tail. total += w_hc * gamma_c^T * mean_B W(obs(x_T)) with W's
         # parameters FROZEN (stop-grad) so dL_pi/d(theta_W)=0; the ONLY policy gradient path is pathwise
         # through x_T (the differentiable rollout endpoint). x still holds x_T here (the endpoint is not
@@ -862,6 +1184,14 @@ def policy_bptt_loss(
         mean_abs_deficit_feature=mean_abs_deficit_feature,
         friction_loss=friction_weighted,
         proj_mag_bptt=proj_mag_bptt,
+        l_du_raw=l_du.detach(),
+        l_du_weighted=l_du_weighted,
+        l_infeas_raw=l_infeas_raw.detach(),
+        l_infeas_weighted=l_infeas_weighted,
+        l_floor_recov_raw=l_floor_recov_raw.detach(),
+        l_floor_recov_weighted=l_floor_recov_weighted,
+        l_agree_raw=l_agree_raw,
+        l_agree_weighted=l_agree_weighted,
     )
 
 
