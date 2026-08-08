@@ -1,0 +1,14 @@
+{
+  "tag": "postedit",
+  "run_dir": "/home/junhyeok/MIT/jt-pncbf/data/runs/v2.8.3/set__20260807-111711__seed42/v2.8.3__jt__20260807-111711__seed42",
+  "steps": 60,
+  "n_metric_rows": 6,
+  "filter_type_in_cfg": "<absent>",
+  "sha_metrics": "71f65a4fc4b40d6d9c067f28e485125cd22a1f048721dd19e8b27d48a0c9f4ec",
+  "sha_eval": "0ce08607a3057e3f36b41b4e09865f9dfafb80face0ff3fd31ea03a14e8c1da2",
+  "n_numeric_cols": 81,
+  "L_V_total_last": "0.002743348479270935",
+  "L_pi_total_last": "757.75244140625",
+  "grad_norm_pi_last": "379.49737548828125",
+  "label_mean_last": "-0.17016486823558807"
+}

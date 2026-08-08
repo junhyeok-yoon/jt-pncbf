@@ -67,6 +67,12 @@ class ContinuingState:
     dtype: Any
     w: int                                     # stationary window W
     cum: dict = None                           # cumulative instrumentation across rounds (set in create)
+    # v2.8.3 U-PREV AXIS (default off -> stays None, no behaviour change). [B, action_dim] previous
+    # EXECUTED control per row, appended to the POLICY observation by the collector's step_fn. Persistent
+    # across rounds like `x`; reset to `u_prev_reset` (hover trim m*g/4) for any row whose episode is
+    # refilled, since that row is then at t=0.
+    u_prev: Any = None
+    u_prev_reset: float = 0.0
 
     @staticmethod
     def create(system, scene_sampler, rng, n_rows, config, device, dtype, inject_frac=0.0, system_name=None):
@@ -194,6 +200,8 @@ def advance_round(
                 seg_start[b] = idx
                 seg_first[b] = nx[j].detach().clone()
                 state.pos_ring[b, :] = np0[j]                                      # reset ring to fresh IC
+                if state.u_prev is not None:
+                    state.u_prev[b] = state.u_prev_reset     # v2.8.3 U-PREV: row is at t=0 -> hover trim
             scene_dirty = True
             st.timings["refill"] += _t() - ts
 

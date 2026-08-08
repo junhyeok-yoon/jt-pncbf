@@ -179,7 +179,13 @@ def _build_control_net(system: System, config: Mapping[str, Any]) -> ControlNet:
     # observation [obs (dim obs_dim), delta_u_{t-1} (dim action_dim)]; the two new input columns are
     # zero-initialized so the policy ignores the deficit feature at init (clean continuity). The value
     # network observation is unchanged. Flag off => dim-obs_dim policy, byte-identical baseline.
-    extra = system.action_dim if _obs_deficit_on(config) else 0
+    # v2.8.3 U-PREV AXIS (additive, DEFAULT OFF): obs.u_prev_feedback appends u_safe(t-1) (per-rotor, RAW
+    # NEWTONS, t=0 = hover trim m*g/4) to the POLICY observation only, 34 -> 38 on quadrotor_3d. The VALUE
+    # net input is UNCHANGED at obs_dim (see src/common/observation.py, U-PREV AXIS note). Flag off => the
+    # untouched dim-obs_dim policy, byte-identical CTRL baseline.
+    from src.common.observation import u_prev_extra_dim
+
+    extra = (system.action_dim if _obs_deficit_on(config) else 0) + u_prev_extra_dim(system, config)
     net = ControlNet(system.obs_dim + extra, system, config)
     if extra:
         with torch.no_grad():
@@ -203,8 +209,33 @@ class JTPNCBFFramework:
         # read by policy() on the next step; reset per rollout (a fresh framework is built per eval).
         self._obs_deficit = _obs_deficit_on(config)
         self._prev_deficit: Tensor | None = None
+        # v2.8.3 U-PREV AXIS. This class is the DEPLOYED object built by BOTH eval paths (the in-loop eval
+        # at train.py:797 and `run_full._load_framework` -> the final eval), so the u_prev channel is
+        # carried here exactly once for both. `_prev_u` is written by filter() with the EXECUTED u_safe and
+        # read by policy() on the next step; at t=0 (or on any batch change) it resolves to the hover trim.
+        from src.common.observation import append_u_prev, u_prev_feedback_on, u_prev_init
+        self._u_prev_on = u_prev_feedback_on(config)
+        self._prev_u: Tensor | None = None
+        self._u_prev_init = u_prev_init
+        self._append_u_prev = append_u_prev
         from src.common.maneuver_value import build_safety_h_fn
-        self._filter = HardNetFilter(
+        # v2.8.3 B-axis FLAG GATE (additive; DEFAULT OFF). `filter.type` selects the ENFORCEMENT FORM at
+        # this single construction site. Absent (every shipped config and every existing checkpoint) or
+        # "hardnet" -> the unchanged HardNetFilter construction, same arguments, byte-identical output
+        # (proved: scripts/analysis/v283_backup_parity.py, pre/post-edit digests). "backup_switching" ->
+        # src/common/filter_backup.BackupSwitchingFilter: a hand-designed backup policy + an ONLINE
+        # ROLLOUT CERTIFICATE (implicit/backup CBF), one-step-lookahead switching, no QP, no analytic h.
+        _filter_type = str(config.get("filter", {}).get("type", "hardnet"))
+        if _filter_type == "hardnet":
+            _filter_cls = HardNetFilter
+        elif _filter_type == "backup_switching":
+            from src.common.filter_backup import BackupSwitchingFilter
+            _filter_cls = BackupSwitchingFilter
+        else:
+            raise ValueError(
+                f"Unknown filter.type {_filter_type!r}; expected 'hardnet' or 'backup_switching'."
+            )
+        self._filter = _filter_cls(
             system,
             build_safety_h_fn(system, config, value_net),   # v2.5.0 Stage B: V_M or learned h_fn
             config,
@@ -213,27 +244,44 @@ class JTPNCBFFramework:
 
     def reset_deficit_state(self) -> None:
         self._prev_deficit = None
+        self._prev_u = None                       # v2.8.3 U-PREV: next policy() call resolves to the trim
 
     def _policy_obs(self, x: Tensor, scene: Any) -> Tensor:
         obs = self.system.observation(x, scene)
-        if not self._obs_deficit:
-            return obs
-        b = obs.shape[0]
-        if self._prev_deficit is None or self._prev_deficit.shape[0] != b:
-            feat = obs.new_zeros((b, self.system.action_dim))
-        else:
-            feat = self._prev_deficit
-        return torch.cat([obs, feat], dim=1)
+        if self._obs_deficit:
+            b = obs.shape[0]
+            if self._prev_deficit is None or self._prev_deficit.shape[0] != b:
+                feat = obs.new_zeros((b, self.system.action_dim))
+            else:
+                feat = self._prev_deficit
+            obs = torch.cat([obs, feat], dim=1)
+        if self._u_prev_on:
+            b = obs.shape[0]
+            if self._prev_u is None or self._prev_u.shape[0] != b:
+                # t = 0 (or a batch change: a fresh chunk of eval scenes) -> hover trim, NEVER zeros.
+                feat_u = self._u_prev_init(self.system, self.config, b,
+                                           device=obs.device, dtype=obs.dtype)
+            else:
+                feat_u = self._prev_u
+            obs = self._append_u_prev(obs, feat_u)
+        return obs
 
     def policy(self, x: Tensor, scene: Any) -> Tensor:
         return self.policy_net(self._policy_obs(x, scene))
 
     def filter(self, x: Tensor, u_nom: Tensor, scene: Any) -> tuple[Tensor, Tensor]:
         if not self._obs_deficit:
-            return self._filter(x, scene, u_nom)
+            out = self._filter(x, scene, u_nom)          # returned VERBATIM when the axis is off
+            if self._u_prev_on:
+                # the EXECUTED control (post-filter, post-box), detached: an INPUT channel, not a
+                # gradient path. Read by _policy_obs on the next step.
+                self._prev_u = out[0].detach()
+            return out
         u_safe, infeasible, u_cbf_only, _ = self._filter(
             x, scene, u_nom, return_deficit_aux=True)
         self._prev_deficit = (u_cbf_only - u_safe).detach()
+        if self._u_prev_on:
+            self._prev_u = u_safe.detach()
         return u_safe, infeasible
 
     def value(self, x: Tensor, scene: Any) -> Tensor:
@@ -253,6 +301,15 @@ class _ManeuverEvalFramework:
         self.system = system
         self.config = config
         self.policy_net = policy_net
+        # v2.8.3 U-PREV AXIS: this eval-only framework builds the observation WITHOUT the u_prev channel
+        # and is INACTIVE in the CTRL config (safety_channel is not maneuver). Refuse the combination
+        # loudly rather than feed a dim-obs_dim observation to a dim-(obs_dim+action_dim) policy.
+        from src.common.observation import u_prev_feedback_on as _uprev_on
+        if _uprev_on(config):
+            raise NotImplementedError(
+                "_ManeuverEvalFramework does not carry the u_prev channel; obs.u_prev_feedback is "
+                "registered against the value-channel (JTPNCBFFramework) eval path only."
+            )
         # evaluate._tensor_options reads framework.value_net's dtype/device (its ONLY use of value_net);
         # alias the trained policy so the eval runs on the policy's device/dtype (float32, cuda).
         self.value_net = policy_net
@@ -2131,7 +2188,7 @@ def _pool_stem_for(pool_name: str, config: Mapping[str, Any], system_name: str) 
     # config that opts out via eval.in_loop.mixed=false) resolves the legacy in-loop pool.
     if (pool_name == "inloop" and system_name == "quadrotor_3d"
             and bool(config.get("eval", {}).get("in_loop", {}).get("mixed", True))):
-        return "eval_inloop_quadrotor-3d-d2r-mixed_n2000_seed45678"
+        return "eval_inloopv2_quadrotor-3d-d2r-mixed_n2000_seed145678"  # v2.8.3 S2 successor (predecessor resolvable)
 
     if pool_name == "inloop":
         n_scenes = int(config["eval"]["in_loop"]["n"])

@@ -1,0 +1,74 @@
+{
+  "cps": {
+    "D1": 0.8290814341271521,
+    "R1": 0.8290814341271521,
+    "equal": true
+  },
+  "reach": {
+    "D1": 0.936,
+    "R1": 0.936,
+    "equal": true
+  },
+  "collision": {
+    "D1": 0.03,
+    "R1": 0.03,
+    "equal": true
+  },
+  "stuck": {
+    "D1": 0.0015,
+    "R1": 0.0015,
+    "equal": true
+  },
+  "timeout": {
+    "D1": 0.0325,
+    "R1": 0.0325,
+    "equal": true
+  },
+  "oob": {
+    "D1": 0.0,
+    "R1": 0.0,
+    "equal": true
+  },
+  "infeasibility": {
+    "D1": 0.09722855290949317,
+    "R1": 0.09722855290949317,
+    "equal": true
+  },
+  "saturation_rate": {
+    "D1": 0.43903316788073704,
+    "R1": 0.43903316788073704,
+    "equal": true
+  },
+  "coll_obstacle": {
+    "D1": 0.0115,
+    "R1": 0.0115,
+    "equal": true
+  },
+  "coll_band_lower": {
+    "D1": 0.0185,
+    "R1": 0.0185,
+    "equal": true
+  },
+  "coll_band_upper": {
+    "D1": 0.0,
+    "R1": 0.0,
+    "equal": true
+  },
+  "empty_share": {
+    "D1": 0.08279897341997085,
+    "R1": 0.08279897341997085,
+    "equal": true
+  },
+  "singular_share": {
+    "D1": 0.016004171564114395,
+    "R1": 0.016004171564114395,
+    "equal": true
+  },
+  "mean_proj_mag": {
+    "D1": 0.4480227217402025,
+    "R1": 0.4480227217402025,
+    "equal": true
+  },
+  "collision_scenes_identical": true,
+  "ALL_EQUAL": true
+}

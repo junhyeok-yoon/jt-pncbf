@@ -627,6 +627,15 @@ def spline_sobolev_loss(
             elif rollout_policy == "policy_detached":
                 if policy_net is None:
                     raise ValueError("sobolev rollout_policy='policy_detached' requires a policy_net.")
+                # v2.8.3 U-PREV AXIS: this sobolev rollout has no action history and is INACTIVE in the
+                # CTRL config (loss.sobolev is null). Rather than invent a u_prev convention for a path
+                # the axis was never registered against, refuse the combination loudly.
+                from src.common.observation import u_prev_feedback_on as _uprev_on
+                if _uprev_on(config):
+                    raise NotImplementedError(
+                        "loss.sobolev rollout_policy='policy_detached' is not supported with "
+                        "obs.u_prev_feedback (the policy is dim obs_dim+action_dim here)."
+                    )
                 u = policy_net(system.observation(x, scene)).detach()
             else:
                 raise ValueError(f"Unknown sobolev rollout_policy {rollout_policy!r}.")
@@ -787,7 +796,10 @@ def policy_bptt_loss(
     # v2.5.0 Stage B: safety channel = analytic V_M (maneuver) or learned make_h_fn (value, default) —
     # the SAME builder as the collection filter (one builder, two call sites).
     from src.common.maneuver_value import build_safety_h_fn
-    hardnet = HardNetFilter(system, build_safety_h_fn(system, config, value_net), config)
+    # v2.8.3 B2 GATE (site 2 of 3: policy BPTT). Same branch as train.py:207 via the single shared
+    # resolver; absent/"hardnet" -> HardNetFilter, byte-identical to the pre-gate construction.
+    from src.common.filter_backup import resolve_filter_cls
+    hardnet = resolve_filter_cls(config)(system, build_safety_h_fn(system, config, value_net), config)
 
     _zero_grads(value_net.parameters())
     with frozen_params(value_net):
@@ -817,12 +829,24 @@ def policy_bptt_loss(
         floor_recov_terms: list[Tensor] = []    # v2.8.2 cond(c): per-step prox-weighted tilt excess (floor recovery)
         agree_nonempty_masks: list[Tensor] = [] # v2.8.2 agree: per-step ~last_empty (only collected when w_agree>0)
         prev_deficit = x.new_zeros((x.shape[0], system.action_dim)) if obs_deficit else None
+        # v2.8.3 U-PREV AXIS. The BPTT window starts from a buffer state that carries NO action history,
+        # so step 0 of the window uses the t=0 convention: hover trim m*g/4 per rotor, NEVER zeros —
+        # the SAME value the collector and both eval paths use. Thereafter it is the previous step's
+        # EXECUTED u_safe, DETACHED: the axis opens an INPUT channel, it does not add a second gradient
+        # path through the filter (the deployed/collection paths are no_grad, so a gradient-carrying
+        # training path would be a train/deploy semantic mismatch).
+        from src.common.observation import append_u_prev, u_prev_feedback_on, u_prev_init
+        u_prev_on = u_prev_feedback_on(config)
+        prev_u = (u_prev_init(system, config, x.shape[0], device=x.device, dtype=x.dtype)
+                  if u_prev_on else None)
 
         for _ in range(bptt_t):
             obs = system.observation(x, scene)
             if obs_deficit:
                 obs = torch.cat([obs, prev_deficit], dim=1)   # prev_deficit already detached
                 deficit_feat_terms.append(torch.linalg.norm(prev_deficit, dim=1).mean())
+            if u_prev_on:
+                obs = append_u_prev(obs, prev_u)              # append_u_prev detaches
             u_nom = policy_net(obs)
             nominal_actions.append(u_nom)
             if getattr(policy_net, "last_pretanh", None) is not None:
@@ -872,6 +896,8 @@ def policy_bptt_loss(
             else:
                 u_safe, _ = hardnet(x, scene, u_nom, detach_coeffs=detach_coeffs)
             safe_actions.append(u_safe)
+            if u_prev_on:
+                prev_u = u_safe.detach()          # EXECUTED control, fed to the policy at the next step
             if w_agree > 0.0 and getattr(hardnet, "last_empty", None) is not None:
                 # v2.8.2 agree: capture the filter's OWN empty indicator at this step (box_aware path sets it).
                 # Detached: the mask gates the term but carries no gradient. Only runs when w_agree>0.
@@ -1041,6 +1067,10 @@ def policy_bptt_loss(
         obs0 = system.observation(batch.states.detach(), batch.scene)
         if obs_deficit:
             obs0 = torch.cat([obs0, obs0.new_zeros((obs0.shape[0], system.action_dim))], dim=1)
+        if u_prev_on:
+            # single-state site (no action history in the buffer row) -> the t=0 convention: hover trim
+            obs0 = append_u_prev(obs0, u_prev_init(system, config, obs0.shape[0],
+                                                   device=obs0.device, dtype=obs0.dtype))
         u0 = policy_net(obs0)
         x_next_unfiltered = rk4_step(system, batch.states.detach(), u0, dt)
         v_next = value_net.deployed_h(system.observation(x_next_unfiltered, batch.scene))

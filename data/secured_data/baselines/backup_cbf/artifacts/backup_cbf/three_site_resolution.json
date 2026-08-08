@@ -1,0 +1,29 @@
+{
+  "flag ABSENT": {
+    "expected": "HardNetFilter",
+    "sites": {
+      "train.py:207 (deployed)": "HardNetFilter",
+      "losses.py:790 (policy BPTT)": "HardNetFilter",
+      "collection.py:460 (collection)": "HardNetFilter",
+      "train.py:207 CONSTRUCTED": "HardNetFilter"
+    }
+  },
+  "flag hardnet": {
+    "expected": "HardNetFilter",
+    "sites": {
+      "train.py:207 (deployed)": "HardNetFilter",
+      "losses.py:790 (policy BPTT)": "HardNetFilter",
+      "collection.py:460 (collection)": "HardNetFilter",
+      "train.py:207 CONSTRUCTED": "HardNetFilter"
+    }
+  },
+  "flag backup_switching": {
+    "expected": "BackupSwitchingFilter",
+    "sites": {
+      "train.py:207 (deployed)": "BackupSwitchingFilter",
+      "losses.py:790 (policy BPTT)": "BackupSwitchingFilter",
+      "collection.py:460 (collection)": "BackupSwitchingFilter",
+      "train.py:207 CONSTRUCTED": "BackupSwitchingFilter"
+    }
+  }
+}

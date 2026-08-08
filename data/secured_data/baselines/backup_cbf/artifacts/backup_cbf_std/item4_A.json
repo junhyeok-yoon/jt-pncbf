@@ -1,0 +1,17 @@
+{
+  "T_b": 120,
+  "c_v": 0.3,
+  "n_states": 6000,
+  "chunks": 0,
+  "h_none_mean": 0.7492385506629944,
+  "h_none_median": 0.5966764092445374,
+  "h_rest_mean": 0.7491990327835083,
+  "h_rest_median": 0.5966764092445374,
+  "delta_mean": 3.954539351980202e-05,
+  "delta_median": 0.0,
+  "delta_p90": 9.110482642427087e-05,
+  "delta_max": 0.0014631152153015137,
+  "frac_terminal_was_binding": 0.3578333258628845,
+  "certified_frac_none": 0.8945000171661377,
+  "certified_frac_rest": 0.831166684627533
+}

@@ -1,0 +1,26 @@
+{
+  "mode": "smoke",
+  "tag": "",
+  "n_steps": 4,
+  "wall_s": 75.68839764595032,
+  "run_dir": "/home/junhyeok/MIT/jt-pncbf/data/runs/v2.8.3/set__20260807-113547__seed42/v2.8.3__jt__20260807-113547__seed42",
+  "filter_sites": {
+    "collection.py:460 (collection)": "BackupSwitchingFilter",
+    "losses.py:790 (policy BPTT)": "BackupSwitchingFilter",
+    "train.py:207 (deployed)": "BackupSwitchingFilter"
+  },
+  "all_three_sites_seen": true,
+  "result": {
+    "halted": false,
+    "halt_reason": null,
+    "last_policy_loss": 79.06944274902344,
+    "last_pi_grad_norm": 12.514653205871582,
+    "last_vs_grad_norm": 6.440213680267334,
+    "max_policy_grad_leak": 0.0
+  },
+  "kv0_value_step_assertion": "smoke stage FORCES k_v = 1 (train.py:538), overriding B2's K_V = 0; the value step smoke runs is NOT B2's configuration. Under B2's K_V = 0 the assertion is VACUOUS.",
+  "finished_at": "2026-08-07T15:37:03.168851+00:00",
+  "rate": {
+    "error": "only 1 metrics rows"
+  }
+}

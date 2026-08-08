@@ -9,12 +9,37 @@ the Strategist, and the Executor.
 ## Current state (dashboard)
 
 !!! note "STATUS — keep this section short and always current"
-    - Active version: **v2.8.3** — OPEN (2026-08-06). v2.8.2 CLOSED (2026-08-07): diagnostic version, no new SOTA and no bold change; every registered training axis was falsified, unscored or a specification error. See `docs/versions/v2.8.2_results.md`.
-    - Data layout: **repaired** and consolidated under `data/runs/<version>/`; `data/previous_runs/` **retired (gone)**. `.gitignore` `secured_data` negations restored; the canonical `-d2r` pools placed in `data/secured_data/pools/`. See `data_layout_repair.md`, `data_repair_part2.md`.
-    - Bold state (§2.4/§6.3): one bold row per system — double_integrator v2.3.0 0.8698 (flagged: `cps_v2` pending re-scoring), quadrotor_planar v2.7.1 0.9036, and **quadrotor_3d v2.8.0 0.7919 (NEW this close — first eligible per-rotor-plant baseline; dual scoring `cps_tilt60` 0.9206 / `cps_bandopen` 0.8818; secured `cf948104`)**. v2.7.2 0.9329 was released (pre-per-rotor plant, checkpoint does not load). The §6.3 presence check passes: every bold row's checkpoint is in `secured_data` (3-D `cf948104`, planar `3b27d691`, DI v2.3.0 seed42/99/12345).
-    - Open prerequisites: register the paper's headline scoring once (0.8793, bracket 0.8051/0.9078); name the pool wherever thrust-share is quoted; a canonical-pool measurement at the deployed fallback `{kstep, phases 1, k 3}`; a loadable per-rotor-plant baseline (S3); escalation to {42, 99, 12345}; the deck-assembly pipeline is not under version control.
-    - Open at close: D4 actuator-lag `rem:lag-null` (τ-sweep completed 4/30 cells, prediction unscored); multi-seed {42,99,12345} not escalated (v2.8.0 closes single-seed); `protocol_delta_dual_scoring.md` §X.1–X.6 is a draft awaiting the Researcher's install into `docs/protocol/`; theory.tex delivered (7 labels present, uncommitted).
-    - In flight: **v2.8.3 sigma-hazard repair-A arm** — `v2.8.3__jt__20260807-005658__seed42` (run dir `data/runs/v2.8.3/set__20260807-005658__seed42/`), step **6497** at this edit, PID 4090911, `halt_reason` null. Arm 1 (deployed two-valued alpha) COLLAPSED and is retained as a record only (`set__20260806-235320__seed42`, stopped step 4968, reach 0.0). Also open: the v2.8.2 dt axis arms dt=0.02 (died at step 10834 by shell teardown) and dt=0.01 (never launched, sequential behind 0.02).
+    - **v2.8.3 CLOSED (2026-08-08) — diagnostic version, NO SOTA candidate, NO bold change.** Six axes
+      were screened; none was adopted. Results in `docs/versions/v2.8.3_results.md`; close fact-gather
+      in `docs/versions/v2.8.3/close_facts.md`. **Active version: v2.8.4 — OPEN**, all three version
+      strings read `v2.8.4`; `docs/versions/v2.8.4/changes.md` is still an empty placeholder.
+    - **Pool of record: `fullcb`** — `eval_fullcb_quadrotor-3d-d2r_n2000_seed823456`, sha256
+      `3682a4e38ab3405d0afd4cfc119a73225eee4ef945cf4a58eed23b2eb6118517`, built from the canonical pool
+      under ONE screen (certain impossibility under the coupled, rollout-verified bound), re-verified
+      **0/2000**. All thirteen standing rows are re-scored on one cell on it (ledger, 2026-08-08).
+      Predecessor pools are unmodified and still resolve.
+    - Bold state (§2.4/§6.3) **UNCHANGED**: double_integrator v2.3.0 0.8698 (flagged, `cps_v2` pending
+      re-scoring), quadrotor_planar v2.7.1 0.9036, quadrotor_3d v2.8.0 0.7919 (secured `cf948104`).
+      **CLASSIFICATION FLAG for the Researcher:** R1 (CTRL + HardNet) scores **0.8291** on `fullcb`,
+      above the standing 0.7919, but on a **different pool stem** — a classification question, not a
+      promotion. Bold deliberately left unchanged and no v2.8.3 row is bolded.
+    - **Presence check (§6.3), every system:** v2.3.0 secured PRESENT (11 `.pt`); v2.8.0 secured PRESENT
+      (2 `.pt`); **quadrotor_planar v2.7.1 has NO `data/secured_data/v2.7.1/`** — its row cites a v2.7.0
+      artifact (`v2.7.0 iter-5 secured best.pt (3b27d691)`) and `data/secured_data/v2.7.0/` does exist.
+      Flagged, not repaired.
+    - **In flight: nothing.** No training or eval process is running; the GPU is idle. The sigma arm
+      (`…20260807-005658`) and the u_prev arm (`…20260807-115736`) both COMPLETED 30000 steps; four
+      further v2.8.3 run directories read `phase: training` but hold no process and are abandoned.
+    - Baselines: `data/baselines/{ppo, backup_cbf}/` and `data/secured_data/baselines/{ppo, backup_cbf}/`
+      populated. **backup_cbf has NO checkpoint of its own** — it is two filter cells over the CTRL
+      checkpoint; every citation carries the STATUS line *"hand-designed policy + online rollout
+      certificate (implicit/backup CBF); NOT an analytic closed-form CBF."* **PPO baseline ledger row
+      still not placed** (PF-3, awaits Researcher).
+    - Open, carried into v2.8.4: sigma C2 switching share (**no such column exists** in the evaluator);
+      1915/45/40 unreconciled; PF-2, PF-3, PF-4, PF-5 open; the box_klamp float32 residual (diagnosed,
+      unfixed by instruction); read (c)'s horizon inadmissibility (measured inert on the active window,
+      unrepaired in the code); `eval_batch_size` is still not a column of `eval_metrics.csv`.
+
 
 ## Map
 

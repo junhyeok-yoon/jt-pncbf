@@ -36,6 +36,16 @@ class _HardNetParams:
     empty_mode: str = "argmin"              # v2.8.2 M1 (prop:empty-prox): argmin (v2.8.0 discrete least-violating,
                                             # DEFAULT) | prox (continuous softmin over the SAME candidates)
     empty_prox_temp: float | None = None    # v2.8.2: prox continuity scale gamma; NO default (S5-derived; required iff prox)
+    # v2.8.4 BOX-FEASIBLE CLASS-K (additive, DEFAULT OFF => byte-identical row). The shipped row sets
+    # its demanded decay from alpha alone, with no knowledge of what the actuator box can deliver, so
+    # on rows where demand exceeds supply the half-space misses the box entirely and the projection
+    # falls through to a non-differentiable fallback. `box_klamp` clamps demand to kappa * supply at
+    # row-construction time, where supply(x) = -L_f h - min_{u in box} (L_g h . u) is computed with the
+    # SAME minimizing corner the emptiness test uses, so the empty branch vanishes by construction.
+    box_klamp_enabled: bool = False
+    box_klamp_kappa: float = 0.8
+    box_klamp_mode: str = "hard"            # hard = exact min; soft = softplus-min at box_klamp_beta
+    box_klamp_beta: float = 20.0            # soft-mode sharpness; ln2/beta is the worst-case extra retreat
     gamma_margin: float = 0.0               # v2.8.2: ROW-ONLY safety retreat (02_control §6.1). b = -L_f h - alpha*(h+gamma).
                                             # DEFAULT 0.0 => byte-identical to the pre-v2.8.2 row (guarded in _row_upper).
                                             # Deliberately NOT installed at h_fn level: h+gamma would move _base_alpha's
@@ -104,8 +114,20 @@ class HardNetFilter:
             )
             gap = torch.relu((h_peak - h.detach()) / self.params.lookahead_delta)
             alpha = alpha * (1.0 + self.params.lookahead_beta * gap)
-        row_upper = _row_upper(lf_h, alpha, h, self.params)
         bounds = self.system.u_bounds.to(device=u_nom.device, dtype=u_nom.dtype)
+        row_upper = _row_upper(lf_h, alpha, h, self.params, lg_h, bounds)
+        # v2.8.4 FLAG INVARIANCE (02_control §4): with the clamp on, the geometric intersection is
+        # non-empty by construction, so `empty_intersection` would read 0 and the infeasibility metric
+        # would silently change meaning. The flag is instead raised wherever the CLAMP BOUND, i.e. on
+        # exactly the rows the shipped row would have made empty. The metric keeps counting "the row
+        # asked for more decay than the box can deliver"; only the enforcement changes.
+        self.last_clamp_bound = None
+        if self.params.box_klamp_enabled:
+            _supply = _box_supply(lf_h, lg_h, bounds)
+            _g = float(self.params.gamma_margin)
+            _demand = alpha * h if _g == 0.0 else alpha * (h + _g)
+            _cap = torch.where(_supply >= 0.0, float(self.params.box_klamp_kappa) * _supply, _supply)
+            self.last_clamp_bound = (_demand > _cap).detach()
 
         projected = _base_projection(u_nom, lg_h, row_upper, bounds, self.params)
         lg_norm = torch.linalg.norm(lg_h, dim=1)
@@ -149,7 +171,8 @@ class HardNetFilter:
         # Built from the PRE-detach coeffs (so detach_filter_coeffs, which detaches the projection row, does not
         # also kill s_inf's policy gradient). Uses the base alpha (lookahead, off by default, is not folded in).
         self.last_a_live = _lg_live
-        self.last_b_live = _row_upper(_lf_live, _base_alpha(_h_live, self.params), _h_live, self.params)
+        self.last_b_live = _row_upper(_lf_live, _base_alpha(_h_live, self.params), _h_live, self.params,
+                                      _lg_live, bounds)
         # v2.7.1 Stage-1: k-step empty-branch ACTION fallback (eval-only, default off). On rows where the
         # geometric intersection is empty, replace the least-violating action with the first-phase control of
         # the two-phase k-step argmin. INVARIANT: the returned flag `singular | empty_intersection` is NOT
@@ -167,9 +190,11 @@ class HardNetFilter:
             box_projected[m] = u1_star.to(box_projected.dtype)
         self.last_empty = empty_intersection.detach()          # split logging (S1d); additive, not the flag
         self.last_singular = singular.detach()
+        _flag_second = (self.last_clamp_bound if self.params.box_klamp_enabled
+                        else empty_intersection)                # v2.8.4 flag invariance (see row site)
         if return_deficit_aux:
-            return box_projected, singular | empty_intersection, u_cbf_raw, singular
-        return box_projected, singular | empty_intersection
+            return box_projected, singular | _flag_second, u_cbf_raw, singular
+        return box_projected, singular | _flag_second
 
 
 def _cbf_terms(
@@ -514,6 +539,7 @@ def _hardnet_params(config: Mapping[str, Any]) -> _HardNetParams:
     _gm = config["filter"].get("gamma_margin", 0.0)
     if isinstance(_gm, dict):
         _gm = _gm.get(_sys, _gm.get("default", 0.0))
+    _bk = config["filter"].get("box_klamp") or {}   # v2.8.4: absent => enabled False => shipped row
     return _HardNetParams(
         epsilon=float(hardnet_cfg["epsilon"]),
         lg_reg_eps=float(config["filter"].get("lg_reg_eps", 0.0)),
@@ -533,10 +559,35 @@ def _hardnet_params(config: Mapping[str, Any]) -> _HardNetParams:
         empty_prox_temp=(None if config["filter"].get("empty_prox_temp") is None
                          else float(config["filter"]["empty_prox_temp"])),   # NO silent default (S5-derived)
         gamma_margin=float(_gm),
+        box_klamp_enabled=bool(_bk.get("enabled", False)),
+        box_klamp_kappa=float(_bk.get("kappa", 0.8)),
+        box_klamp_mode=str(_bk.get("mode", "hard")),
+        box_klamp_beta=float(_bk.get("beta", 20.0)),
     )
 
 
-def _row_upper(lf_h: Tensor, alpha: Tensor, h: Tensor, params: _HardNetParams) -> Tensor:
+def _box_supply(lf_h: Tensor, lg_h: Tensor, bounds: Tensor) -> Tensor:
+    """v2.8.4: s(x) = -L_f h - min_{u in box} (L_g h . u) — the LARGEST decay the box can deliver.
+
+    The minimizing corner is formed by the SAME rule `_empty_halfspace_box` uses (`where(a >= 0, low,
+    high)`), so `supply` and the emptiness test are two readings of one object: with
+    b = -L_f h - demand and min_lhs = -L_f h - supply, the row is empty iff min_lhs > b + tol iff
+    demand > supply + tol. Clamping demand to <= kappa*supply therefore removes the empty branch by
+    construction rather than by tuning."""
+    low = bounds[:, 0]
+    high = bounds[:, 1]
+    minimizing_corner = torch.where(lg_h >= 0.0, low, high)
+    return -lf_h - torch.sum(lg_h * minimizing_corner, dim=1)
+
+
+def _row_upper(
+    lf_h: Tensor,
+    alpha: Tensor,
+    h: Tensor,
+    params: _HardNetParams,
+    lg_h: Tensor | None = None,
+    bounds: Tensor | None = None,
+) -> Tensor:
     """THE single constructor for the deployed CBF row RHS b (02_control §6.1).
 
         b = -L_f h - alpha * (h + gamma_margin)
@@ -547,9 +598,33 @@ def _row_upper(lf_h: Tensor, alpha: Tensor, h: Tensor, params: _HardNetParams) -
     safe/unsafe region test. NOTE: 02_control §6.1 also specifies a V_SHIFT = 1e-3 term in h_eff which
     the shipped row has never carried; V_SHIFT is deliberately NOT added here (recorded divergence)."""
     g = float(params.gamma_margin)
-    if g == 0.0:
-        return -lf_h - alpha * h
-    return -lf_h - alpha * (h + g)
+    if not params.box_klamp_enabled:
+        # UNTOUCHED shipped path — byte-identical, not merely numerically equal.
+        if g == 0.0:
+            return -lf_h - alpha * h
+        return -lf_h - alpha * (h + g)
+
+    # v2.8.4 box-feasible class-K. demand_new = min(demand, kappa_eff * supply).
+    if lg_h is None or bounds is None:
+        raise ValueError("box_klamp requires lg_h and bounds at the row site.")
+    demand = alpha * h if g == 0.0 else alpha * (h + g)
+    supply = _box_supply(lf_h, lg_h, bounds)
+    # kappa < 1 keeps a strict interior margin where the box CAN supply the decay. Where supply < 0
+    # (the drift raises h faster than the box can oppose it, so no non-negative decay is achievable)
+    # shrinking by kappa would move the cap the WRONG way and re-open the empty branch; there the
+    # tightest feasible demand is exactly `supply`, which leaves the row exactly-feasible.
+    kappa = float(params.box_klamp_kappa)
+    cap = torch.where(supply >= 0.0, kappa * supply, supply)
+    if params.box_klamp_mode == "hard":
+        demand_new = torch.minimum(demand, cap)
+    elif params.box_klamp_mode == "soft":
+        # softplus-min: -(1/beta) log(exp(-beta a) + exp(-beta b)) <= min(a,b) - ln2/beta, so the soft
+        # mode is strictly MORE conservative than hard and cannot re-open the empty branch.
+        beta = float(params.box_klamp_beta)
+        demand_new = -torch.logaddexp(-beta * demand, -beta * cap) / beta
+    else:
+        raise ValueError(f"filter.box_klamp.mode must be hard|soft, got {params.box_klamp_mode!r}.")
+    return -lf_h - demand_new
 
 
 def _base_alpha(h: Tensor, params: _HardNetParams) -> Tensor:

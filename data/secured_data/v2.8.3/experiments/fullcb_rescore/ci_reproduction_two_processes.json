@@ -1,0 +1,30 @@
+{
+  "proc_a": {
+    "pid": 3253098,
+    "PYTHONHASHSEED": "<unset>",
+    "cps_ci": [
+      0.8018119728742952,
+      0.8557535977311803
+    ],
+    "reach_ci": [
+      0.9245,
+      0.9465
+    ],
+    "hash_of_label_this_process": 1789899106
+  },
+  "proc_b": {
+    "pid": 3253135,
+    "PYTHONHASHSEED": "<unset>",
+    "cps_ci": [
+      0.8018119728742952,
+      0.8557535977311803
+    ],
+    "reach_ci": [
+      0.9245,
+      0.9465
+    ],
+    "hash_of_label_this_process": 1243183977
+  },
+  "cis_identical_across_processes": true,
+  "demonstrates": "boot_ci with a fixed integer seed reproduces exactly across processes, while abs(hash(label)) does not"
+}

@@ -1,0 +1,89 @@
+{
+  "run_dir": "data/runs/v2.8.3/set__20260807-113741__seed42/v2.8.3__jt__20260807-113741__seed42",
+  "metrics_mtime": "2026-08-07T11:56:38.192673",
+  "budget_optimizer_steps": 30000,
+  "intervals_all": [
+    {
+      "from": 0,
+      "to": 200,
+      "s_per_step": 1.9112233293056489
+    },
+    {
+      "from": 200,
+      "to": 400,
+      "s_per_step": 2.1500207889080047
+    },
+    {
+      "from": 400,
+      "to": 600,
+      "s_per_step": 1.6240207242965699
+    }
+  ],
+  "intervals_used_post_warmup": [
+    {
+      "from": 200,
+      "to": 400,
+      "s_per_step": 2.1500207889080047
+    },
+    {
+      "from": 400,
+      "to": 600,
+      "s_per_step": 1.6240207242965699
+    }
+  ],
+  "post_warmup_steps_measured": 400,
+  "s_per_step_mean": 1.8870207566022872,
+  "s_per_step_min": 1.6240207242965699,
+  "s_per_step_max": 2.1500207889080047,
+  "discarded_interval": {
+    "from": 0,
+    "to": 200,
+    "s_per_step": 1.9112233293056489
+  },
+  "discard_reason": "interval 0 carries process start, network build, value-init load, cuDNN autotune and the first collection; it is not the steady-state rate.",
+  "train_phase_projection_h_mean": 15.725172971685728,
+  "train_phase_projection_h_max": 17.916839907566708,
+  "n_inloop_evals": 20,
+  "ctrl_total_wall_h": 9.758043615486887,
+  "ctrl_t_eval_total_h": 2.301500931580861,
+  "ctrl_train_s_per_step": 0.8947851220687231,
+  "b2_over_ctrl_train_rate": 2.108909401890297,
+  "inloop_eval_s_measured_b2": 22.3,
+  "inloop_eval_h_measured_b2": 0.1238888888888889,
+  "inloop_eval_h_ctrl_bound": 2.301500931580861,
+  "projected_total_h_mean": 15.849061860574617,
+  "projected_total_h_max_conservative": 20.21834083914757,
+  "cap_h": 72.0,
+  "verdict": "PROCEED",
+  "note": "The rate segment sits below the 1500-step eval cadence, so the measured s/step is the TRAIN phase (collect + BPTT) only; the eval term is added separately from CTRL's own measured t_eval plus the synchronized per-call backup-vs-HardNet delta at the in-loop eval batch. Both projections are reported, mean and max over the measured intervals.",
+  "written_at": "2026-08-07T11:58:52-04:00",
+  "contention_during_measurement": {
+    "segment_started": "2026-08-07 11:37:41 -0400",
+    "solo_window": "steps 0->200 (11:37:45 - 11:44:07). nvidia-smi showed ONE compute app (this arm) until 11:41:46.",
+    "pre_contention_s_per_step": 1.9112233293056489,
+    "pre_contention_caveat": "the 0->200 interval also carries process start / net build / value-init load / cuDNN autotune, so 1.911 s/step is an UPPER bound on the solo steady-state rate, not a clean one.",
+    "observed_neighbours": [
+      {
+        "at": "2026-08-07T11:41:46-0400",
+        "pid": 1263844,
+        "mib": 1290,
+        "what": "u_prev arm flag-off parity segment (exited 11:42:2x)"
+      },
+      {
+        "at": "2026-08-07T11:54:35-0400",
+        "pid": 1298032,
+        "mib": 520,
+        "what": "u_prev arm smoke"
+      }
+    ],
+    "reading": "intervals 200->400 (2.150) and 400->600 (1.624) each partially overlapped a short u_prev segment; the spread between them (32%) is larger than any contention signal this window can resolve, so the arm's reference rate is taken as the post-warmup MEAN 1.887 s/step and the >25% degradation test is run against that.",
+    "degradation_baseline_used": 1.887
+  },
+  "correction_to_part_I_gate_2": {
+    "part_I_projection_h": "40.8 - 56 (scaled from a synthetic per-call microbenchmark)",
+    "measured_h": "15.85 (mean) - 20.22 (conservative)",
+    "measured_bptt_ratio_vs_ctrl": 2.11,
+    "part_I_assumed_bptt_ratio": 5.77,
+    "why": "Part I scaled CTRL's phase decomposition by a per-call ratio measured on a synthetic batch. A real B2 training segment gives 2.11x CTRL's train rate, not 5.77x. The Part I number is superseded by measurement, not by re-registration of the cap."
+  }
+}

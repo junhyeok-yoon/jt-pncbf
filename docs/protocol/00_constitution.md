@@ -9,6 +9,27 @@ sibling documents and are referenced, never duplicated, here.
 Direct edits to any protocol document are recorded as a one-line entry in
 `docs/protocol/CHANGELOG.md` (date, file, summary of the change).
 
+## Purpose
+
+The protocol exists to hold four things stable across every change of session, actor, and
+version.
+
+- **Definitions.** The terms the work is stated in mean one thing, everywhere, and are
+  defined once in the document that owns them.
+- **Structure and governance.** Who decides what, how a decision is recorded, and what
+  each actor may and may not do — so authority is never ambiguous and no decision is taken
+  by whoever happens to be reasoning at the time.
+- **Continuity.** A new instance of any actor resumes from this repository rather than from
+  anyone's memory. Nothing that matters lives only in a session.
+- **Direction and philosophy.** How work is ordered, what counts as evidence, and how a
+  result is judged. These are the Researcher's, and the protocol carries them forward
+  unchanged so that the research keeps its character as it grows.
+
+It is not a record of what went wrong. Where a rule exists it states what the system is and
+how the work is done, on its own merits; the reasoning that produced it belongs to the
+build-logs and the per-version documents (§3 Prohibition 3). The test of these documents is
+that a reader holding them and nothing else can carry out the work correctly.
+
 ## Research scope and framework lineage
 
 The work sits in a three-step lineage. **PNCBF** (So et al., ICRA 2024) learns a neural CBF
@@ -137,12 +158,14 @@ The engineering disciplines that keep results attributable and the codebase main
 - **Reproduce before innovating.** When a reference implementation exists, reproduce it
   faithfully first. Original design choices usually have reasons. Add novelty only on top of
   a reproduced baseline.
-- **Re-derive closed-form components when the plant changes.** A closed-form component whose
-  derivation used a specific state or action dimension can silently cease to be correct at
-  another dimension — a box-projection enumeration exact only for action dimension $\le 2$,
-  an observation encoding correct only in the absence of gravity. When a lineage changes the
-  plant, such components must be re-derived, not re-run. Re-running a dimension-specific
-  derivation after a dimension change is a correctness failure, not reuse.
+- **Re-derive a closed-form component when its domain changes.** A closed-form component
+  carries the assumptions its derivation used — a state or action dimension, a plant, a set
+  of initial conditions, a horizon — and silently ceases to be correct outside them: a
+  box-projection enumeration exact only for action dimension $\le 2$; an observation
+  encoding correct only in the absence of gravity; a reachability bound whose containment
+  argument assumes the start of a horizon, evaluated at a point inside it. When a lineage
+  changes the plant, or a component is applied outside its assumed domain, it is re-derived
+  rather than re-run, and the assumptions that did not survive the move are named.
 - **One axis per version (recommended, not mandatory).** A version should ideally introduce
   one new mechanism, since stacking independent changes makes results unattributable. This
   is a recommendation, not a hard rule: minor parameter changes may legitimately accompany a

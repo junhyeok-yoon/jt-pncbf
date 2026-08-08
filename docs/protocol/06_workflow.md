@@ -51,10 +51,12 @@ The Researcher decides to start a new version (`vX.Y.Z`). The Strategist drafts 
 
 **When the bump happens.** The bump to the next version string is performed immediately after
 the preceding version's push, not at the next version's close. The close of `vX.Y.Z` therefore
-asserts that `src/_version.py`, `pyproject.toml`, and `exp_config.yaml` `run.version` all read
-`vX.Y.Z`; a mismatch is reported as a discrepancy and resolved before the close commit, because
-an artifact produced under a stale string is indistinguishable at run level from the previous
-version's.
+asserts that every artifact the version claims was stamped with that string, read from each run's
+own `config.yaml` (`05_code` §3) rather than from the working tree, whose current contents say
+nothing about what a past artifact carries. A tree already holding a later string is recorded,
+since a successor version may be open; an artifact filed under one version and stamped with
+another is the defect the assertion exists to catch, because such a run is indistinguishable at
+run level from the other version's.
 
 **Version-string bump checklist.** When the version number itself changes, the version
 string is encoded in several places and must be updated together so that new run-ids,
@@ -147,7 +149,9 @@ Executor directly, recording only the run-id and one line of reason in the activ
 build-log. This keeps `data/` from accumulating meaningless trees. The rule is one-sided:
 any run that produced information stays — a completed run, a run stopped by a registered
 falsifier or halt, a failed run whose failure carries a recorded conclusion or lesson, and
-anything a document cites, are records and are never deleted under this clause. When in
+anything a document cites, are records and are never deleted under this clause. The citation
+test reads documents other than the deletion record itself, and a run-id appearing only in an
+inventory — an enumeration carrying no number, verdict or lesson — is not a citation. When in
 doubt, keep.
 
 **`cps` is not commensurable across systems.** Systems differ in dynamics, control bounds, and

@@ -1,0 +1,176 @@
+{
+  "T_b": 30,
+  "eps": 0.0,
+  "k_d": 8.0,
+  "kp_att": 320.0,
+  "kd_att": 64.0,
+  "long_steps": 200,
+  "ic_list": [
+    121,
+    250,
+    350,
+    473,
+    544,
+    836,
+    870,
+    1055,
+    1132,
+    1289,
+    1407,
+    1410,
+    1686,
+    1701,
+    1819,
+    1928
+  ],
+  "per_ic": [
+    {
+      "scene": 121,
+      "m0": 0.2315537929534912,
+      "m_min_Tb": -0.4006012976169586,
+      "m_min_200": -1.0994024276733398,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.41492801904678345
+    },
+    {
+      "scene": 250,
+      "m0": 0.2817518711090088,
+      "m_min_Tb": 0.2817518711090088,
+      "m_min_200": 0.2817518711090088,
+      "collision_free_Tb": true,
+      "collision_free_200": true,
+      "h_b_at_IC": 0.2817518711090088
+    },
+    {
+      "scene": 350,
+      "m0": 0.31178197264671326,
+      "m_min_Tb": -0.2218632847070694,
+      "m_min_200": -0.2218632847070694,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.2218632847070694
+    },
+    {
+      "scene": 473,
+      "m0": 0.42180001735687256,
+      "m_min_Tb": -0.6614251732826233,
+      "m_min_200": -0.6614251732826233,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.6614251732826233
+    },
+    {
+      "scene": 544,
+      "m0": 0.24040210247039795,
+      "m_min_Tb": -0.3522855341434479,
+      "m_min_200": -0.3522855341434479,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.3522855341434479
+    },
+    {
+      "scene": 836,
+      "m0": 0.22523868083953857,
+      "m_min_Tb": -0.2275153398513794,
+      "m_min_200": -0.24139153957366943,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.24833065271377563
+    },
+    {
+      "scene": 870,
+      "m0": 0.16313496232032776,
+      "m_min_Tb": -0.1964510679244995,
+      "m_min_200": -0.1964510679244995,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.1964510679244995
+    },
+    {
+      "scene": 1055,
+      "m0": 0.2509770393371582,
+      "m_min_Tb": -0.20171374082565308,
+      "m_min_200": -0.20171374082565308,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.20171374082565308
+    },
+    {
+      "scene": 1132,
+      "m0": 0.3232090175151825,
+      "m_min_Tb": -0.36557990312576294,
+      "m_min_200": -0.9274435043334961,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.45553678274154663
+    },
+    {
+      "scene": 1289,
+      "m0": 0.3751027584075928,
+      "m_min_Tb": -0.44159337878227234,
+      "m_min_200": -0.44159337878227234,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.44159337878227234
+    },
+    {
+      "scene": 1407,
+      "m0": 0.06069540977478027,
+      "m_min_Tb": -0.5254678726196289,
+      "m_min_200": -1.3335790634155273,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.5986228585243225
+    },
+    {
+      "scene": 1410,
+      "m0": 0.3971797823905945,
+      "m_min_Tb": -0.3339434862136841,
+      "m_min_200": -0.3339434862136841,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.3339434862136841
+    },
+    {
+      "scene": 1686,
+      "m0": 0.1841549277305603,
+      "m_min_Tb": -0.7003908157348633,
+      "m_min_200": -0.7003908157348633,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.7003908157348633
+    },
+    {
+      "scene": 1701,
+      "m0": 0.1824493408203125,
+      "m_min_Tb": -0.7926349639892578,
+      "m_min_200": -1.669158935546875,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.8752768635749817
+    },
+    {
+      "scene": 1819,
+      "m0": 0.26670581102371216,
+      "m_min_Tb": -0.5522744059562683,
+      "m_min_200": -1.299668312072754,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.5522744059562683
+    },
+    {
+      "scene": 1928,
+      "m0": 0.21719509363174438,
+      "m_min_Tb": -0.35728591680526733,
+      "m_min_200": -0.35728591680526733,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.35728591680526733
+    }
+  ],
+  "collision_free_Tb": 1,
+  "collision_free_200": 1,
+  "certified_at_IC": 1,
+  "n_ic": 16
+}

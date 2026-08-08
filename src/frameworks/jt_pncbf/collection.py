@@ -11,6 +11,7 @@ from src.common.filter_cbfqp import CBFQPFilter
 from src.common.filter_hardnet import HardNetFilter
 from src.common.rk4 import rk4_step
 from src.common.signed_h import signed_h
+from src.common.observation import u_prev_feedback_on
 from src.common.quadrotor_barrier import value_target_barrier
 from src.common.system import System
 from src.common.value_net import ValueNetEnsemble, make_h_fn
@@ -116,6 +117,8 @@ def collect_policy_rollouts(
         sigma=sigma,
         torch_generator=torch_generator,
         obs_deficit=bool(config.get("loss", {}).get("policy", {}).get("obs_deficit_feedback", False)),  # type: ignore[union-attr]
+        u_prev_on=u_prev_feedback_on(config),   # v2.8.3 U-PREV AXIS (default off)
+        config=config,
     )
     with torch.no_grad():
         # v2.6.0: the value target barrier is h_star (phi + c v^T Re) for the quadrotor, phi for DI/uni.
@@ -149,8 +152,18 @@ def _collect_policy_rollouts_continuing(
     filter_layer = _make_collection_filter(collection_filter, system, value_net, config)
     bounds = system.u_bounds.to(device=storage_device, dtype=storage_dtype)
 
+    # v2.8.3 U-PREV AXIS. This is the collection site the CTRL config actually uses
+    # (collection.collector == "continuing"). u_safe(t-1) is held PER ROW on the persistent
+    # ContinuingState, so it survives across rounds exactly as `state.x` does; `advance_round` resets a
+    # row's channel to the hover trim when that row's episode is refilled (R1/R2/R3 trigger), which is
+    # the t=0 convention applied at the only place a new episode begins in this collector.
+    from src.common.observation import append_u_prev, u_prev_feedback_on as _uprev_on
+    u_prev_on = _uprev_on(config)
+
     def step_fn(x: Tensor, batched_scene) -> Tensor:
         obs = system.observation(x, batched_scene)
+        if u_prev_on:
+            obs = append_u_prev(obs, state.u_prev)
         u_base = policy_net(obs)
         if sigma > 0.0:
             noise = torch.randn(u_base.shape, generator=torch_generator, device=u_base.device,
@@ -159,7 +172,11 @@ def _collect_policy_rollouts_continuing(
             noise = torch.zeros_like(u_base)
         u_tilde = torch.clamp(u_base + noise, min=bounds[:, 0], max=bounds[:, 1])
         filtered = filter_layer(x.detach(), batched_scene, u_tilde.detach())
-        return filtered[0].detach()
+        u_safe = filtered[0].detach()
+        if u_prev_on:
+            # clone: advance_round mutates rows of state.u_prev on refill, and u_safe is still in use
+            state.u_prev = u_safe.clone()         # EXECUTED control, read by the next step's obs
+        return u_safe
 
     def h_batch_fn(states_g: Tensor, batched_scene) -> Tensor:  # states_g [L, G, D] -> h [L, G]
         return value_target_barrier(system, states_g, batched_scene, config)
@@ -170,6 +187,12 @@ def _collect_policy_rollouts_continuing(
                                        storage_device, storage_dtype, inject_frac=inject_frac,
                                        system_name=system.name)
         buffer._cont_state = state
+    if u_prev_on and getattr(state, "u_prev", None) is None:
+        # every row starts at t=0 -> hover trim m*g/4 per rotor, NEVER zeros
+        from src.common.observation import u_prev_init, u_prev_trim
+        state.u_prev = u_prev_init(system, config, state.x.shape[0],
+                                   device=state.x.device, dtype=state.x.dtype)
+        state.u_prev_reset = float(u_prev_trim(system, config))
     st = advance_round(state, round_length=max_steps, step_fn=step_fn, h_batch_fn=h_batch_fn,
                        scene_sampler=scene_sampler, rng=rng, config=config, buffer=buffer, dt=dt,
                        inject_frac=inject_frac, system_name=system.name)
@@ -284,6 +307,8 @@ def _rollout_for_collection(
     sigma: float,
     torch_generator: torch.Generator | None,
     obs_deficit: bool = False,
+    u_prev_on: bool = False,
+    config: Mapping[str, object] | None = None,
 ) -> tuple[Tensor, Tensor, Tensor]:
     x = system.wrap_state(x0.detach())
     states = [x]
@@ -295,12 +320,21 @@ def _rollout_for_collection(
     prev_deficit = (
         x.new_zeros((x.shape[0], system.action_dim)) if obs_deficit else None
     )
+    # v2.8.3 U-PREV AXIS: u_safe(t-1) appended to the policy observation. This rollout starts a FRESH
+    # episode per row, so t=0 is the hover trim (m*g/4 per rotor) — NEVER zeros.
+    from src.common.observation import append_u_prev, u_prev_init
+    prev_u = (
+        u_prev_init(system, config, x.shape[0], device=x.device, dtype=x.dtype)
+        if u_prev_on else None
+    )
 
     for _ in range(max_steps):
         with torch.no_grad():
             obs = system.observation(x, scene)
             if obs_deficit:
                 obs = torch.cat([obs, prev_deficit], dim=1)
+            if u_prev_on:
+                obs = append_u_prev(obs, prev_u)
             u_base = policy_net(obs)
             if sigma > 0.0:
                 noise = torch.randn(
@@ -325,6 +359,8 @@ def _rollout_for_collection(
                 infeasible = filtered[1]
 
         u_safe = u_safe.detach()
+        if u_prev_on:
+            prev_u = u_safe                       # EXECUTED control, fed to the policy next step
         infeasible_steps.append(infeasible.detach())
         projection_steps.append(torch.linalg.norm(u_safe - u_tilde, dim=-1).detach())
         with torch.no_grad():
@@ -425,6 +461,8 @@ def collect_precursors(
         system=system, policy_net=policy_net, filter_layer=filter_layer, scene=batched_scene, x0=x0,
         max_steps=max_steps, dt=dt, sigma=0.0, torch_generator=torch_generator,
         obs_deficit=bool(config.get("loss", {}).get("policy", {}).get("obs_deficit_feedback", False)),  # type: ignore[union-attr]
+        u_prev_on=u_prev_feedback_on(config),   # v2.8.3 U-PREV AXIS (default off)
+        config=config,
     )
     with torch.no_grad():
         h_values = value_target_barrier(system, states_t, batched_scene, config)
@@ -456,6 +494,20 @@ def _make_collection_filter(
     # collection and BPTT filter with the SAME h_fn. Value path (default) is bit-identical.
     from src.common.maneuver_value import build_safety_h_fn
     h_fn = build_safety_h_fn(system, config, value_net)
+    # v2.8.3 B2 GATE (site 3 of 3: collection). `filter.type` selects the ENFORCEMENT FORM; the
+    # pre-existing `collection_filter` key selects the QP realization. They compose: with filter.type
+    # absent/"hardnet" this is byte-identical to the pre-gate construction. "backup_switching" +
+    # "cbf_qp" is a genuine conflict (two different enforcement forms requested) and raises rather
+    # than silently picking one.
+    from src.common.filter_backup import resolve_filter_cls
+    _cls = resolve_filter_cls(config)
+    if _cls is not HardNetFilter:
+        if collection_filter != "hardnet":
+            raise ValueError(
+                f"filter.type={(config.get('filter') or {}).get('type')!r} conflicts with "
+                f"collection.jt.filter={collection_filter!r}; the backup form has no QP realization."
+            )
+        return _cls(system, h_fn, config)
     if collection_filter == "hardnet":
         return HardNetFilter(system, h_fn, config)
     if collection_filter == "cbf_qp":

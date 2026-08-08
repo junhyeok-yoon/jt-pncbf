@@ -8,6 +8,78 @@ import torch
 Tensor = torch.Tensor
 
 
+# ---------------------------------------------------------------------------------------------------
+# v2.8.3 U-PREV AXIS — the previous EXECUTED control as a POLICY-observation channel (quadrotor_3d only).
+#
+# WHY. On the empty branch the BPTT gradient through the filter dies (`rem:empty-grad`, `prop:sel(a)`),
+# and the policy input carries nothing about the filter — so on exactly the states the filter rejects the
+# policy has NO channel of any kind. Appending u_safe(t-1) opens an INPUT channel there.
+#
+# WHAT. obs 34 -> 38 for the POLICY ONLY: `[obs(34), u_safe(t-1) (4)]`, per-rotor, RAW NEWTONS (no
+# normalisation, no centring — the same units the actuator box [f_rotor_min, f_rotor_max] is written in).
+# `system.observation` itself is UNCHANGED at 34: the VALUE net V_S must stay a function of the state
+# alone (the HardNet filter differentiates V_S w.r.t. x to form L_f/L_g, and the value target is
+# max_t h(x_t) with h a pure state function), so only the policy net widens.
+#
+# t = 0 CONVENTION. HOVER TRIM m*g/4 per rotor, NOT zeros. u lives in the box [0, f_rotor_max]^4 and the
+# thrust that holds altitude is m*g split over 4 rotors, so the trim is the physically neutral "no
+# previous action" default and the only value continuous with a hovering history. A zero-centred default
+# would repeat the `L_a` / `mu_u` mis-specification (treating 0 as the neutral input for a strictly
+# non-negative rotor-force channel). Provenance of the constants: src/configs/exp_config.yaml:46
+# (mass: 1.0) and :47 (gravity: 9.81) under env.quadrotor_3d -> 1.0 * 9.81 / 4 = 2.4525 N.
+#
+# The SAME convention holds in training, collection, in-loop eval and final eval; every site asserts it.
+U_PREV_SYSTEM = "quadrotor_3d"
+
+
+def u_prev_feedback_on(config: Any) -> bool:
+    """The axis flag. Absent (every shipped config and every existing checkpoint) -> False -> the
+    untouched dim-34 policy path, byte-identical to CTRL."""
+    return bool((config.get("obs", {}) or {}).get("u_prev_feedback", False))
+
+
+def u_prev_trim(system: Any, config: Any) -> float:
+    """t=0 default per rotor: hover trim m*g/4 (see the axis note above)."""
+    phys = config["env"][U_PREV_SYSTEM]
+    trim = float(phys["mass"]) * float(phys["gravity"]) / float(system.action_dim)
+    if not (trim > 0.0):
+        raise ValueError(f"u_prev trim must be positive (got {trim}); a zero default is NOT the axis.")
+    return trim
+
+
+def u_prev_extra_dim(system: Any, config: Any) -> int:
+    """Extra POLICY input columns contributed by the axis (0 when off). quadrotor_3d ONLY."""
+    if not u_prev_feedback_on(config):
+        return 0
+    if system.name != U_PREV_SYSTEM:
+        raise ValueError(
+            f"obs.u_prev_feedback is quadrotor_3d-only but system is {system.name!r}."
+        )
+    if u_prev_feedback_on(config) and bool(
+        (config.get("loss", {}) or {}).get("policy", {}).get("obs_deficit_feedback", False)
+    ):
+        raise ValueError(
+            "obs.u_prev_feedback and loss.policy.obs_deficit_feedback both append action_dim columns "
+            "to the policy observation; enabling both is ambiguous. Enable exactly one."
+        )
+    return int(system.action_dim)
+
+
+def u_prev_init(system: Any, config: Any, batch: int, *, device: Any, dtype: Any) -> Tensor:
+    """[batch, action_dim] filled with the hover trim — the t=0 value of the u_prev channel."""
+    return torch.full((int(batch), int(system.action_dim)), u_prev_trim(system, config),
+                      device=device, dtype=dtype)
+
+
+def append_u_prev(obs: Tensor, u_prev: Tensor) -> Tensor:
+    """[B,34] (+) [B,4] -> [B,38]. `u_prev` is always DETACHED by the caller: the axis opens an INPUT
+    channel, not a second gradient path through the filter (the deployed and collection paths are
+    no_grad, so a gradient-carrying training path would be a train/deploy semantic mismatch)."""
+    if u_prev.shape[0] != obs.shape[0]:
+        raise ValueError(f"u_prev batch {tuple(u_prev.shape)} != obs batch {tuple(obs.shape)}.")
+    return torch.cat([obs, u_prev.detach().to(device=obs.device, dtype=obs.dtype)], dim=1)
+
+
 def scene_obstacle_tensors(
     scene: Any,
     device: torch.device,

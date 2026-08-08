@@ -1,0 +1,17 @@
+{
+  "T_b": 20,
+  "long_steps": 80,
+  "rest_speed_thresh": 0.1,
+  "n_states_sampled": 6000,
+  "n_certified": 5351,
+  "certified_frac": 0.8918333333333334,
+  "invariance_frac_at_Tb": 1.0,
+  "invariance_frac_at_long": 0.997383666604373,
+  "n_violating_beyond_Tb": 14,
+  "first_violation_step_median": 26.0,
+  "first_violation_step_p10": 22.6,
+  "speed_at_Tb_mean": 0.05171423405408859,
+  "speed_at_Tb_median": 0.0028830887749791145,
+  "frac_at_rest_at_Tb": 0.813492805083162,
+  "frac_at_rest_at_long": 1.0
+}

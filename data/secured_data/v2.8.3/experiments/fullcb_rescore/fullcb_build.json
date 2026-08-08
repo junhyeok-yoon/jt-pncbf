@@ -1,0 +1,311 @@
+{
+  "what": "v2.8.3 ITEM 1 \u2014 fullcb: successor FULL pool screened ONLY by the coupled bound",
+  "ancestor": {
+    "stem": "eval_full_quadrotor-3d-d2r_n2000_seed23456",
+    "sha256": "0ef3751bd4d095d8658df92cca009d250d5b2f01d8325aad7dc262e2aadd4695"
+  },
+  "new_pool": {
+    "stem": "eval_fullcb_quadrotor-3d-d2r_n2000_seed823456",
+    "path": "/home/junhyeok/MIT/jt-pncbf/data/secured_data/pools/eval_fullcb_quadrotor-3d-d2r_n2000_seed823456.pkl",
+    "sha256": "3682a4e38ab3405d0afd4cfc119a73225eee4ef945cf4a58eed23b2eb6118517",
+    "n_scenes": 2000,
+    "seed": 823456
+  },
+  "canonical_bound": {
+    "expected_cross_check": 33,
+    "observed": 33,
+    "agrees": true,
+    "removed_indices": [
+      3,
+      8,
+      52,
+      58,
+      109,
+      161,
+      180,
+      208,
+      213,
+      253,
+      367,
+      452,
+      454,
+      494,
+      701,
+      839,
+      872,
+      894,
+      925,
+      936,
+      945,
+      982,
+      1000,
+      1216,
+      1240,
+      1275,
+      1394,
+      1491,
+      1595,
+      1614,
+      1712,
+      1792,
+      1977
+    ],
+    "by_binding_class": {
+      "obstacle": 0,
+      "floor": 32,
+      "ceiling": 1
+    },
+    "note": "a different count is REPORTED with the differing indices, not resolved and not adjusted to; nothing in the build depends on the expectation"
+  },
+  "topups": {
+    "n": 33,
+    "n_draws": 34,
+    "n_rejected_coupled": 1,
+    "min_margin_over_topups": 0.09881584908218333,
+    "records": [
+      {
+        "draw_index": 1,
+        "coupled_margin_m": 0.283075102683501,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 66.50148734611619,
+        "n_active_obstacles": 8
+      },
+      {
+        "draw_index": 2,
+        "coupled_margin_m": 0.5636948364154533,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 138.113225502174,
+        "n_active_obstacles": 10
+      },
+      {
+        "draw_index": 3,
+        "coupled_margin_m": 1.1488945042003467,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 108.57941548529622,
+        "n_active_obstacles": 6
+      },
+      {
+        "draw_index": 4,
+        "coupled_margin_m": 0.17067703555377367,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 66.63820890542875,
+        "n_active_obstacles": 5
+      },
+      {
+        "draw_index": 5,
+        "coupled_margin_m": 0.6444153950239712,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 80.35168174793296,
+        "n_active_obstacles": 8
+      },
+      {
+        "draw_index": 6,
+        "coupled_margin_m": 0.7322309467415482,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 112.7357772804233,
+        "n_active_obstacles": 2
+      },
+      {
+        "draw_index": 7,
+        "coupled_margin_m": 0.8203554685409671,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 83.45547446666804,
+        "n_active_obstacles": 16
+      },
+      {
+        "draw_index": 8,
+        "coupled_margin_m": 0.35420471994855185,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 99.48680240084929,
+        "n_active_obstacles": 5
+      },
+      {
+        "draw_index": 9,
+        "coupled_margin_m": 0.33562811566634365,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 85.4342420409887,
+        "n_active_obstacles": 6
+      },
+      {
+        "draw_index": 10,
+        "coupled_margin_m": 0.09881584908218333,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 64.05049150511643,
+        "n_active_obstacles": 13
+      },
+      {
+        "draw_index": 11,
+        "coupled_margin_m": 0.9505771518960373,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 84.69989749907884,
+        "n_active_obstacles": 14
+      },
+      {
+        "draw_index": 12,
+        "coupled_margin_m": 0.6167014740501143,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 115.30080662906971,
+        "n_active_obstacles": 12
+      },
+      {
+        "draw_index": 13,
+        "coupled_margin_m": 0.7425904743398759,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 43.70011780070801,
+        "n_active_obstacles": 11
+      },
+      {
+        "draw_index": 14,
+        "coupled_margin_m": 0.32982215717603247,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 55.16905119745805,
+        "n_active_obstacles": 11
+      },
+      {
+        "draw_index": 15,
+        "coupled_margin_m": 0.41640355829285136,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 134.300520816424,
+        "n_active_obstacles": 2
+      },
+      {
+        "draw_index": 16,
+        "coupled_margin_m": 0.6855245758329427,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 78.70409812955799,
+        "n_active_obstacles": 4
+      },
+      {
+        "draw_index": 17,
+        "coupled_margin_m": 1.8578019163070172,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 144.65352026215086,
+        "n_active_obstacles": 10
+      },
+      {
+        "draw_index": 18,
+        "coupled_margin_m": 1.0029133134621744,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 41.41521536265443,
+        "n_active_obstacles": 11
+      },
+      {
+        "draw_index": 19,
+        "coupled_margin_m": 1.1624378647186846,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 102.1246832717179,
+        "n_active_obstacles": 9
+      },
+      {
+        "draw_index": 20,
+        "coupled_margin_m": 0.7903407761923429,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 44.87449156619733,
+        "n_active_obstacles": 6
+      },
+      {
+        "draw_index": 21,
+        "coupled_margin_m": 0.6892329731970764,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 134.16569878796125,
+        "n_active_obstacles": 16
+      },
+      {
+        "draw_index": 22,
+        "coupled_margin_m": 1.2089347737858496,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 48.337511799941204,
+        "n_active_obstacles": 7
+      },
+      {
+        "draw_index": 23,
+        "coupled_margin_m": 0.48297877686490576,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 84.5081243867635,
+        "n_active_obstacles": 6
+      },
+      {
+        "draw_index": 24,
+        "coupled_margin_m": 0.21608848027904456,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 115.20544873795416,
+        "n_active_obstacles": 9
+      },
+      {
+        "draw_index": 26,
+        "coupled_margin_m": 1.0943413201424117,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 64.15291788427362,
+        "n_active_obstacles": 7
+      },
+      {
+        "draw_index": 27,
+        "coupled_margin_m": 1.1588108174060208,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 156.60230637767506,
+        "n_active_obstacles": 6
+      },
+      {
+        "draw_index": 28,
+        "coupled_margin_m": 0.29739386740327334,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 81.18070006708756,
+        "n_active_obstacles": 14
+      },
+      {
+        "draw_index": 29,
+        "coupled_margin_m": 1.140447945195175,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 58.09802395142475,
+        "n_active_obstacles": 2
+      },
+      {
+        "draw_index": 30,
+        "coupled_margin_m": 1.6206099334564974,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 84.14276295251426,
+        "n_active_obstacles": 2
+      },
+      {
+        "draw_index": 31,
+        "coupled_margin_m": 0.5998100803733297,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 100.81435416753045,
+        "n_active_obstacles": 15
+      },
+      {
+        "draw_index": 32,
+        "coupled_margin_m": 1.2701143303417501,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 53.22240033265996,
+        "n_active_obstacles": 6
+      },
+      {
+        "draw_index": 33,
+        "coupled_margin_m": 0.12641663126295377,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 140.97640947167835,
+        "n_active_obstacles": 12
+      },
+      {
+        "draw_index": 34,
+        "coupled_margin_m": 0.11140907337735761,
+        "coupled_verdict": "avoidable",
+        "tilt0_deg": 103.96502354134837,
+        "n_active_obstacles": 2
+      }
+    ]
+  },
+  "final_bound_over_finished_pool": {
+    "n_flagged": 0,
+    "n": 2000,
+    "PASS": true,
+    "by_binding_class": {
+      "obstacle": 0,
+      "floor": 0,
+      "ceiling": 0
+    }
+  },
+  "predecessor_pools_unchanged": true,
+  "timing_s": 48.52
+}

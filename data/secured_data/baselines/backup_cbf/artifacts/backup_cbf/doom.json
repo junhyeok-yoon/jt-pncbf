@@ -1,0 +1,351 @@
+{
+  "T_b": 20,
+  "eps": 0.0,
+  "long_steps": 200,
+  "ic_list": [
+    121,
+    250,
+    350,
+    473,
+    544,
+    836,
+    870,
+    1055,
+    1132,
+    1289,
+    1407,
+    1410,
+    1686,
+    1701,
+    1819,
+    1928
+  ],
+  "ic_provenance": "scripts/analysis/v282_probe_grad_hstar.py:29 (S16); docs/versions/v2.8.2/drift_decomposition.md:35,39",
+  "per_ic": [
+    {
+      "scene": 121,
+      "pi_b_setpoint": "hold",
+      "m0": 0.2315537929534912,
+      "m_min_Tb": -0.6576070785522461,
+      "m_min_200": -0.7521090507507324,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.8857064247131348
+    },
+    {
+      "scene": 250,
+      "pi_b_setpoint": "hold",
+      "m0": 0.2817518711090088,
+      "m_min_Tb": 0.2817518711090088,
+      "m_min_200": 0.2817518711090088,
+      "collision_free_Tb": true,
+      "collision_free_200": true,
+      "h_b_at_IC": 0.2817518711090088
+    },
+    {
+      "scene": 350,
+      "pi_b_setpoint": "hold",
+      "m0": 0.31178197264671326,
+      "m_min_Tb": -0.2444906383752823,
+      "m_min_200": -0.2444906383752823,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.2444906383752823
+    },
+    {
+      "scene": 473,
+      "pi_b_setpoint": "hold",
+      "m0": 0.42180001735687256,
+      "m_min_Tb": -0.4687691330909729,
+      "m_min_200": -0.4687691330909729,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.8269548416137695
+    },
+    {
+      "scene": 544,
+      "pi_b_setpoint": "hold",
+      "m0": 0.24040210247039795,
+      "m_min_Tb": -0.29299283027648926,
+      "m_min_200": -0.29299283027648926,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.29299283027648926
+    },
+    {
+      "scene": 836,
+      "pi_b_setpoint": "hold",
+      "m0": 0.22523868083953857,
+      "m_min_Tb": -0.41559696197509766,
+      "m_min_200": -0.4289008378982544,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.4787229597568512
+    },
+    {
+      "scene": 870,
+      "pi_b_setpoint": "hold",
+      "m0": 0.16313493251800537,
+      "m_min_Tb": -0.2019362449645996,
+      "m_min_200": -0.2019362449645996,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.2019362449645996
+    },
+    {
+      "scene": 1055,
+      "pi_b_setpoint": "hold",
+      "m0": 0.2509770393371582,
+      "m_min_Tb": -0.2105863094329834,
+      "m_min_200": -0.2787838876247406,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.2105863094329834
+    },
+    {
+      "scene": 1132,
+      "pi_b_setpoint": "hold",
+      "m0": 0.3232090175151825,
+      "m_min_Tb": -0.5593833923339844,
+      "m_min_200": -0.5860738754272461,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.6600194573402405
+    },
+    {
+      "scene": 1289,
+      "pi_b_setpoint": "hold",
+      "m0": 0.3751027584075928,
+      "m_min_Tb": -0.4092226028442383,
+      "m_min_200": -0.4092226028442383,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.4092226028442383
+    },
+    {
+      "scene": 1407,
+      "pi_b_setpoint": "hold",
+      "m0": 0.06069540977478027,
+      "m_min_Tb": -1.0237979888916016,
+      "m_min_200": -1.0896649360656738,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -1.1531490087509155
+    },
+    {
+      "scene": 1410,
+      "pi_b_setpoint": "hold",
+      "m0": 0.3971797823905945,
+      "m_min_Tb": -0.3711344599723816,
+      "m_min_200": -0.3711344599723816,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.3711344599723816
+    },
+    {
+      "scene": 1686,
+      "pi_b_setpoint": "hold",
+      "m0": 0.1841549277305603,
+      "m_min_Tb": -0.6990693211555481,
+      "m_min_200": -0.6990693211555481,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.9651143550872803
+    },
+    {
+      "scene": 1701,
+      "pi_b_setpoint": "hold",
+      "m0": 0.1824493408203125,
+      "m_min_Tb": -1.419023036956787,
+      "m_min_200": -1.552492618560791,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -1.7951408624649048
+    },
+    {
+      "scene": 1819,
+      "pi_b_setpoint": "hold",
+      "m0": 0.26670581102371216,
+      "m_min_Tb": -0.6599159240722656,
+      "m_min_200": -0.7393994331359863,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.857255756855011
+    },
+    {
+      "scene": 1928,
+      "pi_b_setpoint": "hold",
+      "m0": 0.21719509363174438,
+      "m_min_Tb": -0.3248426914215088,
+      "m_min_200": -0.3547400236129761,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": -0.4484879970550537
+    },
+    {
+      "scene": 121,
+      "pi_b_setpoint": "goal",
+      "m0": 0.2315537929534912,
+      "m_min_Tb": -0.30177295207977295,
+      "m_min_200": -0.3757464587688446,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": null
+    },
+    {
+      "scene": 250,
+      "pi_b_setpoint": "goal",
+      "m0": 0.2817518711090088,
+      "m_min_Tb": 0.2817518711090088,
+      "m_min_200": -0.18809223175048828,
+      "collision_free_Tb": true,
+      "collision_free_200": false,
+      "h_b_at_IC": null
+    },
+    {
+      "scene": 350,
+      "pi_b_setpoint": "goal",
+      "m0": 0.31178197264671326,
+      "m_min_Tb": -0.2887420356273651,
+      "m_min_200": -0.2887420356273651,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": null
+    },
+    {
+      "scene": 473,
+      "pi_b_setpoint": "goal",
+      "m0": 0.42180001735687256,
+      "m_min_Tb": -0.4929259419441223,
+      "m_min_200": -0.4929259419441223,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": null
+    },
+    {
+      "scene": 544,
+      "pi_b_setpoint": "goal",
+      "m0": 0.24040210247039795,
+      "m_min_Tb": -0.27189382910728455,
+      "m_min_200": -0.27189382910728455,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": null
+    },
+    {
+      "scene": 836,
+      "pi_b_setpoint": "goal",
+      "m0": 0.22523868083953857,
+      "m_min_Tb": -0.5950475335121155,
+      "m_min_200": -0.5950475335121155,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": null
+    },
+    {
+      "scene": 870,
+      "pi_b_setpoint": "goal",
+      "m0": 0.16313493251800537,
+      "m_min_Tb": -0.18088117241859436,
+      "m_min_200": -0.4329248070716858,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": null
+    },
+    {
+      "scene": 1055,
+      "pi_b_setpoint": "goal",
+      "m0": 0.2509770393371582,
+      "m_min_Tb": -0.23355966806411743,
+      "m_min_200": -0.23355966806411743,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": null
+    },
+    {
+      "scene": 1132,
+      "pi_b_setpoint": "goal",
+      "m0": 0.3232090175151825,
+      "m_min_Tb": -0.32932406663894653,
+      "m_min_200": -0.32932406663894653,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": null
+    },
+    {
+      "scene": 1289,
+      "pi_b_setpoint": "goal",
+      "m0": 0.3751027584075928,
+      "m_min_Tb": -0.47811195254325867,
+      "m_min_200": -0.4940991699695587,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": null
+    },
+    {
+      "scene": 1407,
+      "pi_b_setpoint": "goal",
+      "m0": 0.06069540977478027,
+      "m_min_Tb": -0.38547420501708984,
+      "m_min_200": -0.38547420501708984,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": null
+    },
+    {
+      "scene": 1410,
+      "pi_b_setpoint": "goal",
+      "m0": 0.3971797823905945,
+      "m_min_Tb": -0.4549417495727539,
+      "m_min_200": -0.6929427981376648,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": null
+    },
+    {
+      "scene": 1686,
+      "pi_b_setpoint": "goal",
+      "m0": 0.1841549277305603,
+      "m_min_Tb": -0.7013466358184814,
+      "m_min_200": -0.7013466358184814,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": null
+    },
+    {
+      "scene": 1701,
+      "pi_b_setpoint": "goal",
+      "m0": 0.1824493408203125,
+      "m_min_Tb": -0.7517356872558594,
+      "m_min_200": -0.7517356872558594,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": null
+    },
+    {
+      "scene": 1819,
+      "pi_b_setpoint": "goal",
+      "m0": 0.26670581102371216,
+      "m_min_Tb": -0.5918086171150208,
+      "m_min_200": -0.5918086171150208,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": null
+    },
+    {
+      "scene": 1928,
+      "pi_b_setpoint": "goal",
+      "m0": 0.21719509363174438,
+      "m_min_Tb": -0.15941071510314941,
+      "m_min_200": -0.16863884031772614,
+      "collision_free_Tb": false,
+      "collision_free_200": false,
+      "h_b_at_IC": null
+    }
+  ],
+  "hold_collision_free_Tb": 1,
+  "hold_collision_free_200": 1,
+  "goal_collision_free_Tb": 1,
+  "goal_collision_free_200": 0,
+  "n_ic": 16
+}

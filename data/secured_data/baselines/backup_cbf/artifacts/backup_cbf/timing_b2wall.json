@@ -1,0 +1,7 @@
+{
+  "backup_ms_per_call_batch4096": 188.13823461532593,
+  "hardnet_ms_per_call_batch4096": 32.5852632522583,
+  "T_b": 20,
+  "batch": 4096,
+  "ratio_backup_over_hardnet": 5.773721487497485
+}

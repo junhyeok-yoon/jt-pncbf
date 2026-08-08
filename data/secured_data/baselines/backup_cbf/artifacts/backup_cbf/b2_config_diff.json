@@ -1,0 +1,54 @@
+{
+  "ctrl_config": "/home/junhyeok/MIT/jt-pncbf/data/runs/v2.8.2/set__20260803-063606__seed42/v2.8.2__jt__20260803-063606__seed42/config.yaml",
+  "T_b": 20,
+  "eps": 0.0,
+  "setpoint": "hold",
+  "diff": [
+    {
+      "key": "filter.backup.T_b",
+      "ctrl": "<absent>",
+      "b2": 20
+    },
+    {
+      "key": "filter.backup.c_v",
+      "ctrl": "<absent>",
+      "b2": 0.3
+    },
+    {
+      "key": "filter.backup.certify_backup",
+      "ctrl": "<absent>",
+      "b2": false
+    },
+    {
+      "key": "filter.backup.eps",
+      "ctrl": "<absent>",
+      "b2": 0.0
+    },
+    {
+      "key": "filter.backup.setpoint",
+      "ctrl": "<absent>",
+      "b2": "hold"
+    },
+    {
+      "key": "filter.type",
+      "ctrl": "<absent>",
+      "b2": "backup_switching"
+    },
+    {
+      "key": "loss.policy.w_outside",
+      "ctrl": 0.3,
+      "b2": 0.0
+    },
+    {
+      "key": "training.jt.K_V",
+      "ctrl": 3,
+      "b2": 0
+    },
+    {
+      "key": "training.jt.vs_warmup_steps",
+      "ctrl": 2000,
+      "b2": 0
+    }
+  ],
+  "unregistered": []
+}

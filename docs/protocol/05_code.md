@@ -181,6 +181,17 @@ A `<run_id>/` directory holds:
 └── report.md
 ```
 
+**Baselines are version-independent artifacts.** `data/baselines/<name>/` (e.g. `ppo/`,
+`backup_cbf/`) holds runs whose role is cross-version comparison, not a version's axis: a
+baseline is trained or evaluated once, cited by many versions, and is never filed under
+`data/runs/vX.Y.Z/`. Each `<name>/` carries the run dir(s) in the standard `<run_id>/`
+layout plus a `README.md` naming provenance (original path if copied, config, checkpoint
+hash, scoring artifact and its cell). Secured promotion mirrors the layout:
+`secured_data/baselines/<name>/` (copy-only, Researcher-approved, as `06_workflow` §2.2).
+A baseline row in the ledger carries `parent = baselines/<name>/<run_id>`; the SOTA bold
+rule is unchanged — baselines are a different deployment/training class and are never
+bolded against JT rows (the existing classification clause governs).
+
 **Three kinds of entry under `data/runs/vX.Y.Z/`, and only three.**
 
 - **`<run_id>/` — one execution.** Three formats:
