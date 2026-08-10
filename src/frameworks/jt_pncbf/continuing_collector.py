@@ -36,6 +36,23 @@ from src.envs.scene_init import Scene, sample_scenes
 
 Tensor = torch.Tensor
 
+# v2.8.4 Stage A — opt-in recorder for the COLLECTED-STATE distribution. Default None, so the shipped
+# training path is unchanged except for one `is not None` test per segment group. Nothing is rolled out
+# and no network is evaluated for it: `states_g` and its label `h_g` are already in hand at the single
+# call site below (the same tensors the buffer receives). The trainer never installs it; only an
+# analysis script does, via `set_state_recorder`.
+_STATE_RECORDER: Callable[[Tensor, Tensor], None] | None = None
+
+
+def set_state_recorder(recorder: "Callable[[Tensor, Tensor], None] | None") -> None:
+    """Install (or clear, with None) a per-segment-group recorder `recorder(h_g, states_g)`."""
+    global _STATE_RECORDER
+    _STATE_RECORDER = recorder
+
+
+def get_state_recorder():
+    return _STATE_RECORDER
+
 
 @dataclass
 class ContinuingStats:
@@ -241,6 +258,8 @@ def advance_round(
         th = _t()
         with torch.no_grad():
             h_g = h_batch_fn(states_g, bscene)                                     # [L, G] (batched barrier)
+            if _STATE_RECORDER is not None:                                        # v2.8.4 Stage A, default OFF
+                _STATE_RECORDER(h_g, states_g)
         th2 = _t(); st.timings["hlabel"] += th2 - th
         # fast incremental append (flat-tensor _cat, variable length via _cat_pad_time) — no full rebuild
         buffer.append_batch(scenes_g, bscene, states_g.detach(), h_g.detach())

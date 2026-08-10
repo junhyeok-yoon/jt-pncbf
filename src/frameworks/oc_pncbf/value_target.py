@@ -16,18 +16,22 @@ def pncbf_target(
     dt: float,
     target_rhs: Tensor | float,
     bootstrap_tail: Tensor,
+    ceiling: float = 1.0,
 ) -> Tensor:
+    # v2.8.4 ceiling axis: `ceiling` is the codomain's UPPER bound, shared with the read-out via the
+    # single key network.value.ceiling. The default 1.0 leaves every existing call byte-identical.
+    # The LOWER bound stays at -1.0 at both clamp sites and is not configurable.
     if h_seq.shape[0] < 1:
         raise ValueError("h_seq must contain at least one state.")
 
     squeeze_output = h_seq.ndim == 1
-    costs = torch.clamp(h_seq.unsqueeze(1) if squeeze_output else h_seq, min=-1.0, max=1.0)
+    costs = torch.clamp(h_seq.unsqueeze(1) if squeeze_output else h_seq, min=-1.0, max=ceiling)
     rhs = _as_tensor(target_rhs, costs)
     tail = _as_tensor(bootstrap_tail, costs)
     lhs, int_rhs, discount_rhs = compute_disc_avoid_terms(costs, lambda_disc, dt)
     rhs_full = int_rhs + discount_rhs * tail.unsqueeze(0)
     mixed = lhs + rhs * torch.relu(rhs_full - lhs)
-    result = torch.clamp(mixed, min=-1.0, max=1.0)
+    result = torch.clamp(mixed, min=-1.0, max=ceiling)
     return result.squeeze(1) if squeeze_output else result
 
 def compute_disc_avoid_terms(

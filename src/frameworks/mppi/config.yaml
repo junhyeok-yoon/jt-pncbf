@@ -1,0 +1,598 @@
+# v2.8.4 MPPI baseline — every coefficient of the controller, the cost, the screening grid, and the
+# eval-cell overrides. cost.py / mppi_controller.py / evaluate_mppi.py read EVERYTHING from here; no
+# coefficient is hard-coded in the code (the loaders index required keys, so a missing key raises).
+#
+# The deployed terminal radii, the collision geometry, the plant constants and dt are NOT duplicated
+# here: they are read from the shipped config (src/configs/base_config.yaml + exp_config.yaml, deep
+# merged by src.frameworks.jt_pncbf.train.load_effective_config) so this baseline can never drift from
+# the arms it is compared against. `eval_cell` below only pins the cell those arms were scored on.
+
+mppi:
+
+  # ---- sampler / weighting (Williams et al. information-theoretic MPPI) -------------------------
+  # v2.8.4 AMENDMENT R1-R3: the plan is carried in BODY-WRENCH space, the perturbations are OU in time,
+  # and lambda is RELATIVE to the running std of the sample costs. The legacy sampler that produced the
+  # SUPERSEDED first screen stays reachable via space=rotor, noise=iid, lam_mode=absolute, and the
+  # reproducibility gate re-runs one of its cells through that path and compares every metric.
+  sampling:
+    space: wrench          # R1 — "wrench": plan U = (F_total, tau_x, tau_y, tau_z), allocated to rotor
+                           # thrusts through the SYSTEM'S OWN relation (system.mixer_inv) and clipped per
+                           # rotor to system.u_bounds AFTER allocation. "rotor" = the legacy per-rotor plan.
+    noise: ou              # R2 — "ou": first-order low-pass (Ornstein-Uhlenbeck) along the horizon axis,
+                           # stationary, so the marginal std is sigma_j at every k. "iid" = legacy.
+    lam_mode: relative     # R3 — "relative": lam_eff = max(lam * std_n(S_n), lam_eps_abs) per (scene,
+                           # control step), so the softmax exponent is invariant to any rescaling of S and
+                           # ESS cannot collapse by scale mismatch. "absolute" = legacy (lam used as-is).
+    center: hover          # S3 CHANGE 1 — "hover": the commanded control is the EXPLICIT decomposition
+                           # u = u_hover + u_plan + eps, with u_hover the FIXED hover-trim anchor read from
+                           # the system object (the trim wrench (m*g,0,0,0), rotor image mass*gravity/4 per
+                           # rotor) and u_plan the deviation the MPPI update moves. "none" = the legacy
+                           # S1/S2 parameterisation (anchor 0, the plan carried in absolute units). The two
+                           # are algebraically identical on every branch; cpu_smoke.py check (l) MEASURES
+                           # the floating-point difference rather than asserting equivalence.
+    control_hold: 1        # S3 CHANGE 3 — m, the number of PHYSICAL steps each DECISION entry is applied
+                           # for. The plan carries `horizon` DECISION entries, so the rollout spans
+                           # horizon*m rk4 steps (effective lookahead horizon*m*dt seconds) and the MPPI
+                           # update + receding-horizon shift run once every m control steps; on the m-1
+                           # HOLD steps between decisions the latched action is re-applied unchanged.
+                           # DEFAULT ONLY; the S3 grid below sweeps it and evaluate_mppi.py overrides it
+                           # per cell via --control-hold. m = 1 is the unheld controller.
+    n_samples: 1024        # N — control sequences sampled per control step (the amended grid fixes N=256)
+    horizon: 40            # H — planning horizon in control steps (H * dt = 2.0 s at dt = 0.05)
+    lam: 0.2               # lambda — lam_rel under lam_mode=relative; an absolute temperature otherwise
+    lam_eps_abs: 1.0e-9    # floor on lam_eff, so a zero-variance cost row cannot divide by zero
+    sigma: 1.0             # exploration std in PER-ROTOR-EQUIVALENT NEWTONS. NOT an absolute wrench std:
+                           # the per-channel wrench std is sigma * channel_scale (below). The declared
+                           # default is the value the superseded first screen ran; the amended grid sweeps
+                           # sigma in {0.1, 0.3, 0.6}.
+    channel_scale: from_mixer_row_norms
+                           # mode string; the numerics are computed at construction FROM system.mixer as
+                           # channel_scale_j = ||M_row_j|| = {2.0, 2l, 2l, 2c}
+                           # = {2.0, 0.2404163056, 0.2404163056, 0.032} for l = arm_L/sqrt(2), c = c_moment,
+                           # and are RECORDED in every cell's JSON, so per-channel anisotropy is available
+                           # later without another redesign. RATIONALE: an ABSOLUTE reading of sigma would
+                           # put sigma = 0.6 N*m at 3.8x the whole achievable yaw-torque range (tau_z
+                           # half-authority = c * f_rotor_max * 2 = 0.15696 N*m), i.e. pure clipping. Because
+                           # the mixer rows are orthogonal, this normalization makes the MARGINAL wrench
+                           # covariance at a given sigma EQUAL to that of the old i.i.d. per-rotor noise —
+                           # so R1's reparameterisation is by itself measure-preserving here, and what
+                           # changes the sampled distribution is the OU correlation plus post-allocation
+                           # clipping. Stated plainly rather than oversold.
+    trim: from_system_constants
+                           # mode string; the nominal is the hover trim wrench (mass*gravity, 0, 0, 0) with
+                           # mass and gravity read from env.<system>, and the numeric m*g is recorded per
+                           # cell. The braking tail appended by the receding-horizon shift is the same wrench.
+    ou:
+      correlation_steps: 5.0        # OU correlation length in control steps (5 * dt = 0.25 s)
+      alpha: 0.8187307530779818     # OU pole. The loader ASSERTS alpha == exp(-1/correlation_steps) to
+                                    # 1e-12 and raises otherwise, so the two fields can never drift apart.
+    seed: 42               # torch.Generator seed for the perturbations
+    sample_chunk: 0        # rollout batch cap along the sample axis (0 = all N at once). Samples are
+                           # independent, so chunking is EXACTLY equivalent — it trades wall time for peak
+                           # VRAM and nothing else (cpu_smoke.py check (e) asserts metric-for-metric
+                           # agreement between a chunked and an unchunked cell).
+
+  # ---- cost coefficients (see cost.py for the five terms) --------------------------------------
+  # The deployed reach terminal is a CONJUNCTION (dist <= 0.15 AND speed <= 0.30 AND ||omega|| <= 0.30),
+  # so the speed and angular-rate terms are load-bearing, not decoration: without them the controller
+  # sails through the goal ball and every episode times out.
+  cost:
+    w_goal: 1.0            # running  w_goal * ||p - g||^2
+    w_vel: 20.0            # running  w_vel * gate(d) * relu(||v|| - env.goal_speed_radius)^2
+    w_angrate: 20.0        # running  w_angrate * gate(d) * relu(||omega|| - env.goal_angrate_radius)^2
+    w_terminal: 30.0       # terminal weight (the JT policy loss uses the same 30.0)
+    terminal: settling     # S3 CHANGE 2 — the terminal-cost FORM.
+                           #   "settling" (default): w_terminal * [ relu(d - goal_radius)^2
+                           #                                      + relu(||v|| - goal_speed_radius)^2
+                           #                                      + relu(||w|| - goal_angrate_radius)^2 ]
+                           #     with all three radii READ from the effective deployed env config, so the
+                           #     terminal is ZERO EXACTLY on the set where the deployed reach predicate
+                           #     closes and positive off it. The position leg carries the relu offset for
+                           #     the same reason the other two do — without it the zero-set property is
+                           #     false. See cost.py for the full statement.
+                           #   "distance" (LEGACY, S1/S2): w_terminal * ||p_H - g||. Retained so the
+                           #     superseded screens stay reproducible; the repro gate runs it.
+    gate_scale: 6.0        # near-goal window gate(d) = exp(-(d / (gate_scale * env.goal_radius))^2)
+                           # 6.0 * 0.15 = 0.90 m: settling pressure starts ~0.4 s of flight before the ball
+    c_crash: 1000.0        # C_crash — collision INDICATOR cost, charged once at the first collision.
+                           # DEFAULT ONLY; the screening grid below sweeps it and evaluate_mppi.py
+                           # overrides it per cell via --c-crash.
+
+  # ---- recovery components B1 / B2 / B3 (charter "v3"; artifacts data/runs/v2.8.4/mppi_v3/) ----
+  # ALL THREE DEFAULT OFF, so this file as shipped resolves to the S3 controller — the charter's "v2" —
+  # byte for byte. `src/frameworks/mppi/recovery.py` documents each component and the one interpretation
+  # that had to be made (B1's leg). `smoke_recovery.py` re-runs an S3 screen cell with all three off and
+  # compares it against data/runs/v2.8.4/mppi_screen_v3/ metric for metric.
+  #
+  # WHAT S3 MEASURED, so these are not mistaken for a polish of a residual: reach is 0.0000 in all 16 S3
+  # cells and in BOTH tilt bands of every cell; the eight m=4 cells are identical because the degenerate
+  # branch fired on 0.9997-1.0000 of decisions. See recovery.py's module docstring for the verbatim read.
+  recovery:
+    theta_ref_deg: 60.0    # theta_ref. Shared by B1's weight law, B2's firing condition and the
+                           # reporting split, so all three rest on one config field and none is typed in
+                           # code. The charter fixes it at the evaluation split's own boundary, 60 deg.
+                           # NOTE: the S3 screen split its bands at 90 deg, so the S3 bands and these
+                           # bands are NOT directly comparable.
+    b1:
+      enabled: false       # B1 — recovery-aware cost weight
+      w_att: 20.0          # w0, the base attitude weight. Same family as w_vel / w_angrate (both 20.0),
+                           # the cost's other shaping weights, so B1 enters at the scale the existing
+                           # shaping terms already use rather than at a scale of its own.
+      k_att: 1.0           # k_att in w_att(theta) = w0 * (1 + k_att * relu(theta-theta_ref)/theta_ref).
+                           # At theta = 180 deg the excess is (180-60)/60 = 2, so k_att = 1.0 makes the
+                           # weight exactly 3 * w0 at full inversion and exactly w0 at theta <= 60.
+    b2:
+      enabled: false       # B2 — recovery-informed initial plan
+      block_steps: 5       # decision entries at the head of the plan seeded with the recovery wrench.
+                           # Set to the sampler's own timescale, mppi.sampling.ou.correlation_steps = 5:
+                           # a seeded block shorter than the noise correlation length would be perturbed
+                           # as one lump anyway. At m=1 that is 0.25 s of flight, at m=4 it is 1.0 s.
+      torque_frac: 0.5     # tau_mag = torque_frac * the roll/pitch torque half-authority computed from
+                           # system.mixer and system.u_bounds. At 0.5 the allocation of the seeded wrench
+                           # lies strictly INSIDE the per-rotor box for every recovery axis (the worst
+                           # case is f = m*g/4 +- 2.0797*sqrt(2)*0.5*1.179 = 2.4525 +- 1.734 N inside
+                           # [0, 4.905] N), so the seed is realisable without clipping. smoke_recovery.py
+                           # check (b) MEASURES that rather than assuming it.
+    b3:
+      enabled: false       # B3 — adaptive temperature
+      ess_frac_of_n: 0.1   # ESS = (sum w)^2 / sum w^2 lies in [1, N]; where it falls below this fraction
+                           # of N the softmax is drawing on under a tenth of the sample budget. S3
+                           # measured ESS/N at 0.005-0.007 in the m=1 cells, so this condition is
+                           # expected to hold at nearly every decision step; the event rate is measured
+                           # and reported per cell rather than assumed.
+      lam_factor: 5.0      # lambda multiplier applied to those rows FOR THAT DECISION STEP ONLY.
+
+  # ---- goal-attraction redesign G1-G4 (charter "v4"; artifacts data/runs/v2.8.4/mppi_v4/) -------
+  # ALL FOUR DEFAULT OFF, so this file as shipped resolves to the charter-"v3" controller byte for byte
+  # and `smoke_goal_v4.py` re-runs the reference cell with all four off and compares it against
+  # data/runs/v2.8.4/mppi_v3/ metric for metric.
+  #
+  # WHAT THE DIAGNOSIS MEASURED (data/runs/v2.8.4/mppi_diag/, not re-derived here): timeout episodes
+  # equilibrate 1.6-2.0 m from the goal and never enter r = 0.5; |omega| sits at 5-6.5 rad/s throughout;
+  # |v| pins at v_max. The four components below act on that reading and nothing else.
+  goal_v4:
+    g1:
+      enabled: false     # G1 — PROGRESS stage cost. When on, the absolute stage term w_goal*||p-g||^2 is
+                         # REPLACED (not supplemented) by the per-step approach term
+                         #     -w_p * (||p_{k-1} - g|| - ||p_k - g||)
+                         # accumulated at every PHYSICAL rollout step. Rationale from the dispatch: an
+                         # absolute distance cannot discriminate between samples that are all far;
+                         # approach can. NOTE, stated because it is an algebraic property of the term and
+                         # not a claim about any metric: summed over the horizon the term telescopes to
+                         # w_p*(||p_H-g|| - ||p_0-g||), and p_0 is shared by every sample of a scene at a
+                         # given control step, so between SAMPLES the term equals w_p*||p_H-g|| exactly.
+                         # A collided sample is frozen, so its increments are 0 for the remaining horizon.
+      w_p: 1.0           # w_p. Set to w_goal (1.0) — the weight of the stage term G1 REPLACES — so the
+                         # progress leg enters at the scale the position leg already used rather than at
+                         # a scale of its own. Swept by G2 and available to the Round-2 sweep.
+    g2:
+      enabled: false     # G2 — TERM REBALANCE. When on, the progress weight becomes w_p * w_p_scale.
+                         # G2 acts ONLY on the progress weight, so with G1 off the progress term is not
+                         # evaluated at all and G2 changes no coefficient of the resolved cost. That is
+                         # recorded per cell (`g2_inert_because_g1_off`) rather than left implicit.
+      w_p_scale: 10.0    # the dispatch's "current value and 10x" sweep axis: G2 off = w_p, G2 on = 10*w_p
+    g3:
+      enabled: false     # G3 — LINEARISED TERMINAL. When on, phi = w_terminal * ||p_H - g|| (first
+                         # power), replacing the settling terminal's squared form. w_terminal is READ from
+                         # mppi.cost.w_terminal above — the same w_T the settling terminal uses, not a
+                         # second copy. NOTE: this expression is byte-identical to the legacy S1/S2
+                         # terminal `mppi.cost.terminal: distance`, and the implementation shares that
+                         # branch rather than duplicating it.
+    g4:
+      enabled: false     # G4 — ALWAYS-ON ANGULAR-RATE COST. When on, the running cost carries
+                         #     w_omega * ||omega||^2
+                         # at every physical step, with NO near-goal gate and NO tilt condition — the
+                         # dispatch's "not tilt-conditioned". It is added to, not substituted for, the
+                         # existing gated relu-excess rate term. The OU noise is NOT touched by G4: the
+                         # sampler's correlation coefficient is unchanged and the smoke re-runs the v3 OU
+                         # statistics test to measure that.
+      w_omega: 1.0       # w_omega. Set to w_goal (1.0), the base STAGE weight family, rather than to the
+                         # 20.0 the gated legs use: those 20.0s multiply relu EXCESSES inside a 0.90 m
+                         # window, while this leg is a bare quadratic charged at every step of the
+                         # horizon. Available to the Round-2 sweep.
+    reference_cell:
+      # The Round-1 baseline and the v3-reproduction target, FIXED BY THE BRIEF and NOT a Researcher cell
+      # selection: the v3 screen row the diagnosis was run on, i.e. the optimiser-live, timeout-dominant
+      # m=1 cell. Its retained artifact is
+      # data/runs/v2.8.4/mppi_v3/cell__N1024_lam0.05_C100000_m1_H40_sig1.json.
+      n_samples: 1024
+      lam: 0.05
+      c_crash: 1.0e5
+      control_hold: 1
+      horizon: 40
+      sigma: 1.0
+      b1: true
+      b2: true
+      b3: true
+      label: "N1024_lam0.05_C100000_m1_H40_sig1"
+      status: "BRIEF-FIXED reference cell — NOT a Researcher selection; no cell selection has ever been
+               registered for any MPPI screen"
+    probe:
+      n_scenes: 50       # Rounds 1-2 probe scale: the FIRST 50 scenes of the pool, in pool order
+      ebs: 50            # one eval chunk, so the probe cells share one RNG-stream layout
+    confirm:
+      n_scenes: 400      # Round 3 confirm scale — the screen scale (mppi.screen.n_scenes)
+      ebs: 200           # the screen's own chunking, so Round 3 matches the v3 screen's memory pattern
+    round1:
+      # The dispatch's four Round-1 cells, in dispatch order. Switch NAMES only; every coefficient the
+      # switches resolve to is read from the blocks above.
+      - {id: R1_v3_ref,      g1: false, g2: false, g3: false, g4: false}
+      - {id: R1_G1_G3,       g1: true,  g2: false, g3: true,  g4: false}
+      - {id: R1_G2_G4,       g1: false, g2: true,  g3: false, g4: true}
+      - {id: R1_G1_G2_G3_G4, g1: true,  g2: true,  g3: true,  g4: true}
+    round2:
+      # The dispatch bounds Round 2 to the two most sensitive coefficients of the Round-1-selected
+      # combination, ONE VALUE UP AND ONE DOWN each. The factors live here so no swept value is typed in
+      # code; a decade each way, the same order of magnitude the G2 axis (10x) already uses.
+      factor_down: 0.1
+      factor_up: 10.0
+    report:
+      # The reporting columns every round table carries. `probe_radius` is the r the dispatch names for
+      # the time-inside share column. It is a PROBE FOR A REPORTING COLUMN, NOT A THRESHOLD: no gate, no
+      # ranking, no selection and no decision of any kind is taken against it, and no round's choice may
+      # reference it. It lives here so no radius is typed in code, the same treatment every other radius
+      # in this file gets. The tilt split of the band columns is `mppi.recovery.theta_ref_deg` with
+      # `<=` / `>`, read from that one field rather than duplicated here.
+      probe_radius: 0.5
+
+  # ---- the charter "v3" ablation ---------------------------------------------------------------
+  # Four rows at one cell: the charter's "v2" controller, then +B1, then +B1+B2, then +B1+B2+B3.
+  # NO Researcher cell selection was provided, so the charter's fallback applies: the CONFIG-ORDER FIRST
+  # cell with {N=1024, m=4}. In grid_v3's nesting (N x lam x C_crash x m) that is
+  # N=1024, lam=0.05, C_crash=1e3, m=4. That cell sits inside the m=4 corner where S3 measured the
+  # degenerate branch at ~100% of decisions — the one configuration in which MPPI provably never runs
+  # its update. It is run as the REGISTERED ablation exactly as specified, and the identical four rows
+  # are ALSO run at the config-order first {N=1024, m=1} cell as a NON-REGISTERED diagnostic companion,
+  # so the components are also measured where the optimiser is live. The two tables are reported
+  # separately and neither substitutes for the other.
+  ablation:
+    registered:
+      cell: {n_samples: 1024, lam: 0.05, c_crash: 1.0e3, control_hold: 4, horizon: 40, sigma: 1.0}
+      status: "REGISTERED — the charter's fallback cell (config-order first with N=1024, m=4)"
+    diagnostic:
+      cell: {n_samples: 1024, lam: 0.05, c_crash: 1.0e3, control_hold: 1, horizon: 40, sigma: 1.0}
+      status: "NON-REGISTERED diagnostic companion (config-order first with N=1024, m=1)"
+    rows:
+      - {label: v2_baseline, b1: false, b2: false, b3: false}
+      - {label: B1,          b1: true,  b2: false, b3: false}
+      - {label: B1_B2,       b1: true,  b2: true,  b3: false}
+      - {label: B1_B2_B3,    b1: true,  b2: true,  b3: true}
+
+  # ---- degenerate-sample rule (all N rollouts of a scene collide) ------------------------------
+  degenerate:
+    tail: hover_trim       # braking tail appended by the receding-horizon shift: mass*gravity/action_dim
+                           # per rotor, mass and gravity read from env.<system>, clipped to the box.
+    action: hold_shifted_plan   # skip the MPPI update; use the carried (already shifted + tail) plan
+    count: per_episode          # counted into `degenerate_steps` and written to the per-episode arrays
+
+  # ---- screening -------------------------------------------------------------------------------
+  # SELECTION: by Researcher decision from the full screen table. No threshold is registered.
+  # All cells are run and reported in CONFIG ORDER (the nesting below), sorted by nothing.
+  screen:
+    selection: "by Researcher decision from the full screen table; no threshold is registered"
+
+    # S3 — THIS screen's grid, 16 cells, nested EXACTLY as the dispatch writes it:
+    #     N in {256, 1024} x lam_rel in {0.05, 0.2} x C_crash in {1e3, 1e5} x m in {1, 4},
+    # with H fixed at 40 DECISION entries and sigma fixed at 1.0. Artifacts go to
+    # data/runs/v2.8.4/mppi_screen_v3/ (the dispatch calls this screen "v2"; it is NOT the mppi_screen_v2
+    # directory, which holds S2). Held coefficients and why:
+    #   sigma 1.0        — the S1 value and this file's declared default. The dispatch asks that the delta
+    #                      per change be readable against S1's table, which requires holding every
+    #                      non-swept coefficient at its S1 value; sigma is NOT a grid dimension here. S2
+    #                      swept sigma in {0.1, 0.3, 0.6}, so S2 and S3 are NOT directly comparable.
+    #   lam_mode relative— reverting to absolute would reintroduce the defect R3 fixed (S1 measured ESS
+    #                      median 1.0001, 64.7% of steps below 1.01). lam values below are lam_rel.
+    #   space wrench / noise ou — the dispatch's "first-order AR smoothing with coefficient in config" IS
+    #                      the R2 stationary OU above; the coefficient stays config-read with the
+    #                      load-time consistency assert.
+    grid_v3:
+      n_samples: [256, 1024]
+      lam: [0.05, 0.2]
+      c_crash: [1.0e3, 1.0e5]
+      control_hold: [1, 4]
+      horizon: [40]
+      sigma: [1.0]
+
+    # v2.8.4 AMENDMENT R3 — the corrected grid, 12 cells, nested sigma x lam_rel x horizon.
+    # N is fixed at 256 and C_crash at 1e5 (both measured inert in the superseded screen). lam is the
+    # RELATIVE lambda (lam_mode: relative above). This is the grid `screen_grid.py` runs by default.
+    grid_v2:
+      sigma: [0.1, 0.3, 0.6]
+      lam: [0.05, 0.2]
+      horizon: [20, 40]
+      n_samples: [256]
+      c_crash: [1.0e5]
+
+    # SUPERSEDED first grid, RETAINED verbatim as the record of what the first screen ran (its artifacts
+    # live in data/runs/v2.8.4/mppi_screen/ and are retained as measurement). Reachable via --grid v1.
+    grid_v1_superseded:
+      n_samples: [256, 1024]
+      horizon: [20, 40]
+      lam: [0.05, 0.2]
+      c_crash: [1.0e3, 1.0e5]
+
+    pool: data/secured_data/pools/eval_fullcb_quadrotor-3d-d2r_n2000_seed823456.pkl
+    pool_sha8: "3682a4e3"
+    n_scenes: 400          # the FIRST 400 scenes of the pool, in pool order
+    seed: 42
+    ebs: 200               # scenes per eval chunk; peak sampler memory ~ ebs * N * H * action_dim floats
+
+  # ---- backward-reproducibility gate (amendment (D)) --------------------------------------------
+  # Before the amended screen runs, ONE cell of the superseded screen is re-run through the legacy
+  # sampler (space=rotor, noise=iid, lam_mode=absolute) and EVERY metric is compared against the
+  # retained artifact. Identity of the metrics is the gate; a mismatch stops the screen.
+  repro_gate:
+    cell_label: "N256_H20_lam0.05_C1000"
+    artifact: data/runs/v2.8.4/mppi_screen/cell__N256_H20_lam0.05_C1000.json
+    space: rotor
+    noise: iid
+    lam_mode: absolute
+    # S3 adds three more switches, so the gate must pin their LEGACY values too or it would compare the
+    # retained artifact against a different controller. These are the S1/S2 settings, not a relaxation of
+    # the comparison: every leaf the gate compared before is still compared, byte for byte.
+    center: none
+    control_hold: 1
+    terminal: distance
+
+  # ---- charter "v5": sample budget / cascaded MPPI / relaxed-settling companion ----------------
+  # THREE STAGES, strictly sequential, with a structural gate after Stage 1. Nothing in this block is
+  # a threshold: the only two gates are the charter's own structural ones (Stage 1's reach_all > 0
+  # stop, and "Stage 3 runs regardless"), and they are written in `stages_v5.py` as control flow, not
+  # as a number here. No cell is selected, ranked or registered anywhere in the v5 lineage.
+  v5:
+
+    # ---- THE BASE CONFIGURATION for every v5 stage ---------------------------------------------
+    # NAMING RESOLUTION, recorded here because the charter's two clauses point at two DIFFERENT
+    # retained rows and the reader must be able to see which one was used. The charter says "the v3
+    # timeout-dominant cell" and ALSO "B1-B3 off, G1-G4 off". With B1-B3 OFF the configuration is the
+    # charter-"v2" controller, whose retained row is
+    #
+    #   data/runs/v2.8.4/mppi_screen_v3/cell__N1024_lam0.05_C100000_m1_H40_sig1.json
+    #       reach 0.0000   collision 0.2400   timeout 0.7600   (n = 400)   [B1/B2/B3 absent = off]
+    #
+    # and NOT the same-named row at
+    #
+    #   data/runs/v2.8.4/mppi_v3/cell__N1024_lam0.05_C100000_m1_H40_sig1.json
+    #       reach 0.0000   collision 0.2225   timeout 0.7775   (n = 400)   [B1 = B2 = B3 = true]
+    #
+    # THE SWITCHES ARE DECISIVE: the base is built with all seven switches false, so the
+    # mppi_screen_v3 row is the base and the mppi_v3 row is its B1-B3-ON sibling. `stages_v5.py`
+    # reads all seven back off the constructed controller and records them false per cell.
+    base_cell:
+      n_samples: 1024        # the base row's own N. Stage 1 SWEEPS N and holds everything else fixed.
+      lam: 0.05
+      c_crash: 1.0e5
+      control_hold: 1        # m
+      horizon: 40            # H
+      sigma: 1.0
+      space: wrench          # OU noise in body-wrench space — the charter's "OU noise"
+      noise: ou
+      lam_mode: relative
+      center: hover          # the charter's "hover centering"
+      terminal: settling     # the charter's "settling terminal cost"
+      b1: false
+      b2: false
+      b3: false
+      g1: false
+      g2: false
+      g3: false
+      g4: false
+      label: "N1024_lam0.05_C100000_m1_H40_sig1"
+      retained_row: data/runs/v2.8.4/mppi_screen_v3/cell__N1024_lam0.05_C100000_m1_H40_sig1.json
+      sibling_row: data/runs/v2.8.4/mppi_v3/cell__N1024_lam0.05_C100000_m1_H40_sig1.json
+
+    # ---- scale, fixed for every v5 cell so the cells are comparable to each other AND to the base --
+    scale:
+      n_scenes: 400          # the charter's screen scale: the FIRST 400 scenes of the pool, in order
+      ebs: 200               # `mppi.screen.ebs` — HELD at the value the base row was scored under, so
+                             # the v5 cells share the base row's eval-chunk layout and RNG-stream
+                             # geometry. Changing it per cell would make the N axis non-comparable.
+      seed: 42
+
+    # ---- STAGE 1 — sample budget (the last card inside standard MPPI) ---------------------------
+    stage1:
+      # N and, per N, the rollout sample-chunk. Samples are INDEPENDENT, so chunking is EXACTLY
+      # equivalent — it trades wall time for peak VRAM and changes nothing else (the sampled tensor is
+      # built in full before the split, so the RNG stream is identical too). The charter REQUIRES the
+      # N = 8192 cell to be chunked; a chunk of 0 means "all N at once".
+      cells:
+        - {n_samples: 2048, sample_chunk: 0}
+        - {n_samples: 4096, sample_chunk: 0}
+        - {n_samples: 8192, sample_chunk: 2048}
+      # r for the "best-cost sample's endpoint inside r of the goal" reporting column. These are
+      # DISPATCH-GIVEN REPORTING PROBES, not thresholds: no gate, no ranking and no selection is taken
+      # against either radius. They live here so no radius is typed in code.
+      endpoint_probe_radii: [0.5, 1.0]
+
+    # ---- STAGE 2 — cascaded MPPI (leaves the vanilla class; its own baseline) -------------------
+    stage2:
+      variant: cascaded
+      variant_status: >-
+        CASCADED VARIANT. This is NOT vanilla MPPI: the plan is an outer-loop command and an inner
+        attitude PD closes the loop underneath it. It is filed and must be reported as a SEPARATE
+        baseline row and must NEVER be blended with, or tabulated beside, a vanilla MPPI row without
+        an explicit variant column.
+      # THE PLAN VARIABLE. The charter writes the plan as (total thrust T, desired attitude q_des).
+      # The shipped inner loop it names — `System.lqr_action`, reached through
+      # `src.common.filter_backup.override_gains` — derives BOTH of those from ONE world-force vector
+      # f_des: the commanded collective is f_des . b3 (the projection onto the CURRENT thrust axis)
+      # and the desired attitude is the direction of f_des (the shipped attitude error is
+      # b3 x b3_des, which has no component along b3, so the shipped PD is yaw-blind and a full q_des
+      # carries one degree of freedom it cannot consume). The plan therefore carries the desired
+      # WORLD ACCELERATION a_des in R^3, and (T, q_des) are read off the shipped cascade's own lines.
+      # This interpretation is recorded in the build log, not hidden here.
+      plan: accel_world
+      plan_dim: 3
+      # sigma is the base cell's sigma, in per-rotor-equivalent newtons, exactly as in vanilla. The
+      # per-axis acceleration std is computed at construction as
+      #     sigma * ||mixer_row_0|| / mass
+      # i.e. the COLLECTIVE channel's own scale converted to an acceleration by the system's own mass,
+      # so the collective axis keeps the marginal std vanilla uses and the two lateral axes inherit it.
+      # The numerics are computed from system.mixer and env.<system>.mass; nothing is typed.
+      channel_scale: from_collective_row_norm_over_mass
+      cells:
+        - {n_samples: 1024, lam: 0.05, sample_chunk: 0}
+        - {n_samples: 1024, lam: 0.2,  sample_chunk: 0}
+        - {n_samples: 4096, lam: 0.05, sample_chunk: 0}
+        - {n_samples: 4096, lam: 0.2,  sample_chunk: 0}
+      smoke:
+        # CPU smoke, run BEFORE the screen. Both scenes are obstacle-free and are built here rather
+        # than drawn from the pool, so the smoke is a wiring test and not a second screen.
+        hover_steps: 200          # steps the hover fixed point is held for
+        straight_line:
+          offset: [3.0, 0.0, 0.0]   # goal - start, metres; a straight line with no obstacle
+          seconds: 6.0              # duration of the OPEN-LOOP two-phase acceleration profile
+          # The profile is accelerate-then-decelerate, amplitude 4 * offset / seconds^2, which in
+          # exact double integration lands at the goal with zero terminal velocity. It is replayed
+          # OPEN LOOP in the outer loop — the a_des sequence is fixed at t = 0 and never re-computed
+          # from the state — while the inner attitude PD is closed, which is the cascade's own
+          # structure. A closed-outer-loop companion is reported beside it as supporting evidence.
+
+    # ---- STAGE 3 — relaxed-settling companion (re-scoring only, no new rollouts) ----------------
+    stage3:
+      # The relaxed terminal: the POSITION radius UNCHANGED (read from env.goal_radius — never typed)
+      # and the velocity and angular-rate conditions REMOVED. Every cell is reported with the
+      # DEPLOYED reach column FIRST and the relaxed one beside it; the relaxed number is never
+      # reported on its own.
+      relaxed_terminal:
+        position: from_env_goal_radius
+        speed: removed
+        angrate: removed
+      # Rollout sets to re-score. The two v5 stages write their own; the third is the retained
+      # mppi_diag rollout set, which is the base cell's B1-B3-ON SIBLING at n = 100 (NOT the base) and
+      # is labelled as such wherever it appears. It is READ ONLY.
+      external_rollouts:
+        - path: data/runs/v2.8.4/mppi_diag/trajectories__N1024_lam0.05_C100000_m1_H40_sig1.npz
+          label: v3_sibling_B1B2B3_on__n100
+          note: >-
+            RETAINED, IMMUTABLE, READ-ONLY. This is the charter-"v3" sibling (B1 = B2 = B3 = true) at
+            n = 100, not the v5 base (B1-B3 off). mppi_diag already scored it under both terminals and
+            measured deployed reach 0.0000 AND relaxed position-only reach 0.0000; a reproduction here
+            is consistent with that recorded diagnosis, not a new discovery.
+
+  # ---- eval cell: the same overrides every v2.8.4 fullcb row was scored under ------------------
+  # (identical to scripts/analysis/v282_agree_gate.gate_overrides plus the v2.8.1 angular terminal;
+  # `run.system` is switched to quadrotor_3d because the shipped exp_config ships quadrotor_planar.)
+  eval_cell:
+    run:
+      system: quadrotor_3d
+    env:
+      dt: 0.05
+      stuck_window_steps: 60
+      stuck_radius: 0.10
+      band_collision_limit: 4.0
+      band_terminates: true
+      goal_angrate_radius: 0.3
+    eval:
+      max_steps: 200
+      dt_ctrl: 0.05
+
+  # ================================================================================================
+  # LITERATURE-STANDARD QUADROTOR MPPI over (collective thrust T, desired body rates omega_des)
+  # Artifacts data/runs/v2.8.4/mppi_cascaded/, build log docs/versions/v2.8.4/mppi_cascaded.md,
+  # README data/baselines/mppi_cascaded/README.md, controller src/frameworks/mppi/cascade_rate.py.
+  # ================================================================================================
+  # WHAT THIS BASELINE IS, verbatim from the charter and repeated in the README and the build log:
+  #
+  #   Literature-standard quadrotor MPPI (L1-MPPI, Pravitra et al. 2020; PA-MPPI, RA-L 2026): the
+  #   planner samples in (collective thrust T, desired body rates omega_des) — attitude dynamics are
+  #   delegated to an inner loop, exactly as those works prescribe. Two asymmetries vs our method, both
+  #   stated wherever this baseline is reported: (1) privileged full-state + obstacle-field access;
+  #   (2) the per-rotor box is NOT handled by the planner — the inner loop allocates rotor thrusts and
+  #   clips to [0, 4.905], so actuator constraints are respected only after allocation, not during
+  #   planning. The rotor-direct variant (v1-v5, reach 0.0000 across 25+ configurations and N up to
+  #   8192) remains the same-interface comparison and is reported as its own row.
+  #
+  # THIS IS NOT THE charter-"v5" CASCADE (`mppi.v5.stage2`, src/frameworks/mppi/cascade.py). That one
+  # plans the desired WORLD ACCELERATION a_des and rolls the FULL PLANT with the shipped attitude PD
+  # closed inside the loop. This one plans (T, omega_des), propagates attitude KINEMATICS in the
+  # planner, and closes a body-RATE tracking inner loop. Different interfaces, separate rows.
+  #
+  # NOTHING HERE IS A THRESHOLD. No cell is ranked, selected or registered by any code that reads this
+  # block; the screen emits the full 8-cell table and stops.
+  cascaded:
+    variant: cascaded_rate
+    variant_status: >-
+      SEPARATE BASELINE ROW. Literature-standard quadrotor MPPI over (collective thrust T, desired body
+      rates omega_des) — L1-MPPI / PA-MPPI's interface. It is NOT rotor-direct vanilla MPPI and it is
+      NOT the charter-"v5" a_des cascade. Its numbers must never be blended with, averaged with or
+      substituted for either, and it may never sit in a table with them without an explicit variant
+      column.
+    plan: thrust_bodyrate
+    plan_dim: 4                  # (T, w_x, w_y, w_z); equals the rotor dimension, so the inherited plan
+                                 # bookkeeping (reset / shift / OU draw) is reused unchanged.
+
+    # ---- channel scales. sigma stays the base cell's PER-ROTOR-EQUIVALENT NEWTONS. The collective
+    # channel keeps exactly the marginal std vanilla gives its F_total channel, sigma*||mixer_row_0||;
+    # each rate channel takes the RATE CHANGE vanilla's torque noise of that channel produces in one
+    # control step, sigma*||mixer_row_{j+1}||/J_j*dt. Every factor is read off the system object or the
+    # config at construction; the resolved per-channel stds are recorded in every cell JSON. It is a
+    # CHOICE (a torque std has no rate counterpart without a timescale) and is recorded as one.
+    channel_scale: from_mixer_rows_over_inertia_times_dt
+
+    # ---- the low-pass on the sampled body rates: L1-MPPI's stated correction for discontinuous rate
+    # samples. w_f[k] = beta*w_f[k-1] + (1-beta)*w_cmd[k], initialised at the CURRENT MEASURED body
+    # rate. `beta` is asserted equal to exp(-1/steps) at construction to 1e-12, exactly as the OU pole
+    # is, so the two fields can never drift apart.
+    rate_lowpass:
+      steps: 2.0                 # 2 control steps = 0.10 s. Shorter than the sampler's own OU
+                                 # correlation length (mppi.sampling.ou.correlation_steps = 5, 0.25 s),
+                                 # so the filter smooths the within-correlation discontinuity the
+                                 # correction targets without erasing the sampler's own timescale.
+      beta: 0.6065306597126334   # exp(-1/2)
+
+    # ---- scale, fixed for every cell so the 8 cells are comparable to each other -------------------
+    scale:
+      n_scenes: 400              # the FIRST 400 fullcb scenes of the pool, in pool order
+      ebs: 200                   # HELD at mppi.screen.ebs — the value every retained v2.8.4 row of this
+                                 # lineage was scored under, so the eval-chunk layout is consistent
+      seed: 42
+
+    # ---- THE SCREEN GRID, nested exactly as the charter writes it: 8 cells --------------------------
+    #     N in {1024, 4096} x lambda in {0.05, 0.2} x inner-loop rate gain in {backup-CBF value, 2x}
+    # Everything else is the v3 base configuration, read from `mppi.v5.base_cell` (C_crash 1e5, m 1,
+    # H 40, sigma 1.0, OU noise, hover centring, settling terminal, B1-B3 off, G1-G4 off) rather than
+    # duplicated here, so the two blocks cannot drift apart.
+    grid:
+      n_samples: [1024, 4096]
+      lam: [0.05, 0.2]
+      # The inner-loop rate gain is k_rate = system.kd_att * factor, with system.kd_att READ from
+      # config["lqr"][run.system] = the attitude loop's own rate gain, which is the gain
+      # src/common/filter_backup.py names in its docstring and reaches through `override_gains`.
+      # factor 1 IS the backup-CBF value; factor 2 is twice it. The value itself is never typed.
+      rate_gain_factors: [1.0, 2.0]
+    sample_chunk:
+      # per-N rollout sample-chunk; 0 = all N at once. Samples are INDEPENDENT, so chunking is exactly
+      # equivalent — it trades wall time for peak VRAM and changes nothing else.
+      1024: 0
+      4096: 0
+
+    # ---- the CPU smoke, run BEFORE any GPU cell ----------------------------------------------------
+    smoke:
+      rate_gain_factor: 1.0      # the smoke runs the factor-1 controller — factor 1 IS the backup-CBF
+                                 # value itself (k_rate = system.kd_att, unmultiplied), which is what
+                                 # makes check (f)'s algebraic identity with the shipped PD testable.
+      hover_steps: 200           # steps the hover fixed point is held for under the full cascade
+      straight_line:
+        offset: [3.0, 0.0, 0.0]  # goal - start, metres; an obstacle-free straight line
+        seconds: 10.0            # duration of each straight-line leg
+        mppi_n_samples: [1024, 4096]
+                                 # N for the CPU planner legs — the screen grid's OWN two budgets, so
+                                 # the wiring test is run at the sample budgets the screen uses. It is
+                                 # a wiring test on one constructed obstacle-free scene, never a second
+                                 # screen and never a selection.
+        mppi_horizon: 40         # H for the CPU planner legs — the base cell's own horizon
+      fidelity_probe:
+        # (g) the planner's model against the FULL plant under the same command sequence: the error the
+        # delegation assumption ("the inner loop tracks the commanded rate") actually makes over one
+        # planning horizon. Measurement only.
+        n_states: 256
+        seed_offset: 3
+      box_probe:
+        n_states: 512            # random states the aggressive-command box check is evaluated at
+        n_sampled_plans: 4096    # sampler draws used for the pre-clip out-of-box count
+      lowpass_probe:
+        n_sequences: 4096        # sequences the low-pass autocorrelation is measured over
+      predicate_probe:
+        n_scenes: 8              # pool scenes the collision-indicator agreement is checked on
+        n_rollout_steps: 30

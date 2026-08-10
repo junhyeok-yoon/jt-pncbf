@@ -19,6 +19,11 @@ class ValueNetEnsemble(nn.Module):
         hidden = int(value_cfg["hidden"])
         n_layers = int(value_cfg["n_layers"])
         beta = float(value_cfg["softplus_beta"])
+        # v2.8.4 — the certificate's codomain UPPER bound (the one config key of the ceiling axis).
+        # Default 1.0 reproduces the shipped read-out `clamp(., -1.0, 1.0)` bit for bit. The LOWER
+        # bound stays at -1.0 and is deliberately not configurable: the safe set {V_hat <= 0} and the
+        # whole region below it are untouched, so only the resolution of the unsafe region changes.
+        self.ceiling = float(value_cfg.get("ceiling", 1.0))
         self.members = nn.ModuleList(
             [_make_value_member(obs_dim, hidden, n_layers, beta) for _ in range(n_vs)]
         )
@@ -30,7 +35,7 @@ class ValueNetEnsemble(nn.Module):
         return torch.cat([member(obs) for member in self.members], dim=1)
 
     def value_all(self, obs: Tensor) -> Tensor:
-        return torch.clamp(self.forward_all(obs), min=-1.0, max=1.0)
+        return torch.clamp(self.forward_all(obs), min=-1.0, max=self.ceiling)
 
     def value(self, obs: Tensor) -> Tensor:
         return torch.mean(self.value_all(obs), dim=1)

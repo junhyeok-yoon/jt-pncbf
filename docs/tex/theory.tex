@@ -89,18 +89,34 @@ exact value equals the hazard, so a position-only hazard hands the value a gradi
 velocity and no rate component, and both input channels vanish there. That set has positive
 measure, so the failure is a property of the exact object and no amount of training removes it.
 Adding a velocity lead restores the thrust channel on that set up to a null subset; adding a
-rate term restores the torque channel. Whether the degeneracy is null on the whole operating
-region remains open. We then record what the deployed realization does and does not inherit:
-the finite-candidate filter is a projection only up to action dimension two, so at per-rotor
-dimension four it is a selection, discontinuous across ties and gradient-free wherever a box
-vertex wins; a single-scalar dual solve is exact and continuous in every dimension.
-Sampled-data statements bound the inter-sample excursion and show why a finer control period
-helps sub-quadratically. Part~II collects the double-integrator results on self-conditioning:
-the separation of the safety channel from policy optimization, the degeneracy of
-self-referential evaluation, a fully discrete margin theorem with a measurable error budget,
-and the maneuver-family barrier that realizes the safety guarantees with no learned object in
-the safety channel. Every empirical figure carries its seed basis, pool, and device; retracted
-hypotheses are kept as retractions.
+rate term restores the torque channel. We then record what the deployed realization does and
+does not inherit: the finite-candidate filter is a projection only up to action dimension two,
+so at per-rotor dimension four it is a selection, discontinuous across ties and gradient-free
+wherever a box vertex wins; a single-scalar dual solve is exact and continuous in every
+dimension.
+
+The consolidated edition adds four groups of results. First, the \emph{geometry of the deployed
+hazard is bounded, and the bound is arithmetic}: the clipped ramp is exactly $-1$ beyond the
+ramp width, so the obstacle branch cannot be positive from outside it at any admissible closing
+speed, and the sensing distance is therefore set by a constant that was never screened. An
+exponential replacement removes the flat region in exact arithmetic but not at deployment
+precision, and it does not decouple the sensing length from the gain-switch inflation. Second,
+the \emph{horizontal deceleration authority against a vertical cylinder is identically zero}
+until the vehicle tilts, which is the horizontal counterpart of the altitude-holding limit and
+which makes the stopping distance two-phase; the tilt phase is rate-limited, not torque-limited,
+on the deployed box. Third, the \emph{learning signal in the failure phase is absent for a
+structural reason}: the task gradient is identically zero wherever the deployed selection returns
+a box vertex, that set coincides with the empty branch, and the empty branch on the failure class
+is a spawn condition rather than a trajectory event -- so the loss gate's temperature multiplies
+a gradient that does not exist, and a proximal realization restores a rank-one Jacobian only
+strictly inside the saturation knee. Fourth, the \emph{rotor-level input interface is recorded as
+what a sampling planner cannot work in}, now measured at three interfaces rather than one, with
+the reason localized: the search finds reaching trajectories and the cost does not select them.
+Every empirical figure carries its seed basis, pool, and device; retracted hypotheses are kept as
+retractions. Part~II collects the double-integrator results on self-conditioning: the separation
+of the safety channel from policy optimization, the degeneracy of self-referential evaluation, a
+fully discrete margin theorem with a measurable error budget, and the maneuver-family barrier
+that realizes the safety guarantees with no learned object in the safety channel.
 \end{abstract}
 
 \tableofcontents
@@ -273,7 +289,9 @@ $\mathcal S_h$ 자체는 null이므로 어려움의 원천이 아니다. 배포�
 \cref{eq:thrustentry}가 작아지면 배포 box의 authority $\bar u\,\bignormone{(\Lg V)^-}$
 (\cref{prop:sinfty-decomp})가 요구 보정을 지배하지 못해 feasible 집합이 안전 집합 아래로 수축한다. 그 근방은 두께를 가진다.
 position-only $h$가 first-order filter로 쓰일 수 없는 진짜 이유는 \cref{cor:degen-pos}이며,
-$\mathcal S_h$가 아니다.
+$\mathcal S_h$가 아니다. 배포된 $h_\star$에 대해서는 이와 별개의, 더 강한 제약이 있다:
+\cref{prop:ramp-ceiling}이 보이듯 절단된 ramp는 그 폭 밖에서 정확히 상수이므로, 그곳에서는
+$\grad\phi=0$이고 \cref{eq:thrustentry}가 $\mathcal S_h$와 무관하게 소멸한다.
 \end{remark}
 
 \section{PNCBF collapses the relative degree to one}\label{sec:validity}
@@ -567,7 +585,10 @@ $\partial\dot\Vhpi/\partial u=\Lg\Vhpi$이므로 $\mathcal Z$ 위에서는 certi
 $u$-감도가 $0$이고, plant를 경유하는 task-cost gradient는 영향을 받지 않는다. 이산 형태의 증명은
 \cref{prop:vacuum}(c)에 있다. 배포 사상에서 policy gradient가 실제로 소멸하는 자리는 box vertex가
 이기는 집합이며(\cref{prop:sel}(a), \cref{cor:jt-deployed}(b)), 그것은 $\mathcal Z$와 일반적으로
-서로소다.
+서로소다. 배포 loss에서 이 소멸이 어디까지 번지는지는 \cref{rem:gate-open}이 측정으로 닫는다:
+$\texttt{detach\_filter\_coeffs}$가 켜져 있으면 $u_{\mathrm{nom}}$은 $u_{\mathrm{safe}}$를 통해서만
+task 항에 도달하므로, $\partial u_{\mathrm{safe}}/\partial u_{\mathrm{nom}}=0$인 곳에서는 one-step
+형태뿐 아니라 full-BPTT task gradient 전체가 소멸한다.
 \end{remark}
 
 \begin{corollary}[Joint training is well posed where the certificate has authority]\label{cor:main}
@@ -593,7 +614,9 @@ Scope: a.e.\ on $\mathcal N$, per fixed $o$.
 구현된 $\pi_\theta$와 $\Vhat$는 상태가 아니라 관측 $o(x,S)$의 함수다($S$: 장애물·goal 배치).
 관측이 어떤 변환군으로 몫을 취하는 것은 그 변환이 실제 closed-loop dynamics의 대칭일 때만 정보
 손실이 없다. 이 절은 그 조건을 명시하고, 중력이 있는 계에서 회전 몫이 과잉임을 --- 따라서
-memoryless obs-conditioned 함수에 제거 불가능한 aliasing 하한이 생김을 --- 보인다.
+memoryless obs-conditioned 함수에 제거 불가능한 aliasing 하한이 생김을 --- 보인다. 그 위에
+Top-$K$ 절단이 별개의 손실로 얹히며, 그 절단이 배포 pool에서 실제로 무는 것이
+\cref{rem:topk-measured}이다.
 
 \begin{definition}[Closed-loop symmetry group]\label{def:sym}
 Let a subgroup $G$ act by rigid motions simultaneously on the state (positions, velocities,
@@ -700,6 +723,211 @@ latency의 대가를 치르며, 흔적이 약한 곳에서 정확히 실패하�
 곳이다.
 \end{remark}
 
+\begin{remark}[Measured: the Top-$K$ truncation drops the struck obstacle]\label{rem:topk-measured}
+배포 encoder는 hard Top-$K$이며 $K=5$, 정렬 key는 surface distance
+$\norm{c_{xy}-p_{xy}}-r$, 비활성 실린더는 $+\infty$로 밀린다. 배포 경로에는 \emph{거리 절단
+상수가 존재하지 않는다} --- 도달 범위는 $K$ 하나가 정한다. 거리 채널에는 정규화도 clip도 없고,
+network는 raw body-frame offset $R(q)^\top(\Delta c_{xy},0)$과 raw 반지름을 미터 단위로 받는다.
+따라서 관측의 obstacle 표현은 거리에 따라 열화하지 않으며, 최근접 실린더는 구성상 rank 1이라
+언제나 Top-$K$ 안에 있다. 절단이 무는 것은 두 번째 이후의 실린더다.
+
+그럼에도 절단은 실제로 문다. 충돌 episode의 활성 window 전체에서 \emph{실제로 부딪힌} 실린더가
+Top-5 밖에 있는 step이 ARM $32/416$(20 episode = 20 scene, 최대 rank 11), GAMMA $80/399$
+(16 / 16, 최대 rank 9)이다. 접촉 window 안에서 ARM은 $k=1\ldots10$ 전 구간에서 안에 있고,
+GAMMA는 contact$-8$에서 $2/6$, contact$-9$에서 $2/5$, contact$-10$에서 $2/4$가 밖으로 나가며 ---
+매번 같은 두 scene이다 --- rank 8에 이른다. contact$-1$에서는 두 arm의 모든 episode에서 rank 1이다.
+
+\cref{cor:obs-label}이 그 귀결을 말한다: 두 상태가 rank $>K$인 실린더에서만 다르면 관측이 같고,
+그 구별을 요구하는 어떤 label도 memoryless obs-conditioned 인증서로 표현되지 않는다. 절단된
+ramp 아래에서는 이것이 무해하다 --- $\phi$가 그 거리에서 정확히 $-1$이라 label이 그 쌍을 분리하지
+않기 때문이다(\cref{prop:ramp-ceiling}). 감지 거리를 늘리는 어떤 hazard 형태도 이 무해함을 잃고,
+관측이 나를 수 없는 구별을 인증서에 요구하게 된다. 범위: 단일 seed, 두 arm, canonical pool.
+\end{remark}
+
+\section{The sensing ceiling of the deployed geometric term}\label{sec:ramp}
+
+\textbf{직관.} 배포된 기하 항은 raw penetration이 아니라 폭 $h_{\mathrm{scale}}$의 절단된
+ramp다. 그 폭 밖에서 항은 정확히 $-1$이고 평평하다. 이 절은 그 평평함이 감지 거리에 대한
+\emph{산술적} 상한을 만든다는 것을, 그리고 그 상한이 velocity lead 계수로는 풀리지 않는다는 것을
+보인다. 상한을 정하는 상수는 이 계에서 한 번도 선별된 적이 없다.
+
+\begin{definition}[Clipped geometric ramp]\label{def:ramp}
+For clearance $d\eqdef\norm{p_{xy}-c_{xy}}-r$ to an active cylinder and a width
+$h_{\mathrm{scale}}>0$, the deployed geometric term is
+\begin{equation}\label{eq:ramp}
+\phi(d)\;\eqdef\;1-2\,\mathrm{clamp}\!\big(d/h_{\mathrm{scale}},\,0,\,1\big),
+\end{equation}
+so $\phi=+1$ for $d\le0$, $\phi$ falls linearly to $-1$ at $d=h_{\mathrm{scale}}$, and
+$\phi\equiv-1$ beyond. Its slope inside the ramp is $-2/h_{\mathrm{scale}}$ and its zero level
+set is $d=h_{\mathrm{scale}}/2$, an inflation of every cylinder by that amount.
+\end{definition}
+
+\begin{proposition}[The ramp width is a hard sensing ceiling]\label{prop:ramp-ceiling}
+Let the horizontal branch of the deployed hazard be $\mathrm{horiz}=\phi(d)+c\,v_r$ with
+$\phi$ as in \cref{def:ramp}, $c>0$ the velocity-lead coefficient and $v_r$ the radial closure
+rate. Then, scope: exact.
+\begin{enumerate}[label=(\alph*)]
+  \item \textbf{(reaction distance)} While $c\,v_r\le1$, $\mathrm{horiz}>0$ holds exactly on
+  \begin{equation}\label{eq:reaction}
+  d\;<\;\frac{h_{\mathrm{scale}}}{2}\big(1+c\,v_r\big),
+  \end{equation}
+  a distance strictly inside the ramp; the whole $h_{\mathrm{scale}}$-dependence is the factor
+  $h_{\mathrm{scale}}/2$.
+  \item \textbf{(saturation ceiling)} Beyond the ramp, $\phi\equiv-1$, so $\mathrm{horiz}>0$
+  there requires $c\,v_r>1$, i.e.\ $v_r>1/c$. If the plant's speed clamp satisfies
+  $v_{\max}\le1/c$, then the horizontal branch \emph{cannot} be positive from outside the ramp
+  at any admissible state, whatever the closing speed.
+  \item \textbf{(the lead cannot lift the ceiling)} Under (b) the reaction distance
+  \cref{eq:reaction} is bounded by $\tfrac{h_{\mathrm{scale}}}{2}(1+c\,v_{\max})\le
+  h_{\mathrm{scale}}$, so increasing $c$ moves the reaction distance by at most a factor two
+  and never past the ramp width, while increasing $h_{\mathrm{scale}}$ scales it linearly and
+  simultaneously inflates the zero level set to $h_{\mathrm{scale}}/2$.
+  \item \textbf{(the ramp does not enter $\Lg$)} $\grad_v\mathrm{horiz}=c\,\hat r$ carries no
+  length scale, so $\Lg h_\star$ --- hence the authority term
+  $\bar u\bignormone{(\Lg h_\star)^-}$ of \cref{prop:sinfty-decomp} --- is independent of
+  $h_{\mathrm{scale}}$. The slope $-2/h_{\mathrm{scale}}$ lives entirely in $\grad_p$, i.e.\ in
+  the drift $\Lf h_\star$: widening the ramp raises demand without raising authority.
+\end{enumerate}
+\end{proposition}
+\begin{proof}
+(a) Inside the ramp $\phi=1-2d/h_{\mathrm{scale}}$, so $\mathrm{horiz}>0$ reads
+$1-2d/h_{\mathrm{scale}}+c\,v_r>0$, which rearranges to the display; the bound is below
+$h_{\mathrm{scale}}$ exactly when $c\,v_r\le1$. (b) Beyond the ramp $\phi=-1$ identically, so
+$\mathrm{horiz}=-1+c\,v_r$. (c) Substitute $v_r\le v_{\max}\le1/c$ in (a). (d)
+$\grad_v\phi=0$ since $\phi$ depends on position only, and $\grad_v(c\,v_r)=c\,\hat r$;
+\cref{def:under} then gives the thrust entry $\tfrac{c}{\mass}\hat r^\top Re$ with no
+$h_{\mathrm{scale}}$.
+\end{proof}
+
+\begin{remark}[Measured: the ceiling binds on the deployed constants]\label{rem:ramp-measured}
+배포값은 $h_{\mathrm{scale}}=0.35$~m, $c=0.3$, $v_{\max}=2.5$~m/s이므로 $1/c=3.333>v_{\max}$이고
+\cref{prop:ramp-ceiling}(b)의 조건이 성립한다: \emph{0.35~m 밖에서 obstacle branch는 어떤 속도로도
+양수가 될 수 없다}. 최대 접근 속도에서의 반응 거리는 $0.306$~m로 ramp 폭 자체를 넘지 못한다.
+
+이것이 실패 계급의 관측과 정합한다. obstacle 충돌에서 접촉 5 step 전 clearance 중앙값이
+$0.355$~m, 즉 ramp 경계 바로 밖이고, 그 시점의 인증서는 침묵한다. 서 있는 경고(final-run lead)는
+ARM $0.15$~s, GAMMA $0.18$~s --- 세 내지 네 control step이다.
+
+두 상수를 각각 6.67배와 4.29배 범위에서 기록된 상태 위에 재계산한 결과는 다음과 같다. $c$를
+$0.3\to2.0$으로 키우면 obstacle 경고가 $0.15\to0.20$~s(한 step) 움직이는 동안 도달 episode 중
+$h_\star$가 한 번이라도 양수가 되는 수가 $525\to1805$(전체 1870)로 간다. $h_{\mathrm{scale}}$을
+$0.35\to1.5$로 키우면 경고가 $0.15\to0.28$~s(세 step)로 두 배 더 움직이지만, analytic row의
+$s_\emptyset>0$ 비율이 timeout step에서 $0.1731\to0.9091$, 도달 step에서 $0.0689\to0.5134$로
+간다. 그리고 $\phi$가 $h_{\mathrm{scale}}$에 대해 단조 증가이고 lead와 band 항이 그것을 읽지
+않으므로, $h_\star$의 부호 이동은 \emph{완전히 일방향}이다: 모든 cell에서 pos$\to$neg가 정확히 $0$이다.
+범위: 단일 seed, 두 arm, canonical pool, 기록된 상태 위의 산술이며 그 상수로 학습했을 때의
+결과에 대한 주장이 아니다.
+\end{remark}
+
+\begin{proposition}[An exponential ramp removes the flat region but not the coupling]\label{prop:exp-ramp}
+Replace \cref{eq:ramp} by $\phi_{\exp}(d)\eqdef2e^{-d/\ell}-1$ for $d\ge0$, clamped above at
+$+1$ for $d<0$, with $\ell>0$. Then, scope: exact.
+\begin{enumerate}[label=(\alph*)]
+  \item $\phi_{\exp}(0)=+1$, $\phi_{\exp}\to-1$ asymptotically and attains $-1$ nowhere, so
+  $\grad_p\phi_{\exp}\neq0$ at every finite clearance and \cref{prop:ramp-ceiling}(b) has no
+  analogue: the branch can be positive at any distance provided $c\,v_r$ is large enough.
+  \item The contact-face slope is $-2/\ell$, matching \cref{def:ramp} when $\ell=h_{\mathrm{scale}}$;
+  the zero level set is $d=\ell\ln2$, so at matched slope the gain-switch inflation grows by the
+  factor $2\ln2=1.3863$, and matching the inflation instead requires
+  $\ell=h_{\mathrm{scale}}/(2\ln2)$, whose slope is steeper by the same factor. \emph{The two
+  cannot be matched simultaneously.}
+  \item $\phi_{\exp}(\ell)\ge\phi(h_{\mathrm{scale}})$ pointwise if and only if
+  $\ell\ge h_{\mathrm{scale}}$. Hence for $\ell<h_{\mathrm{scale}}$ the substitution can lower
+  $h_\star$ somewhere, and the sign migration is two-way.
+  \item Like the clip, $\phi_{\exp}$ is position-only, so $\grad_v$ is unchanged and
+  \cref{prop:ramp-ceiling}(d) carries over verbatim: the candidate never enters $\Lg h_\star$.
+\end{enumerate}
+\end{proposition}
+\begin{proof}
+(a) and (b) are direct evaluations; $d\phi_{\exp}/dd=-(2/\ell)e^{-d/\ell}$ gives the slope and
+$\phi_{\exp}=0$ gives $d=\ell\ln2$. (c) With $x\eqdef d/\ell$ and $\ell=h_{\mathrm{scale}}$,
+$2e^{-x}-1-(1-2x)=2e^{-x}+2x-2$ vanishes at $x=0$ with derivative $2-2e^{-x}\ge0$, hence is
+non-negative for $x\ge0$; scaling $\ell$ up only raises $\phi_{\exp}$ pointwise and scaling it
+down only lowers it. (d) $\phi_{\exp}$ depends on $p$ alone.
+\end{proof}
+
+\begin{corollary}[Sensing reach per unit of gain-switch inflation]\label{cor:reach-per-inflation}
+Define the \emph{inflation radius} as the clearance at which the geometric term crosses zero ---
+the surface on which the deployed two-valued gain switches --- and the \emph{sensing edge} at
+level $\eta\in(0,1)$ as the clearance at which the term falls to $-\eta$. Then the ratio of the
+two is a constant of the functional form, independent of its scale parameter:
+\begin{equation}
+\frac{d_{-\eta}}{d_{0}}\;=\;
+\begin{cases}
+1+\eta, & \text{clip \cref{def:ramp}},\\[2mm]
+\dfrac{\ln\!\big(2/(1-\eta)\big)}{\ln 2}, & \text{exponential \cref{prop:exp-ramp}}.
+\end{cases}
+\end{equation}
+At $\eta=1$ the clip attains $-1$ exactly at $d_{-1}=2d_0$ and is flat beyond, so its sensing
+edge is at twice its inflation radius and no further; the exponential attains $-0.9$ at
+$\ln20/\ln2=4.32$ times its inflation radius and $-0.99$ at $\ln200/\ln2=7.64$ times.
+Consequently, at matched inflation --- hence at matched gain-switch geometry, which is what
+\cref{prop:ceiling} and \cref{cor:alpha-thresh} make the driver of the empty branch --- the
+exponential reaches $2.16$ times further than the clip at the $-0.9$ level. Scope: exact,
+a property of the two functional forms and of neither's constants.
+\end{corollary}
+\begin{proof}
+For the clip, $\phi=0$ at $d=h_{\mathrm{scale}}/2$ and $\phi=-\eta$ at
+$d=h_{\mathrm{scale}}(1+\eta)/2$, whose ratio is $1+\eta$. For the exponential,
+$\phi_{\exp}=0$ at $d=\ell\ln2$ and $\phi_{\exp}=-\eta$ at $d=\ell\ln(2/(1-\eta))$; $\ell$
+cancels in the ratio.
+\end{proof}
+
+\begin{remark}[Measured: what the exponential buys at matched warning, and what it does not]\label{rem:exp-matched}
+\cref{cor:reach-per-inflation}의 귀결은 기록된 상태 위에서 직접 읽힌다. ARM obstacle 계급의
+서 있는 경고 중앙값을 맞춰 놓고 analytic row의 $s_\emptyset>0$ 비율을 비교하면:
+
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+form & 경고 $p_{50}$ (s) & 팽창 (m) & empty obst / timeout / reached (ARM) \\
+\midrule
+clip $h_{\mathrm{scale}}=0.35$ (배포) & $0.15$ & $0.175$ & $0.3798$ / $0.1731$ / $0.0689$ \\
+exp $\ell=0.175$                      & $0.15$ & $0.121$ & $0.2933$ / $0.0664$ / $0.0415$ \\
+clip $h'=0.7$                         & $0.20$ & $0.350$ & $0.7212$ / $0.6460$ / $0.2521$ \\
+exp $\ell=0.25$                       & $0.20$ & $0.173$ & $0.3846$ / $0.1715$ / $0.0748$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+즉 clip이 한 control step의 경고를 더 사려면 timeout step의 analytic empty를 $0.173\to0.646$으로
+올려야 하는 반면, 지수형은 같은 한 step을 $0.173\to0.172$에 산다. 팽창 열이 그 이유를 말한다 ---
+지수형은 팽창을 거의 그대로 둔 채 감지를 늘린다.
+
+세 가지 단서를 함께 기록한다. 첫째, $\ell<h_{\mathrm{scale}}$에서 $h_\star$의 부호 이동이
+양방향이므로(\cref{prop:exp-ramp}(c)) 인증서가 위험을 놓치는 방향의 이동이 존재한다:
+$\ell=0.175$에서 pos$\to$neg가 활성 step의 $0.00996$(obstacle $22/416$)이고, $\ell=0.25$에서
+$0.00064$로 사실상 사라진다. 둘째, $\ell=0.35$에서 timeout empty가 $0.2014\to0.4133$으로 급증하므로
+지수형의 이점은 $\ell$이 커지면 소멸한다. 셋째이자 가장 중요한 것 --- 이 표의 empty는 \emph{얼린
+정책의 궤적 위} 재계산이므로 보수성 비용의 상한이지 학습 결과의 예측이 아니다. hazard를 넓히는
+목적이 정책이 더 멀리서 비키게 만드는 것이므로, 실현되는 비용은 이보다 작을 수도 클 수도 있으며
+그것은 측정의 대상이다. 범위: 단일 seed, 두 arm, canonical pool.
+\end{remark}
+
+\begin{remark}[Measured: three constraints bound the exponential candidate]\label{rem:exp-measured}
+세 측정이 함께 이 후보의 창을 닫는다. 모두 기록된 상태 위의 산술이며 학습 결과에 대한 주장이 아니다.
+
+\emph{관측 천장.} \cref{rem:topk-measured}의 절단 아래에서, $\phi_{\exp}$가 유의미하게 $-1$이 아닌
+거리 $d_{\mathrm{mat}}(\ell)=\ell\ln(2/\varepsilon)$가 $(K{+}1)$번째 최근접 실린더까지의 거리를
+넘으면 인증서는 관측이 나를 수 없는 구별을 요구받는다. 활성 step 위 $D_{K+1}$의 분위수로 읽은
+천장은 $\varepsilon=0.01$에서 $p5$ $0.2098$~m, $p50$ $0.5040$~m이다(두 arm의 최솟값).
+
+\emph{정지거리 바닥.} \cref{prop:hstop}의 두 단계 정지거리는 $v=2.0$에서 $0.527$~m,
+$v=2.5$에서 $0.730$~m이고, $1.5\,d_{\mathrm{stop}}=k\ell$을 $k=3$으로 읽으면
+$\ell=0.2636$과 $0.3647$~m를 요구한다. 따라서 중앙 장면에서는 $\ell\approx0.35$--$0.50$이 두
+구속을 함께 만족하지만, $p5$ 장면에서는 $v\gtrsim1.5$를 덮는 $\ell$이 존재하지 않는다.
+
+\emph{수치 바닥.} (a)의 "평평한 구간 없음"은 실수 산술에서만 정확하다. 기록된 상태의 위치
+1-ulp가 $\phi$를 1 $\phi$-ulp 미만으로 움직이는 거리 --- 즉 기록된 상태가 gradient를 분해하지
+못하는 거리 --- 는 $\ell\ln(2/(\ell\,g_{\mathrm{res}}))$이고, 중앙 quantum에서 $\ell=0.35$일 때
+$0.853$~m이다. 활성 step의 $41.8\%$(ARM) / $40.6\%$(GAMMA)가 그 밖에 있다. $\ell=0.175$에서는
+$0.548$~m와 $60.1\%$ / $57.3\%$다. 대조적으로 배포 clip의 $\abs{\grad_p\phi}$는 ramp 안에서 정확히
+$2/h_{\mathrm{scale}}$이고 밖에서 정확히 $0$이다.
+
+그리고 $\ell=0.175$에서는 경고가 배포 clip보다 짧다(ARM $p95$ $0.2025$ 대 $0.30$~s). (c)가 그
+이유를 말한다. 범위: 단일 seed, 두 arm, canonical pool.
+\end{remark}
+
 \section{Liveness: a reach--avoid certificate for goal-reaching}\label{sec:liveness}
 
 \textbf{직관 (안전 인증서는 도달을 인증하지 않는다).}
@@ -774,6 +1002,9 @@ stuck $0\to0.7295$ --- 잔여 회전을 지닌 도착은 그 자리에 머물러
 학습 가능하고 거의 무비용이며, 해결된 reach의 $100\%$가 조건을 담는다. 범위: 단일 seed,
 하나의 계(quadrotor\_3d), canonical pool; 각속도 state가 없는 두 계는 byte-identical로
 검증되어 조건이 구조적으로 vacuous함이 확인되었다.
+
+이 조건이 sampling baseline과의 비교에서 다시 나타난다: 문헌 표준 running cost에는 정착을
+함의하는 항이 없으므로 그 최적해는 이 goal 조건을 만족할 이유가 없다(\cref{rem:rotor-measure}).
 \end{remark}
 
 \begin{remark}[Safety--liveness compatibility]\label{rem:ra-compat}
@@ -793,6 +1024,12 @@ program으로 흡수한다. 구조 보존적 실현은 \emph{pathwise}이다 ---
 공급하면 단일 certificate와 filter와 policy의 역할이 그대로 유지된다. certificate 수준의 liveness
 보장은 $\Vhpi$를 \emph{대체}하는 단일 reach--avoid value를 요구하며, 그에 대한 relative-degree
 붕괴·degeneracy measure·gradient 생존·min--max recursion의 학습 가능성은 미해결이다.
+
+한 가지 단서를 덧붙인다. 장애물 근처 내향 접근 속도에 대한 running 페널티는 배포 hazard가
+\emph{이미} 나르는 양($c\,v_r$, \cref{prop:sens-c})을 loss에서 중복 계상한다. 그 중복이 정당화되려면
+hazard가 그 정보를 실어 나르지 못하는 영역이 지목되어야 하며, \cref{prop:ramp-ceiling}(b)가 정확히
+그런 영역 --- ramp 밖 --- 을 준다. 그러나 그 영역의 올바른 처방은 loss 항이 아니라 기하 항의
+형태다(\cref{cor:reach-per-inflation}).
 \end{remark}
 
 \begin{remark}[Empirical status of the pathwise realization]\label{rem:pathwise-status}
@@ -1007,6 +1244,164 @@ certificate와 무관한 회복 candidate 포함 --- 가 실패해야 하며, ca
 certificate--policy recursion; 참 viability kernel에 대한 $\{V^{\calU}\le0\}$의 undiscounted 정확성.
 \end{remark}
 
+\section{The label operator's control gradient: the ceiling and the discount}\label{sec:labgrad}
+
+\textbf{직관.} 앞 절의 label 연산자는 학습 target을 정의한다. 이 절은 그 target이 \emph{제어에
+대해} 어떤 gradient를 내는지를 묻는다. 답은 세 값이다: label의 제어 gradient는 hazard의
+제어 gradient에 스칼라 하나를 곱한 것이고, 그 스칼라는 세 값만 취한다. 두 배포 상수 --- 상한
+절단 $C$와 할인 $\gamma$ --- 는 각기 그 스칼라의 서로 다른 regime에 작용하며, 어느 쪽도 gradient의
+\emph{방향}은 바꾸지 못한다. 이것이 두 축이 각자의 기전을 성공시키고도 실패 계급의 구성을
+바꾸지 못한 이유이며, 절 끝에서 그 한계를 측정과 함께 확정한다.
+
+\paragraph{설정.}
+배포되는 label 연산자는 상한 $C>0$과 하한 $-1$로 두 지점에서 절단되는 discounted running max
+형태를 갖는다:
+\begin{align}
+  c(x) &= \operatorname{clamp}\!\big(h_\star(x),\, -1,\, C\big), \label{eq:lab-c}\\
+  m(x) &= \max\!\Big(c(x),\; (1-\gamma)\,c(x) + \gamma\,\Vhat_{\mathrm{tgt}}(x')\Big),
+         \label{eq:lab-m}\\
+  L(x) &= \operatorname{clamp}\!\big(m(x),\, -1,\, C\big). \label{eq:lab-L}
+\end{align}
+배포 read-out도 같은 상수를 쓴다: $\Vhat = \operatorname{clamp}(f_\theta(o),-1,C)$. \eqref{eq:lab-m}의
+형태는 배포 미분 집합 $\{1,\,1-\gamma\}$에서 역산한 것이며 source에서 직접 읽지 않았다 --- 이
+단서를 붙여 둔다.
+
+\begin{proposition}[Three-valued label gradient]\label{prop:label-tri}
+\eqref{eq:lab-c}--\eqref{eq:lab-L}에서 직접 항만 취하면
+\begin{equation}
+  \frac{\partial L}{\partial u} \;=\; \varsigma(x)\,\frac{\partial h_\star}{\partial u},
+  \qquad
+  \varsigma(x) \;=\; \mathbf{1}\{-1<m<C\}\cdot\frac{\partial m}{\partial c}\cdot
+             \mathbf{1}\{-1<h_\star<C\},
+  \label{eq:lab-s}
+\end{equation}
+이고 $\varsigma(x)$는 다음 세 값만 취한다.
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+regime & 조건 & $\varsigma$ \\
+\midrule
+clipped   & $h_\star\ge C$ 또는 $m\ge C$ & $0$ \\
+bootstrap & unclipped, $(1-\gamma)c+\gamma\Vhat' > c$ & $1-\gamma$ \\
+hold      & unclipped, $c \ge (1-\gamma)c+\gamma\Vhat'$ & $1$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+Scope: exact, given \eqref{eq:lab-m}.
+\end{proposition}
+
+\begin{proof}
+연쇄율에서 $\partial L/\partial u = \mathbf 1\{-1<m<C\}\,(\partial m/\partial c)\,(\partial c/\partial u)$
+이고 $\partial c/\partial u = \mathbf 1\{-1<h_\star<C\}\,\partial h_\star/\partial u$이다.
+$m$은 두 아핀 함수의 max이므로 $\partial m/\partial c$는 활성 가지에 따라 $1$ 또는 $1-\gamma$이다
+(비미분점은 영집합). 절단 지시자 중 하나라도 $0$이면 $\varsigma=0$이다.
+\end{proof}
+
+\begin{corollary}[Direction is preserved]\label{cor:label-dir}
+$\varsigma(x)\ge0$이므로 $\grad_u L\ne0$인 모든 상태에서
+$\cos\big(\grad_u L,\ \grad_u h_\star\big) = +1$이다. 즉 $C$나 $\gamma$를 바꾸는 것은 label이
+gradient를 갖는 \emph{빈도와 크기}만 바꾸고 \emph{방향}은 바꾸지 않는다.
+\end{corollary}
+
+\noindent
+측정: 세 population 모두 cosine의 $p_{50}=1.000000$, $\min=1.0000$. \cref{cor:label-dir}은
+가정이 아니라 확인된 성질이다. 범위: 단일 seed, quadrotor\_3d, 수집된 training state와 실패 계급
+pre-contact step.
+
+\begin{remark}[Measured: the ceiling at $C=1$ is a dead spot]\label{rem:C1-dead}
+$h_\star\ge C$인 상태에서 $\mathbf1\{h_\star<C\}=0$이므로 $\varsigma=0$이고 따라서
+$\partial L/\partial u\equiv0$이다. 측정: 실패 계급 pre-contact step의 $36.67\%$가 $C=1$에서
+$h_\star\ge1$이었고, $148$ step이 몰린 $\Vhat\in[0.9,1.0)$ bin의 $\norm{\grad_u L}$ 중앙값은
+$0.000000$이었다. 이 결손은 배포 인증서로 그대로 전달된다: 같은 계급에서
+$\norm{\Lg\Vhat}/\norm{\Lg h_\star}$의 $p_{50}$이 $0.122$이다. 배포 row가 $A=\Lg\Vhat$을 쓰고
+singular 판정이 $\norm{\Lg\Vhat}$의 문턱이므로(\cref{rem:clip-measured}), label의 $\varsigma=0$은
+인증서의 권한 결손으로 이어진다.
+\end{remark}
+
+\begin{proposition}[Analytic supremum of the deployed hazard]\label{prop:hstar-sup}
+배포되는 hazard는 유계이며
+\begin{equation}
+  \sup h_\star \;=\; \psi_{\mathrm{cap}} + c_z\,v_{\max}
+              \;=\; 0.8 + \tfrac{\pi}{4}\cdot 2.5 \;=\; 2.7635 .
+  \label{eq:hstar-sup}
+\end{equation}
+\end{proposition}
+
+\noindent
+측정: 수집된 $244{,}615$개 training state에서 관측 최댓값 $2.763495683670044$, overflow bin $0$.
+\eqref{eq:hstar-sup}과 일곱 자리까지 일치한다. 따라서 유의미한 $C$의 범위는 $(1,\,2.7635]$이며,
+$C=2.7635$에서 절단이 소멸한다.
+
+\begin{remark}[The ceiling is screened, not argued]\label{rem:C-select}
+$C$는 논증이 아니라 분포에서 정한다. 분위수를 데이터 관측 \emph{이전에} 선언한 뒤($q_{99}$)
+위 training state 집합에서 읽어 $C=Q_{0.99}(h_\star)=1.30$을 얻었다. 이 절차 --- 통계량을 먼저
+선언하고 값을 뒤에 읽는다 --- 가 상수 선정의 표준형이며, 결과를 보고 값을 고르는 것과 구별된다.
+\cref{prop:ramp-ceiling}이 다루는 $h_{\mathrm{scale}}$은 이 절차를 거친 적이 없다.
+\end{remark}
+
+\begin{proposition}[What the ceiling can recover, and at what price]\label{prop:C-ceiling}
+$C$를 키워 $\varsigma=0$에서 벗어나게 할 수 있는 상태는 clipped regime뿐이다. 따라서 $C$ 축이
+회수할 수 있는 실패 계급의 비율은 $C=1$에서의 절단 비율로 위에서 막힌다. 한편 $\Vhat$의 상한이
+$C$이므로 unsafe branch의 요구량 상한이 함께 올라간다:
+$\max\alpha_{\mathrm{unsafe}}\Vhat=\alpha_{\mathrm{unsafe}}C$.
+\end{proposition}
+
+\noindent
+측정: $C=1$에서 절단 $36.67\%$, $C=1.3$에서 잔여 절단 $25.71\%$이므로 실제 회수분은 $10.96$~pp이고,
+$C=2.7635$까지 올려도 상한은 $36.67$~pp이다. 대가 쪽에서 $C:1\to1.3$은 요구량 상한을 $100\to130$으로
+올리고, EMPTY $0.08122\to0.08384$, SINGULAR $0.01302\to0.01580$로 측정되었다 --- 이는
+\cref{lem:attain-decay}가 예측하는 방향 그대로다 --- 요구량이 오르면 공급 여유 $s$에 대한 실행 가능 조건이 조여진다. 배포 채점에서 $\Delta\mathrm{cps}=+0.00175$이며
+그 분해는 collision $+0.005$, timeout $-0.00225$, infeasibility $-0.00100$, reach $-0.00100$,
+stuck $+0.00100$이다: 충돌 이득의 절반 이상이 timeout과 infeasibility로 되돌아간다. 범위: 단일
+seed, 공통 cell.
+
+\begin{remark}[The discount acts on a different regime]\label{rem:gamma-act}
+\cref{prop:label-tri}에서 bootstrap regime의 $\varsigma$는 정확히 $1-\gamma$이므로, $\gamma$를
+낮추면 그 regime의 gradient 크기가 비례해 커진다. 반면 regime \emph{구성}은 $\gamma$에 거의
+불변이다. 측정(offline label 재계산, 실패 계급):
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+$\gamma'$ & clipped 비율 & bootstrap 비율 & $\norm{\grad_u L}$ $p_{50}$ \\
+\midrule
+$0.98983$ (배포) & $0.2571$ & $0.6095$ & $0.0070$ \\
+$0.98$           & $0.2571$ & $0.6095$ & $0.0136$ \\
+$0.97$           & $0.2571$ & $0.6048$ & $0.0202$ \\
+$0.95$           & $0.2571$ & $0.6000$ & $0.0333$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+즉 $C$ 축과 $\gamma$ 축은 서로 다른 집합에 작용한다. $C$는 clipped regime을 $\varsigma=0$에서
+꺼내고, $\gamma$는 bootstrap regime의 $\varsigma$를 키운다. 유효 horizon은 $(1-\gamma)^{-1}$로
+배포값에서 약 $98$ step이며, 실패 계급이 spawn 후 $3$--$9$ step에서 결정된다는 측정과 대비하면
+이 계급에 대해 과잉이다.
+\end{remark}
+
+\begin{remark}[Measured: neither constant moves the failure composition]\label{rem:CG-limit}
+두 축 모두 등록된 기전이 작동했음에도 실패 계급의 \emph{구성}을 바꾸지 못했다. 충돌 episode를
+clip-residual / bootstrap-dominated / direction-defect / none으로 분할하면 $\gamma$ arm과 $C$ arm이
+클래스별로 한 점 이내에서 일치한다: bootstrap-dominated $51.0\%$ 대 $50.9\%$, direction-defect
+$61.2\%$ 대 $61.8\%$, clip-residual $0.0\%$ 대 $3.6\%$(중복 허용 분류). 특히 clip-residual은 목표
+도달 episode에서 $40.8\%\,/\,34.5\%$, 충돌 episode에서 $0.0\%\,/\,3.6\%$로 \emph{성공}의 서명이며
+실패와 무관하다. bootstrap-dominated만이 판별 계급이고($51.0\%$ 대 목표 표본 $8.2\%$), $\gamma$
+축은 그 계급의 gradient 크기를 $4.8\times$ 키우고도 비중을 움직이지 않았다.
+
+따라서 label 측 스칼라 상수로 실패 계급 구성을 이동시키는 경로는 소진되었다. \cref{cor:label-dir}이
+그 이유를 형식적으로 말한다: 두 상수 모두 $\varsigma$를 통해서만 작용하고 $\varsigma\ge0$이므로,
+어느 값을 취하든 label이 가리키는 \emph{방향}은 $\grad_u h_\star$ 그대로다. 실패가 방향의 문제라면
+$\varsigma$의 어떤 재조정도 그것을 고치지 못한다. 남는 지렛대는 $h_\star$ 자신의 형태이며, 그것이
+\cref{sec:ramp}의 대상이다. 범위: 단일 seed, 두 arm, 공통 cell.
+\end{remark}
+
+\begin{remark}[Amendment to \cref{rem:clip-measured}: the ceiling is now a parameter]\label{rem:clip-amend}
+\cref{rem:clip-measured}은 $\{\abs{\Vhat}\ge1-10^{-6}\}$로 절단 집합을 서술하며 상한 $1$을
+전제한다. 배포 상한이 $C$로 일반화되었으므로 그 집합은 $\{\abs{\Vhat}\ge C-10^{-6}\}$로 읽어야
+하고, 인용된 비율($2.31\%$, $1.27\%$, $12.87\%$)은 $C=1$ 시점의 측정이다. 절단 집합과 singular
+집합의 양방향 일치라는 질적 결론은 $C$에 무관하게 유지된다 --- 그것은 \cref{prop:ceiling}의
+귀결이지 상한값의 귀결이 아니기 때문이다. 아울러 상한 절단 행의 질량은 작다: 활성 상태 표본에서
+상한 절단 행 $15$개, 하한 절단 행 $14637$개다. 상한 절단은 도달 불가가 아니라 희소하다.
+\end{remark}
+
 \section{The deployed hazard and its vertical extension}\label{sec:vert}
 
 \textbf{직관.} 배포된 hazard는 처음에 무한 수직 실린더에 맞춰 설계되었고, 그 결과 고도와 수직
@@ -1022,11 +1417,11 @@ with axes $c_i\in\R^2$ and radii $r_i>0$, write $p_{xy}$ for the horizontal posi
 $d_i(p)\eqdef\norm{p_{xy}-c_i}$ and $\hat r_i(p)\eqdef(c_i-p_{xy})/d_i(p)$ for the inward
 horizontal normal. Then
 \begin{equation}\label{eq:hdep}
-h_\star(x)\eqdef\max_i\Big[\underbrace{r_i-d_i(p)}_{\phi_i}+c\,\big(v_{xy}\cdot\hat r_i\big)\Big],
+h_\star(x)\eqdef\max_i\Big[\underbrace{\phi\big(d_i(p)-r_i\big)}_{\phi_i}+c\,\big(v_{xy}\cdot\hat r_i\big)\Big],
 \qquad c>0,
 \end{equation}
-with avoid set $\calA=\{h_\star>0\}$. Each bracket is the velocity lead $h_c$ of
-\cref{prop:lead}(a) for the obstacle $i$.
+with $\phi$ the clipped ramp of \cref{def:ramp} and avoid set $\calA=\{h_\star>0\}$. Each bracket
+is the velocity lead $h_c$ of \cref{prop:lead}(a) for the obstacle $i$, composed with the ramp.
 \end{definition}
 
 \begin{proposition}[Vertical invariance]\label{prop:vert}
@@ -1071,7 +1466,10 @@ vertical branches to \cref{eq:hdep}:
 h_\star^{z}(x)\;\eqdef\;\max\Big\{\,h_\star(x),\ \ (p_z-z_{\mathrm{lim}})+c_z v_z,\ \
 (-p_z-z_{\mathrm{lim}})-c_z v_z\,\Big\}.
 \end{equation}
-The observation is extended by $(p_z,v_z)$ in the same change.
+The observation is extended by $(p_z,v_z)$ in the same change. The vertical branches carry their
+own cap $\psi_{\mathrm{cap}}$ and their own lead $c_z=\pi/\omega_{\max}$, neither of which reads
+the horizontal ramp width; the two branch families are therefore independent parameters
+(\cref{prop:ramp-ceiling} governs only the horizontal one).
 \end{definition}
 
 \begin{proposition}[The vertical extension removes the invariance]\label{prop:vert-removed}
@@ -1102,7 +1500,7 @@ collision으로 재분류하면 headline이 $0.9078$에서 $0.8793$으로 이동
 적용($0.8051$)과 미적용($0.9078$) 사이에 놓인다. 범위: 단일 seed, canonical pool, kstep $k=5$.
 \end{remark}
 
-\section{An altitude-holding limit, and the mass the IC distribution places beyond it}\label{sec:hold}
+\section{An altitude-holding limit, a horizontal braking limit, and the mass the IC distribution places beyond them}\label{sec:hold}
 
 \begin{proposition}[Altitude-holding limit]\label{prop:hold}
 Under \cref{def:sys} with thrust bounded by $\overline f=\mathrm{TWR}\cdot\mass\,g$, a state with
@@ -1131,6 +1529,89 @@ If the initial attitude is Haar-uniform on $\SO(3)$ then $\cos\theta\sim\mathcal
 At $\mathrm{TWR}=2$ this is $0.75$: three quarters of initial conditions begin unable to hold
 altitude at any thrust.
 \end{corollary}
+
+\begin{proposition}[Horizontal braking limit and a two-phase stopping distance]\label{prop:hstop}
+Fix a horizontal unit direction $\hat r$ pointing toward a vertical cylinder's surface, and let
+$s\eqdef v\cdot\hat r$ be the closure rate. Under \cref{def:sys} the instantaneous reachable
+acceleration set at a state is the segment $\{\tfrac{1}{\mass}f_{\mathrm{thr}}\,b_3-g\,e_3:\
+f_{\mathrm{thr}}\in[0,\overline f]\}$ with $b_3\eqdef Re$, so torque does not enter
+$\dot v$ instantaneously. Hence
+\begin{equation}\label{eq:dmax}
+D_{\max}\;\eqdef\;-\min_{f_{\mathrm{thr}}\in[0,\overline f]}\frac{d s}{dt}
+\;=\; g\,(e_3\cdot\hat r)\;+\;\frac{\overline f}{\mass}\,\max\!\big(0,\,-(b_3\cdot\hat r)\big).
+\end{equation}
+Then, scope: exact, pointwise in $x$.
+\begin{enumerate}[label=(\alph*)]
+  \item \textbf{(vertical cylinder)} $\hat r$ is horizontal, so $e_3\cdot\hat r=0$ and
+  $D_{\max}=\tfrac{\overline f}{\mass}\max(0,-(b_3\cdot\hat r))$. In particular $D_{\max}=0$
+  whenever the thrust axis has no component opposing the approach --- which includes every
+  level and every forward-tilted attitude. \emph{The vehicle cannot decelerate horizontally
+  before it tilts}, and the one-phase stopping distance $s^2/(2D)$ is undefined there. This is
+  the horizontal counterpart of \cref{prop:hold}: the same underactuation that removes altitude
+  authority above $\theta_{\mathrm{hold}}$ removes horizontal braking authority below the tilt
+  that produces it.
+  \item \textbf{(floor and ceiling)} For $\hat r=-e_3$ (floor) $D_{\max}=\tfrac{\overline
+  f}{\mass}\max(0,b_{3,z})-g$, which is negative --- gravity accelerates the closure and no
+  admissible input arrests it --- exactly when $\theta>\theta_{\mathrm{hold}}$. For
+  $\hat r=+e_3$ (ceiling) $D_{\max}=g+\tfrac{\overline f}{\mass}\max(0,-b_{3,z})\ge g>0$ always.
+  \item \textbf{(two-phase stopping distance)} Let $t_{\mathrm{tilt}}(\theta)$ be the rest-to-rest
+  time to reach tilt $\theta$ under the deployed box and inertia, and
+  $a_{\max}(\theta)=\tfrac{\overline f}{\mass}\sin\theta$ the horizontal deceleration available
+  once there. Charging the tilt phase at the full closure rate, since (a) gives no deceleration
+  before it,
+  \begin{equation}\label{eq:dstop}
+  d_{\mathrm{stop}}(s)\;=\;\min_{\theta\in(0,\pi/2]}\Big[\,s\,t_{\mathrm{tilt}}(\theta)
+  \;+\;\frac{s^2}{2\,a_{\max}(\theta)}\Big],
+  \end{equation}
+  a lower bound on the true stopping distance, since $a_{\max}$ does not subtract the thrust
+  spent holding altitude. The two terms move oppositely in $\theta$, so the minimiser is
+  interior.
+  \item \textbf{(which limit binds the tilt phase)} With a diagonal inertia and $\omega$ parallel
+  to a principal horizontal axis, $\omega\times\inertia\omega=0$ exactly, so
+  $\dot\omega=\tau_x/\inertia_x$ with no gyroscopic residue. The bang-bang rest-to-rest time is
+  $t_{\mathrm{tor}}(\theta)=2\sqrt{\theta/\alpha_{\mathrm{ang}}}$ with
+  $\alpha_{\mathrm{ang}}=\tau^{\mathrm{horiz}}_{\max}/\inertia_x$ while the peak rate
+  $\sqrt{\theta\,\alpha_{\mathrm{ang}}}$ stays under $\omega_{\max}$, and the trapezoid
+  $t_{\mathrm{rat}}(\theta)=\omega_{\max}/\alpha_{\mathrm{ang}}+\theta/\omega_{\max}$ beyond.
+  The crossover is $\theta_\times=\omega_{\max}^2/\alpha_{\mathrm{ang}}$.
+\end{enumerate}
+\end{proposition}
+\begin{proof}
+\cref{eq:dmax}: $\tfrac{ds}{dt}=\dot v\cdot\hat r=\tfrac{1}{\mass}f_{\mathrm{thr}}(b_3\cdot\hat r)
+-g(e_3\cdot\hat r)$ is affine in $f_{\mathrm{thr}}$ on a segment, so its minimum is at an
+endpoint: $f_{\mathrm{thr}}=\overline f$ when $b_3\cdot\hat r<0$ and $f_{\mathrm{thr}}=0$
+otherwise. Negating gives the display. (a),(b) substitute $\hat r$. (c) is the definition of the
+two phases with the first charged at constant $s$ by (a). (d) With $\inertia$ diagonal and
+$\omega=\omega_x e_x$, $\omega\times\inertia\omega=\omega_x^2(e_x\times\inertia_xe_x)=0$, so the
+rotational equation is linear; the two times are the standard rest-to-rest bang-bang and
+trapezoid profiles, and they agree at the stated crossover.
+\end{proof}
+
+\begin{remark}[Measured: the horizontal authority is identically zero on the failure class]\label{rem:dmax-measured}
+\cref{prop:hstop}(a)의 예측이 배포 실패 계급에서 정확히 관측된다. obstacle 충돌 episode의
+contact$-k$ 전 구간, $k=1\ldots10$에서 $D_{\max}$의 중앙값이 \emph{정확히} $0.000$이고, 접촉 시
+반경 방향 속도의 중앙값이 $2.500$~m/s --- 즉 $v_{\max}$ 그대로다. 정면으로 최고 속도로 들어가며
+제동 권한이 구조적으로 없다. 이는 감속 실패가 아니라 감속 수단의 부재다.
+
+band\_lower 충돌은 (b)의 대응물이다: $D_{\max}$가 $k=3$부터 $-9.810$에 고정되고, 그 시점 tilt
+중앙값이 $96^\circ$, $k=5$에서 $128^\circ$로 $\theta_{\mathrm{hold}}=60^\circ$를 이미 넘었다.
+ceiling 쪽은 (b)가 $D_{\max}\ge g$를 보장하고, 측정된 ceiling 충돌은 두 arm 합쳐 1건이다.
+
+(c)와 (d)를 배포 상수에서 읽으면: 로터 상자 $[0,4.905]^4$, $\mathrm{arm}_L=0.17$~m,
+$\inertia=\mathrm{diag}(0.01,0.01,0.02)$, $\omega_{\max}=4.0$~rad/s에서
+$\tau^{\mathrm{horiz}}_{\max}=1.17924$~N$\cdot$m, $\alpha_{\mathrm{ang}}=117.92$~rad/s$^2$,
+$\theta_\times=7.774^\circ$이다. 즉 유용한 수평 감속을 내는 모든 tilt에서 \emph{rate limit이
+구속하고 torque limit은 구속하지 않는다}. \cref{eq:dstop}의 최소화는
+$v=1.0$에서 $\theta^\star=18.1^\circ$, $d_{\mathrm{stop}}=0.195$~m;
+$v=1.5$에서 $22.1^\circ$, $0.348$~m;
+$v=2.0$에서 $25.4^\circ$, $0.527$~m;
+$v=2.5$에서 $28.3^\circ$, $0.730$~m를 준다. 모든 최소화점이 $\theta_{\mathrm{hold}}$ 아래에 있다.
+
+이 값들을 \cref{prop:ramp-ceiling}과 나란히 두면 배포 기하의 규모가 드러난다: 배포
+$h_{\mathrm{scale}}=0.35$~m는 $v=2.0$의 정지거리 $0.527$~m보다 작고, 최대 접근 속도에서의 반응
+거리 $0.306$~m는 그 절반 이하다. 범위: 단일 seed, 두 arm, canonical pool; $\overline f$는 상자
+최대치이고 고도 유지분을 빼지 않았으므로 $d_{\mathrm{stop}}$은 하한이다.
+\end{remark}
 
 \begin{remark}[Why the vertical channel binds on this axis]\label{rem:hold-bind}
 \cref{cor:hold-so3}은 IC 분포와 하나의 plant 상수의 결합 성질이며 method의 성질이 아니다.
@@ -1186,7 +1667,7 @@ hover 조건 $4(1-\kappa)\bar f_{\mathrm r}>\mass g$의 재배열이고, 존재 
 admissible 궤적 자체다.
 \end{proof}
 
-\begin{remark}[Measured: the floor is an initial-condition property on this pool]\label{rem:floor-bracket}
+\begin{remark}[Measured: the failure class is an initial-condition property]\label{rem:floor-bracket}
 plant 상수 $4\bar f_{\mathrm r}=2\mass g$에서 $a_{\max}=g$이고, IC sampler의
 $v_{\mathrm{ic}}=1.5$~m/s가 (b)의 대역폭을 $v_{\mathrm{ic}}^2/(2g)\approx0.115$~m로 제한한다
 --- 하한이 이 pool에서 거의 공허한 것은 pool이 순해서가 아니라 완화가 수직 운동에너지만 보기
@@ -1197,20 +1678,28 @@ $v_{\mathrm{ic}}=1.5$~m/s가 (b)의 대역폭을 $v_{\mathrm{ic}}^2/(2g)\approx0
 $\kappa\ge\tfrac12$는 hover 불능이라는 per-rotor 결합의 실측이다. 미확정 $147$개($7.35\%$)는
 배분하지 않는다.
 
-교차(v2.8.0 deliverable, 바닥 충돌 $67$건): 회복-시연 IC에서 $0$건, 미확정 $66$, 불가 $1$;
-역으로 회복-시연 $1852$개 전부에서 정책은 바닥을 넘지 않았다. \cref{rem:hold-bind}의 결합과
-합치면: 이 lineage의 바닥 충돌은 측정 가능한 한도에서 정책 실패가 아니라 IC 성질이며, 남은
-질문은 전부 미확정 대역 --- 고tilt$\times$저여유의 모서리 --- 에 있다. 그 대역을 좁히는 것은
-상수-$\kappa$ 가족의 정밀화가 아니라 수직 부분문제 $(z,v_z,\theta,\dot\theta)$의 도달가능성
-계산이 요구되며, 그때까지 회복 가능성의 정의는 제어기-가족 의존임을 명시한다. 범위: 단일 seed,
-하나의 계, 하나의 checkpoint; 상한은 $\kappa$-격자 의존.
+교차 1 (v2.8.0 deliverable, 바닥 충돌 $67$건): 회복-시연 IC에서 $0$건, 미확정 $66$, 불가 $1$;
+역으로 회복-시연 $1852$개 전부에서 정책은 바닥을 넘지 않았다.
+
+교차 2 (v2.8.4, 두 arm의 전 충돌 episode를 같은 분류에 join): 계급 내 충돌률이
+demonstrated-recoverable $18/1882=0.0096$ 대 undetermined $37/118=0.3136$으로 $32.7$배 갈리고,
+band\_lower 충돌은 두 arm 모두 \emph{전부} undetermined이며 demonstrated-recoverable에는 $0$건이다
+(ARM $35/35$, GAMMA $33/33$). 나아가 그 계급의 충돌 episode는 두 arm에서 각각 $47/50$과 $55/55$가
+step $0$에서 이미 filter의 empty branch에 있다(\cref{rem:empty-resolved}).
+
+\cref{rem:hold-bind}, \cref{rem:rho-null}, \cref{rem:dmax-measured}와 합치면 네 개의 독립 측정이
+한 점으로 모인다: \emph{이 lineage의 구속 충돌 계급은 측정 가능한 한도에서 정책 실패가 아니라
+초기 조건의 성질이며}, 남은 질문은 전부 미확정 대역 --- 고tilt$\times$저여유의 모서리 --- 에 있다.
+그 대역을 좁히는 것은 상수-$\kappa$ 가족의 정밀화가 아니라 수직 부분문제
+$(z,v_z,\theta,\dot\theta)$의 도달가능성 계산을 요구하며, 그때까지 회복 가능성의 정의는
+제어기-가족 의존임을 명시한다. 범위: 단일 seed, 하나의 계; 상한은 $\kappa$-격자 의존.
 \end{remark}
 
 \section{Where the learned certificate's authority lives}\label{sec:channel}
 
 \begin{remark}[Measured: the authority is relocated, not merely restored]\label{rem:hstar-resolved}
 \cref{eq:hdep}에 대해 $\partial h_\star/\partial R=0$이고 $\partial h_\star/\partial\omega=0$이므로
-$\Lg h_\star$는 전적으로 thrust 채널에만 지지되며, 그 항 $\tfrac1{\mass}\grad\phi^\top Re$가 바로
+$\Lg h_\star$는 전적으로 thrust 채널에만 지지되며, 그 항 $\tfrac{c}{\mass}\hat r^\top Re$가 바로
 \cref{prop:relh}(c)의 집합에서 소멸하는 것이다. 따라서 배포된 filter가 그 degeneracy를 물려받으리라
 예상할 수 있다.
 
@@ -1229,6 +1718,22 @@ $\mathcal Z(V^{h_\star,\pi})$가 null인지는 매듭짓지 못하며 미해결�
 범위: 단일 seed, 하나의 checkpoint, 하나의 계.
 \end{remark}
 
+\begin{remark}[Measured: the analytic hazard's control row is the collective direction]\label{rem:ah-collective}
+\emph{analytic} hazard의 control row $a_H\eqdef\Lg h_\star$는 배포 인증서의 row와 다른 대상이며,
+그 방향이 정확히 결정된다. mixer의 첫 행이 $(1,1,1,1)$이므로 총추력은 로터 힘의 합이고, 따라서
+$\partial\dot v/\partial u_j=b_3/\mass$가 모든 $j$에 대해 같다. 그러므로 $\Lg h_\star$의 네 성분은
+서로 같고 $a_H\propto(1,1,1,1)$이다. 측정이 이를 정확히 확인한다: 두 arm의 dump 전 상태
+($1586$과 $1758$개)에서 $a_H$의 성분이 자기 행 평균에서 벗어나는 최대 편차가 $0.0$이다.
+
+두 귀결이 따른다. 첫째, 실측 hazard-감소 방향 $g_h=-a_H$는 \emph{순수 collective thrust}이며,
+이는 \cref{prop:hstop}(a)가 말하는 것 --- 수평 제동이 총추력을 자세로 기울여야만 나온다 --- 과
+같은 사실의 label 쪽 표현이다. 둘째, $g_h$가 한 방향에 고정되어 있으므로 그것과 임의 벡터의
+cosine은 그 벡터의 지지 좌표 수로 양자화된다: 지지가 한 좌표뿐이면 cosine은 정확히 $\pm1/2$이다.
+$g_h$와의 정렬을 보고하는 모든 측정은 이 양자화를 함께 명시해야 하며, 중앙값이 아니라 부호
+share만이 정보를 나른다(\cref{rem:empty-prox-measured}).
+범위: 단일 seed, 두 arm, 실패 계급과 목표 표본의 window 상태 전수.
+\end{remark}
+
 \begin{remark}[Open: what governs $\grad_\omega V$]\label{rem:omega-open}
 \cref{rem:hstar-resolved}의 분포가 무엇으로 정해지는지는 여기서 답하지 않는다. 그럴듯한 경로는 $V$가
 민감한 유효 horizon이다: \cref{eq:hdep}의 velocity 항은 $h_\star$가 순간적 closure를 읽게 하여
@@ -1244,15 +1749,18 @@ tilt $\cos\theta\approx0.47$)에서 직접 측정되었고, 그곳에서 supply�
 \begin{proposition}[The hazard coefficient is the sensitivity at hazard-attaining states]\label{prop:sens-c}
 Let $v_r\eqdef v_{xy}\cdot\hat r$ denote the radial closure rate at the active obstacle, and
 suppose $x$ lies in an attainment set for $(h_\star,\pi)$ where $V^{h_\star,\pi}$ is
-differentiable. Then
+differentiable and the ramp is unsaturated there. Then
 \begin{equation}
 \frac{\partial V^{h_\star,\pi}}{\partial v_r}(x)=c .
 \end{equation}
-Scope: exact, on attainment sets.
+Scope: exact, on attainment sets. Where the ramp is saturated the statement is unaffected --- the
+saturation lives in $\grad_p$, not in $\grad_v$ (\cref{prop:ramp-ceiling}(d)) --- but the value
+itself is then pinned at $-1$ until $c\,v_r$ exceeds one, so the sensitivity is realized in a
+quantity that does not cross zero.
 \end{proposition}
 \begin{proof}
 \cref{prop:attain}에 의해 그러한 상태에서 $V^{h_\star,\pi}=h_\star$이고, \cref{eq:hdep}에 의해
-$\partial h_\star/\partial v_r=c$이다.
+$\partial h_\star/\partial v_r=c$이다. 마지막 문장은 \cref{prop:ramp-ceiling}(b),(d)이다.
 \end{proof}
 
 \begin{remark}[Measured: the sensitivity falls away from $c$ under joint training]\label{rem:sens-measured}
@@ -1330,15 +1838,17 @@ $b=-\alpha\Vhat-\Lf\Vhat$를 대입하면 표시가 나온다. (a)는 정의에�
 \end{proof}
 
 \begin{proposition}[Malign ceiling flatness of the clipped certificate]\label{prop:ceiling}
-The deployed certificate is clipped to $[-1,V_{\max}]$ with $V_{\max}=1$. Suppose an open set
-$O\subseteq\calX_0$ on which it saturates at the ceiling, $\Vhat\equiv V_{\max}$. Then on $O$,
-for \emph{every} gain $\alpha>0$, every box $\calU$, and every margin $\gamma_m\ge0$:
+The deployed certificate is clipped to $[-1,C]$ with $C>0$ the deployed ceiling constant
+(\cref{rem:C-select}; $C=1.3$ at present, and every statement below is in $C$ and not in any
+particular value of it). Suppose an open set $O\subseteq\calX_0$ on which it saturates at the
+ceiling, $\Vhat\equiv C$. Then on $O$, for \emph{every} gain $\alpha>0$, every box $\calU$, and
+every margin $\gamma_m\ge0$:
 \begin{enumerate}[label=(\alph*)]
 \item $\grad\Vhat\equiv0$, hence $a\eqdef\Lg\Vhat=0$ and $\Lf\Vhat=0$; in particular
 $O\subseteq\mathcal Z(\Vhat)$ of \cref{def:degen};
 \item the authority term of \cref{prop:sinfty-decomp} vanishes identically while the demand term
-is $\alpha(V_{\max}+\gamma_m)>0$, so
-$s_\emptyset\equiv\alpha(V_{\max}+\gamma_m)>0$ and $O\subseteq\mathcal E$. The row is
+is $\alpha(C+\gamma_m)>0$, so
+$s_\emptyset\equiv\alpha(C+\gamma_m)>0$ and $O\subseteq\mathcal E$. The row is
 $u$-independently \emph{violated}: infeasibility here is a property of the clip and the gain
 alone, with no dependence on $\Lf\Vhat$, on the plant, or on the policy;
 \item $\grad s_\emptyset\equiv0$ on $O$, so the trajectory-level lever of
@@ -1350,24 +1860,28 @@ cannot distinguish them there.
 \end{enumerate}
 This is the exact mirror of \cref{prop:vacuum}: the same flatness that makes the row
 $u$-independently \emph{satisfied} at the floor makes it $u$-independently \emph{violated} at the
-ceiling. Scope: exact, per fixed $o$, for the clipped deployed parameterization.
+ceiling. Scope: exact, per fixed $o$, for the clipped deployed parameterization at any $C>0$.
 \end{proposition}
 \begin{proof}
 (a) 열린 집합 위 상수이므로 $\grad\Vhat\equiv0$이고, $\Lf\Vhat=\grad\Vhat^\top f$와
 $\Lg\Vhat=\grad\Vhat^\top g$가 함께 소멸한다. (b) $a=0$이면
 $\bar u\bignormone{a^-}=0$이고, margin을 포함한 demand는 $\Lf\Vhat+\alpha(\Vhat+\gamma_m)
-=\alpha(V_{\max}+\gamma_m)$이다. \cref{prop:sinfty-decomp}의 표시에 대입하면 결론이 나오며,
-$\alpha>0$과 $V_{\max}>0$에서 부호는 $\alpha$, $\calU$, $\gamma_m$의 값과 무관하다. (c)
-$s_\emptyset$은 $O$ 위 상수 $\alpha(V_{\max}+\gamma_m)$이므로 그 gradient가 소멸한다. (d) (a)가
+=\alpha(C+\gamma_m)$이다. \cref{prop:sinfty-decomp}의 표시에 대입하면 결론이 나오며,
+$\alpha>0$과 $C>0$에서 부호는 $\alpha$, $\calU$, $\gamma_m$의 값과 무관하다. (c)
+$s_\emptyset$은 $O$ 위 상수 $\alpha(C+\gamma_m)$이므로 그 gradient가 소멸한다. (d) (a)가
 $O\subseteq\mathcal Z$를, (b)가 $O\subseteq\mathcal E$를 준다.
 \end{proof}
 
 \begin{remark}[Measured: the clip set and the singular set coincide exactly]\label{rem:clip-measured}
 \cref{prop:ceiling}의 예측은 배포 파이프라인에서 정확히 관측된다. 두 checkpoint의 저장된 step에
-대해 $\{\abs{\Vhat}\ge1-10^{-6}\}$와 deployed singular flag가 \emph{양방향으로 동일한 집합}이다 ---
+대해 $\{\abs{\Vhat}\ge C-10^{-6}\}$와 deployed singular flag가 \emph{양방향으로 동일한 집합}이다 ---
 $3105/3105$와 $1851/1851$, 두 방향 모두 $100.0\%$ --- 이고 그 step들에서 authority는 정확히 $0$이다.
 active step의 $2.31\%$와 $1.27\%$이며, obstacle-collision episode의 접촉 전 window에서는
-$12.87\%$로 올라간다.
+$12.87\%$로 올라간다(인용된 비율은 $C=1$ 시점의 측정이다; \cref{rem:clip-amend}).
+
+v2.8.4의 재측정이 (d)를 배포 cell에서 직접 확인한다: ceiling 상태에서 모든 step이 empty이면서
+동시에 singular이고 authority가 정확히 $0.0$이며, upper-clip 개수가 empty$\wedge$singular 교집합의
+크기와 정확히 일치한다.
 
 두 귀결이 따른다. 첫째, $s_\emptyset$의 attribution --- authority 부족인가 demand 과잉인가 ---
 은 clip 집합을 제외하고 읽어야 한다. 그 위에서는 둘 다 아니고 parameterization이 답이며,
@@ -1375,7 +1889,7 @@ $12.87\%$로 올라간다.
 계측으로 취급하는 어떤 분해도 이 집합에서 \cref{prop:ceiling}(d)에 의해 정보를 잃는다.
 
 \cref{prop:ceiling}은 무엇이 잘못되었는지를 말하지 않는다. clip은 modelling 선택이고, 상태가
-실제로 doom이라면 $\Vhat=V_{\max}$가 옳을 수 있다. 확정되는 것은 그 상태에서 배포 row가 어떤
+실제로 doom이라면 $\Vhat=C$가 옳을 수 있다. 확정되는 것은 그 상태에서 배포 row가 어떤
 입력으로도 충족될 수 없다는 것과, 그 불가능이 plant가 아니라 $(\Vhat,\alpha)$ 쌍에서 온다는 것뿐이다.
 \end{remark}
 
@@ -1410,6 +1924,18 @@ $\alpha$에 대해 풀면 표시된 임계가 나온다. (a)는 강증가성에�
 부호가 뒤집힘에서, (d)는 $\mathrm{sup}=\Lf\Vhat=0$을 대입함에서 따른다.
 \end{proof}
 
+\begin{remark}[The gain is a closed lever, and the switch surface is a different one]\label{rem:alpha-closed}
+\cref{cor:alpha-thresh}(b)가 gain을 탐색이 아니라 측정으로 만들지만, 그 측정을 배포 축으로 쓰는
+경로는 이 계에서 소진되었다: 이 시스템에서 $\alpha$는 배포 격자와 학습 arm 양쪽으로 여러 차례
+선별되었고, $\alpha_{\mathrm{unsafe}}=0$의 반사실에서도 남는 $\alpha$-무관 empty floor가 측정되어
+축으로 닫혔다. 그러나 \cref{prop:ceiling}과 \cref{cor:alpha-thresh}가 함께 지목하는 것은 gain의
+\emph{값}이 아니라 그 gain이 전환되는 \emph{면}이다: 배포 규칙은 $h=0$에서 전환하므로, 기하 항의
+zero level set이 모든 실린더를 그만큼 팽창시키고 그 팽창 반경이 empty 질량을 정한다
+(\cref{def:ramp}에서 $h_{\mathrm{scale}}/2$, \cref{prop:exp-ramp}에서 $\ell\ln2$). 따라서 gain 축이
+닫혀 있어도 그 면은 기하 항의 형태를 통해 여전히 움직이며, 그것이
+\cref{cor:reach-per-inflation}이 재는 양이다.
+\end{remark}
+
 \begin{proposition}[An exact avoid value leaves its own policy strictly feasible]\label{prop:exact-value-feasible}
 Suppose $\Vhat$ coincides on an open set $O\subseteq\{\Vhat<0\}$ with the exact avoid value
 $\Vhp{\pi_0}$ of some admissible policy $\pi_0$, and both are $C^1$ there. Then for every
@@ -1431,7 +1957,19 @@ $\{\Vhat<0\}$에서 $\alpha\Vhat<0$이므로 합이 엄격히 음이다. $\pi_0(
 만족하므로 box-최소는 그보다 작거나 같다: $s_\emptyset(x)<0$.
 \end{proof}
 
-\begin{remark}[Why the margin can be a training signal now, and could not be before]\label{rem:sinfty-signal}
+\begin{remark}[Measured: the certified label errors are few and they are not at spawn]\label{rem:label-error-measured}
+\cref{prop:exact-value-feasible}이 인증하는 집합 $\mathcal E\cap\{\Vhat<0\}$를 배포 실패 계급에서
+직접 세면 spawn에서 \emph{공집합}이다: 두 arm의 spawn-empty 상태 $257$과 $297$개 전부에서
+$\Vhat>0$이고, 최솟값이 $+0.0842$와 $+0.0559$다. 회복-시연 계급으로 제한해도 $0/64$, $0/81$이다.
+따라서 명제는 spawn에서 아무것도 인증하지 않으며, 명제가 다루지 않는
+$\{\Vhat\ge0\}\cap\mathcal E$가 그 population의 전부다.
+
+존재하는 인증 오류는 궤적 진입 쪽에 있다: 두 arm 합쳐 $8$개 상태이고, 전부 회복-시연 scene에
+있으며 미확정 scene에는 $0$개다. \cref{rem:sinfty-signal}이 그 신호를 위치시킨 자리와 일치하나,
+그 규모는 축을 세울 크기가 아니다. 범위: 단일 seed, 두 arm, canonical pool.
+\end{remark}
+
+\begin{remark}[Why the margin could be a training signal, and why its registered precondition refuses it]\label{rem:sinfty-signal}
 세 폐쇄 항목의 실패 기전이 각각 구조적으로 제거되는 조건에서만 이 신호는 사용 가능하며, 그
 조건을 명시한다.
 
@@ -1439,30 +1977,28 @@ $\{\Vhat<0\}$에서 $\alpha\Vhat<0$이므로 합이 엄격히 음이다. $\pi_0(
 $\Lf\Vhat,\Lg\Vhat,\alpha\Vhat$를 모두 $c$배 하므로 $s_\emptyset\to c\,s_\emptyset$:
 $s_\emptyset$은 $\Vhat$에 1-동차다. 따라서 $\theta_V$가 자유 변수인 어떤 penalty
 $\mathrm{relu}(s_\emptyset)$에도 모든 $\theta_V$에서 물리와 무관한 하강 방향 --- 인증서의
-균일 축소 --- 이 열려 있고, 이것이 v2.2.1 $L_{\mathrm{feas}}$의 self-extinguishing의 정리적
-형태다. $\Vhat$를 detach하면 $\theta_V$가 계산 그래프에서 제거되어 그 방향이 구성상
-봉쇄되고, value 회귀는 순수 label 회귀로 남는다.
+균일 축소 --- 이 열려 있다. $\Vhat$를 detach하면 $\theta_V$가 계산 그래프에서 제거되어 그 방향이
+구성상 봉쇄되고, value 회귀는 순수 label 회귀로 남는다.
 
-\textbf{(ii) filter-경로 폭발은 이 경로에 없다.} v2.4.1 $w_{\mathrm{deficit}}$가 실패한
-경로는 filter 계수의 Jacobian을 통과했고, 그 경로에는 \cref{cor:lambda-jac}(d)의
-$1/\norm{a_I}$이 앉아 있다. \cref{prop:sinfty-decomp}(c)에 의해
-$\nabla s_\emptyset$ 경로는 그 양을 포함하지 않는다.
+\textbf{(ii) filter-경로 폭발은 이 경로에 없다.} 실패한 경로는 filter 계수의 Jacobian을
+통과했고, 그 경로에는 \cref{cor:lambda-jac}(d)의 $1/\norm{a_I}$이 앉아 있다.
+\cref{prop:sinfty-decomp}(c)에 의해 $\nabla s_\emptyset$ 경로는 그 양을 포함하지 않는다.
 
 \textbf{(iii) pointwise 무력성은 궤적 조향으로 우회된다.} $\mathcal E$ 소속은 $x$만의
 성질이므로 그 위의 action 재조정은 무력하다는 판정은 서 있다. headroom $\delta>0$의 running
 cost $w_\emptyset\,\mathrm{relu}(s_\emptyset^{\mathrm{detach}}+\delta)$는 다른 지렛대다:
-Markov 부등식으로 그 기대 적분은 경계층
-$\{s_\emptyset\ge-\delta+\epsilon\}$ 체류 시간을 상계로 누르고, 폐루프에서
-$\abs{\dot s_\emptyset}\le c$이면 $\{s_\emptyset\le-\delta\}$에서 $\mathcal E$ 도달까지
-$\delta/c$의 시간이 남는다 --- $\delta$가 사는 것은 반응 시간이며, feasible action이 아직
-존재하는 곳에서 신호가 켜진다.
+Markov 부등식으로 그 기대 적분은 경계층 $\{s_\emptyset\ge-\delta+\epsilon\}$ 체류 시간을 상계로
+누르고, 폐루프에서 $\abs{\dot s_\emptyset}\le c$이면 $\{s_\emptyset\le-\delta\}$에서
+$\mathcal E$ 도달까지 $\delta/c$의 시간이 남는다 --- $\delta$가 사는 것은 반응 시간이며,
+feasible action이 아직 존재하는 곳에서 신호가 켜진다.
 
-\textbf{한계와 등록.} \cref{prop:exact-value-feasible}는 $\{\Vhat<0\}$ 안의
-$\mathcal E$만 오류로 인증한다; $t=0$부터 $\mathcal E$인 회복 불가·미확정 IC의 몫
-(\cref{rem:floor-bracket})은 어떤 running cost로도 줄지 않으므로, 이 신호의 상한은
-trajectory-entry 몫이고 그 분해는 사용 전에 측정되어야 한다. 신호의 kernel은 v2.2.1
-$L_{\mathrm{feas}}$의 $m(x)$와 동일하며, 재개는 새 kernel이 아니라 위 (i)--(iii)의 기전
-제거에 의한 것임을 기록한다.
+\textbf{등록된 전제와 그 측정.} 이 신호의 상한은 \emph{trajectory-entry 몫}이며, 그 분해는
+사용 전에 측정되어야 한다고 위에서 등록했다. 측정되었고, 전제가 성립하지 않는다: 두 arm의
+충돌 episode 중 step $0$에서 이미 $\mathcal E$인 것이 $47/50$과 $54/55$이고, 궤적을 따라
+진입하는 것은 $3$과 $1$이다. step 수준에서도 empty step의 $0.702$와 $0.920$이 spawn-empty
+episode에 있다. 따라서 headroom running cost가 줄일 수 있는 몫은 $2$--$6\%$이고, 그 신호는
+자기 전제에 의해 거부된다. 이것은 기전의 반증이 아니라 \emph{모집단의 부재}이며, 등록된
+사전 측정이 축을 등록 전에 닫은 사례로 기록한다. 범위: 단일 seed, 두 arm, canonical pool.
 \end{remark}
 
 \begin{definition}[$\sigma$-augmented hazard]\label{def:sigma-hazard}
@@ -1525,11 +2061,10 @@ sublevel 포함이 따른다.
 두 가지 주의가 \cref{def:sigma-hazard}의 사용 조건이다.
 
 \textbf{(i) clip 집합에서 $\sigma$는 feasibility 사실이 아니다.} \cref{prop:ceiling}에 의해
-$\{\abs{\Vhat^-}=V_{\max}\}$ 위에서 $\sigma=\alpha V_{\max}>0$은 parameterization의 산물이며
-plant와 무관하다. 이 집합에서 \eqref{eq:sigma-hazard}를 그대로 평가하면 clip artifact가
-label로 승격된다 --- 측정상 active step의 $1.3$--$2.3\%$. 따라서 $\psi$는 clip 집합 밖에서만
-$\sigma$를 받고, 그 위에서는 $\tilde h=h$로 둔다(또는 \cref{prop:ceiling}를 무효화하는
-saturating value map이 선행한다).
+$\{\abs{\Vhat^-}=C\}$ 위에서 $\sigma=\alpha C>0$은 parameterization의 산물이며 plant와 무관하다.
+이 집합에서 \eqref{eq:sigma-hazard}를 그대로 평가하면 clip artifact가 label로 승격된다 ---
+측정상 active step의 $1.3$--$2.3\%$. 따라서 $\psi$는 clip 집합 밖에서만 $\sigma$를 받고, 그
+위에서는 $\tilde h=h$로 둔다(또는 \cref{prop:ceiling}를 무효화하는 saturating value map이 선행한다).
 
 \textbf{(ii) 남는 자기참조는 배포된 TD bootstrap과 같은 \emph{차수}이나 같은 \emph{gain}이
 아니다.} 고정 $(\pi_f,\Vhat^-)$에서 $\tilde h$는 $h$와 같은 자격의 state cost이고 순환은
@@ -1600,7 +2135,9 @@ $\Delta u=0$이라 어떤 rate 벌점에도 비가시다.
 hazardous로 표기되면 학습된 인증 경계가 sliding 대역에서 $m$만큼 물러나고, filter는
 authority 여유가 있는 곳에서 개입한다. 예측은 따라서 empty share와
 $u_{\mathrm{safe}}$ switching rate의 동반 하락이며, 대가는
-\cref{prop:sigma-valid}(c)의 보수성 --- timeout/stuck 상승 압력 --- 이다.
+\cref{prop:sigma-valid}(c)의 보수성 --- timeout/stuck 상승 압력 --- 이다. 다만
+\cref{rem:sinfty-signal}이 측정한 모집단 부재가 이 축 전체에 걸리므로, 그 예측은 배포 실패
+계급에 대해서는 검정할 표본을 갖지 못한다.
 \end{remark}
 
 \begin{remark}[Correction: the earlier circularity verdict on input-aware labels]\label{rem:sigma-retract}
@@ -1772,7 +2309,7 @@ $\lambda$를 고정하고 $\gamma=e^{-\lambda\Delta t}$를 grid별로 재계산�
 100분의 1만큼 label을 바꾸므로 지렛대로 정당화되지 않는다. \emph{큰} 것은 배포된 certificate 자신의
 낙관이다: $\Vhat\le0<V_{0.01}$인 비율이 $9.3\%$로 그 반대의 $2.5\%$에 대해 $3.7\!:\!1$
 비대칭이며, grid가 아니라 regression fit에서 나온다. 도구는 $\Delta t$가 아니라 certificate fit과
-\cref{sec:labeling}의 candidate-set labeling이다. 범위: 단일 seed, 하나의 계, 하나의 checkpoint.
+\cref{sec:labeling}의 candidate-set labeling이다.
 \end{remark}
 
 \begin{remark}[Measured: the finer loop occupies the boundary more closely]\label{rem:occupancy}
@@ -1883,7 +2420,9 @@ Let $\pi_{\mathrm{HN}}$ denote the deployed filtered policy, i.e.\ the selection
   \item where the winning candidate is a box vertex, the policy gradient through the filter is
   \emph{identically zero} by \cref{prop:sel}(a). This is a second degeneracy, disjoint in general
   from $\mathcal Z$, and \cref{prop:lead} --- which restores authority on an attainment set ---
-  does not touch it;
+  does not touch it. Under the deployed $\texttt{detach\_filter\_coeffs}$ the vanishing is not
+  confined to the one-step form: the nominal reaches the task term only through
+  $u_{\mathrm{safe}}$, so the full-BPTT task gradient vanishes on the same set;
   \item across $\calT_\ast$ the deployed map is discontinuous, hence not locally Lipschitz.
   Almost-everywhere differentiability therefore does \emph{not} yield the usual conclusion that
   gradients integrate to differences of the loss: between two points separated by $\calT_\ast$
@@ -1971,24 +2510,24 @@ $\norm{\partial u/\partial b}=1/\norm{a_I}$와, $\abs I$가 줄수록 $\norm{a_I
 \end{proof}
 
 \begin{remark}[Measured: where the Jacobian lives, and what the repair changed]\label{rem:lambda-measured}
-(i) 배포 몫(v2.8.0, canonical pool, dual deliverable): 구조적 영-Jacobian class
+(i) 배포 몫(canonical pool, dual deliverable): 구조적 영-Jacobian class
 $\{$row active, $\abs A=m-1\}$는 filtered step의 약 $2.5\%$이고, 전체 영-Jacobian 집합은
 empty branch $55\%$ / feasible $45\%$로 갈리며 feasible 몫은 위 class가 지배한다 ---
 \cref{cor:lambda-jac}(c)가 예측하는 그대로, 결함이 아니라 활성 등식의 기하다.
 
-(ii) 학습 중 몫(P2, dual arm, logged): filter 개입률은 $0.92\to0.28$, 영-Jacobian share는
+(ii) 학습 중 몫(dual arm, logged): filter 개입률은 $0.92\to0.28$, 영-Jacobian share는
 $0.28\to0.15$로 감소한다 --- 정책이 학습될수록 두 realization이 다를 수 있는 표면 자체가
 줄어든다. enumeration arm의 대응 구간은 기록 소실로 \emph{not recorded}.
 
-(iii) 민감도 가설의 기각(D2): (d)의 gain $1/\norm{a_I}$은 실재하나 chatter를 구동하지 않는다
+(iii) 민감도 가설의 기각: (d)의 gain $1/\norm{a_I}$은 실재하나 chatter를 구동하지 않는다
 --- per-step $\norm{\Delta u}$와의 순위상관이 약한 음수로 측정되어, 증폭자 가설은 기각되었다.
 
-(iv) 축의 학습 채널(P3, matched budget step 34500, scene-paired): full pool
+(iv) 축의 학습 채널(matched budget step 34500, scene-paired): full pool
 $\Delta\mathrm{cps}=-0.0065\ [-0.024,+0.011]$, hold-feasible 부분집합
-$-0.0321\ [-0.0645,-0.0028]$ --- 분리된 유일한 신호가 enumeration 쪽이다. 배포 채널(M5)은
+$-0.0321\ [-0.0645,-0.0028]$ --- 분리된 유일한 신호가 enumeration 쪽이다. 배포 채널은
 $-0.0013$. 축은 cps 예측 없이 전제 복원으로 등록되었고, 측정은 그 등록이 옳았음을 보인다:
 전제는 복원되었고, 이 예산과 seed에서 학습되는 것은 바뀌지 않았다. 범위: 단일 seed, 학습
-궤적의 한 공통 지점, cps 비단조($50$k 종점 비교는 crash로 unavailable).
+궤적의 한 공통 지점, cps 비단조.
 \end{remark}
 
 \begin{proposition}[A continuous, gradient-carrying realization of the infeasible branch]\label{prop:empty-prox}
@@ -2020,15 +2559,16 @@ Then:
   =\operatorname{diag}(\mathbf 1_I)$ with $I$ the unclipped coordinates, which is nonzero off
   the all-clipped set --- the branch on which \cref{cor:jt-deployed}(b) recorded an identically
   zero policy gradient regains one;
-  \item \textbf{(the boundary)} across $\partial\mathcal E$ the exact projection's one-sided
-  limit is $\mathrm{clip}(u_{\mathrm{nom}}-\lambda_{\mathrm{sat}}a)$ with
-  $\lambda_{\mathrm{sat}}$ the saturation knee of \cref{prop:lambda-solve}'s breakpoint scan,
-  so the residual jump at a branch transition is
-  $\norm{\mathrm{clip}(u_{\mathrm{nom}}-\gamma(0)a)-\mathrm{clip}(u_{\mathrm{nom}}-\lambda_{\mathrm{sat}}a)}
-  \le\abs{\gamma(0)-\lambda_{\mathrm{sat}}}\,\norm{a}$, vanishing where
-  $\gamma(0)\ge\lambda_{\mathrm{sat}}$ and bounded otherwise; branch-transition steps are a
-  separately measured, small class, distinct from the within-$\mathcal E$ chatter that (b)
-  removes.
+  \item \textbf{(the saturation knee bounds the gain)} let $\lambda_{\mathrm{sat}}$ be the
+  smallest $\lambda$ at which every coordinate of $\mathrm{clip}(u_{\mathrm{nom}}-\lambda a,\calU)$
+  is clipped --- closed form in $(u_{\mathrm{nom}},a,\calU)$ and the saturation knee of
+  \cref{prop:lambda-solve}'s breakpoint scan. Then $I=\emptyset$ for every
+  $\gamma\ge\lambda_{\mathrm{sat}}$, so (c) delivers a nonzero Jacobian \emph{only strictly
+  inside the knee}; and across $\partial\mathcal E$ the exact projection's one-sided limit is
+  $\mathrm{clip}(u_{\mathrm{nom}}-\lambda_{\mathrm{sat}}a)$, so the residual jump at a branch
+  transition is at most $\abs{\gamma-\lambda_{\mathrm{sat}}}\norm{a}$, vanishing where
+  $\gamma\ge\lambda_{\mathrm{sat}}$. The two requirements --- a live Jacobian and a continuous
+  branch transition --- therefore pull $\gamma$ in opposite directions across the same knee.
 \end{enumerate}
 Scope: exact. The deployed choice of $\gamma(\cdot)$ is a registration, not a theorem.
 \end{proposition}
@@ -2042,11 +2582,42 @@ $f(u_\gamma)\le f(v^\star)$의 재배열에 $\norm{v^\star-u_{\mathrm{nom}}}^2
 $\gamma\norm{\Delta a}$로 유계; $\gamma(s_\emptyset)$가 연속이면 합성이 연속이고, 유한한
 $\gamma$에서 $a_j\mapsto\mathrm{clip}(u_{\mathrm{nom},j}-\gamma a_j)$는 부호 통과점에서
 연속이다 --- vertex argmin은 $\gamma\to\infty$ 극한이며 불연속은 그 극한에서만 생긴다.
-(c) 자유 좌표에서 항등, clip 좌표에서 $0$. (d) feasible 쪽에서 $b\downarrow\min_\calU a^\top
-u$일 때 $\lambda^\star\uparrow\lambda_{\mathrm{sat}}$이고 사영은
+(c) 자유 좌표에서 항등, clip 좌표에서 $0$. (d) $\lambda_{\mathrm{sat}}$의 정의에서
+$\gamma\ge\lambda_{\mathrm{sat}}$이면 모든 좌표가 clip되어 $I=\emptyset$이다. feasible 쪽에서
+$b\downarrow\min_\calU a^\top u$일 때 $\lambda^\star\uparrow\lambda_{\mathrm{sat}}$이고 사영은
 $\mathrm{clip}(u_{\mathrm{nom}}-\lambda_{\mathrm{sat}}a)$로 수렴한다; 차의 상계는 clip의
 non-expansiveness다.
 \end{proof}
+
+\begin{remark}[Measured: what the proximal branch restores, at what price, and its registered null]\label{rem:empty-prox-measured}
+\cref{prop:empty-prox}의 세 양이 배포 실패 계급의 기록된 상태 위에서 직접 측정되었다. 모집단은
+task gradient가 정확히 $0$인 상태 --- 두 arm의 spawn window에서 $258/293$과 $280/329$ --- 이고,
+$\gamma$는 데이터 관측 전에 선언된 $m\cdot\lambda_{\mathrm{sat}}$, $m\in\{0.25,0.5,1,2,4\}$이다.
+
+\emph{Jacobian은 knee 안쪽에서만 돌아온다.} $\abs I\ge1$인 몫이 $m=0.25$와 $m=0.5$에서
+$258/258$, $280/280$ --- 전 상태 --- 이고, $m=1.0$에서 $16/258$, $12/280$으로 붕괴하며
+$m\ge2$에서 정확히 $0$이다. 이는 \cref{prop:empty-prox}(d)를 데이터 위에서 읽은 것이다.
+
+\emph{되살아나는 Jacobian은 얇다.} 모든 cell에서 $\abs I$의 중앙값이 $1$(총 $4$ 중)이고
+$\norm{\partial P/\partial u_{\mathrm{nom}}}_F$의 $p_{50}$이 $1.000$, 최대 가능치는 $2.000$이다.
+
+\emph{대가는 작고 상계는 느슨하다.} 실현 초과 위반의 $p_{50}$은 $m=0.25$에서 $0.279$(ARM),
+$0.301$(GAMMA)이고 (a)의 상계 $p_{50}$은 $3.008$, $3.244$다 --- 상계가 $8$--$11$배 느슨하며
+모든 cell의 모든 상태에서 성립한다.
+
+\emph{되살아난 신호의 방향.} $\abs I\ge1$인 상태에서 $\cos(g_{\mathrm{perf}}(u_\gamma),g_h)$의
+$\cos>0$ 몫이 실패 계급에서 $0.725$--$0.779$, 크기를 맞춘 목표 표본에서 $0.505$--$0.594$이다.
+중앙값이 정확히 $+0.5000$인 것은 정렬 수준이 아니라 \cref{rem:ah-collective}의 양자화이며 ---
+$g_h\propto(1,1,1,1)$이고 $\abs I$의 중앙값이 $1$이므로 --- 정보를 나르는 것은 부호 share뿐이다.
+
+\emph{그리고 등록된 학습 arm은 null이었다.} 이 realization을 학습 arm으로 돌린 등록 결과는
+배포 채점에서 $\mathrm{cps}$ $0.8348$ 대 대조군 $0.8407$이고, 겨눈 지표인 infeasibility는
+CI $[0.0935,0.1083]$ 대 대조군 $0.0928$로 겹치지 않고 나쁜 쪽이었다. 단일 seed, 단일 run이며
+그 차이는 대조군 자신의 checkpoint 간 변동보다 작으므로 "축이 닫혔다"가 아니라 "이 조건에서
+측정 가능한 개선 없음"이 정확한 표현이다. \cref{rem:empty-resolved}이 그 null과 정합하는
+모집단 사실을 준다: 이 branch는 궤적이 날아드는 곳이 아니라 태어나는 곳이다.
+범위: 단일 seed, 두 arm, canonical pool; 재계산은 기록된 상태 위의 산술이다.
+\end{remark}
 
 \begin{remark}[Measured: the selection is the initiating discontinuity]\label{rem:sel-measured}
 적분 스텝만 다른 두 궤적 --- 따라서 RK4 global 오차인 $10^{-5}$ 규모의 분리 --- 을 스텝별로
@@ -2062,1589 +2633,766 @@ empty-branch fallback이 아니라 box-aware selection 자체에서 일어난다
 \cref{rem:churn-null}과 함께 이는 재배치의 설명을 닫는다: closed loop은 매끄러운 의미에서 혼돈적이지
 않다 --- 증폭이 지수적 성장이 아니라 한 스텝에서 일어난다 --- 그것은 \emph{불연속}이며, $10^{-5}$
 규모를 포함한 어떤 섭동도 $\calT_\ast$를 가로질러 $O(1)$ 제어 차이를 낳는다. 범위: 단일 seed,
-하나의 계, 하나의 checkpoint --- 구체적으로 v2.7.4 checkpoint와 v2.7.5 $dt_{\mathrm{ctrl}}$ arm
-위의 \texttt{theory\_r13r14.py} 측정이다. v2.8.0 S1이 같은 protocol을 v2.7.6 checkpoint와
-canonical pool 위에서 재실행하여 중앙값 $2.92$, $p_{90}$ $30.96$, 최대 $47{,}769$를 얻었다. 두
-수치 집합은 서로 다른 측정이며 대체되지 않는다; 질적 결론 --- 증폭이 지수적 성장이 아니라 한
-스텝의 불연속에서 온다 --- 은 양쪽에서 같고, 꼬리의 크기는 checkpoint와 pool에 의존한다.
+하나의 계, 두 checkpoint --- 한 측정에서 중앙값 $9.4$, $p_{90}$ $3.0\times10^4$; 같은 protocol을
+다른 checkpoint와 canonical pool에서 재실행하여 중앙값 $2.92$, $p_{90}$ $30.96$, 최대 $47{,}769$를
+얻었다. 두 수치 집합은 서로 다른 측정이며 대체되지 않는다; 질적 결론 --- 증폭이 지수적 성장이
+아니라 한 스텝의 불연속에서 온다 --- 은 양쪽에서 같고, 꼬리의 크기는 checkpoint와 pool에 의존한다.
 \end{remark}
 
-\section{Deployment regularity: rate, chatter, and lag}\label{sec:rate}
+\section{The clamped row}\label{sec:clamp}
 
-The results of \cref{sec:selection} concern the filter as a map. This section concerns what that
-map's regularity does under zero-order-hold deployment: how the command's total variation scales
-with the control rate, and whether irregularity converts into safety loss on a lagged actuator.
-Both questions admit sharp statements, and both were measured in v2.8.0.
+이 절은 배포되는 행의 요구량을 상자가 실제로 공급할 수 있는 양으로 자르는
+구성을 다룬다. 학습되는 대상($\Vhat$, 정책, 손실)과 배포되는 사영
+(\cref{prop:lambda-solve}의 정확한 쌍대 해)은 전혀 바뀌지 않으며, 변경은 단일 행
+생성자 한 곳에 국한된다. 이하의 모든 진술은 그 한 곳의 대수에서 나온다.
 
-\begin{proposition}[Total-variation dichotomy under zero-order hold]\label{prop:tv-rate}
-Let the closed loop be sampled with period $h$, let the state velocity be bounded,
-$\norm{\dot x}\le M$ along the trajectories considered, and write
-$u_k=\pi_{\mathrm{dep}}(x(t_k))$ for the held command. Define the command total-variation rate
-$\mathrm{TV/s}\eqdef\frac1T\sum_k\norm{u_{k+1}-u_k}$ over a horizon $T$.
-\begin{enumerate}[label=(\alph*)]
-  \item \textbf{(Lipschitz feedback: rate-independent bound)} If $\pi_{\mathrm{dep}}$ is
-  $L$-Lipschitz on the visited set, then
-  $\norm{u_{k+1}-u_k}\le L\norm{x(t_{k+1})-x(t_k)}\le LMh$, and since there are $1/h$ samples
-  per second,
-  \[
-    \mathrm{TV/s}\ \le\ LM \qquad\text{independently of }h .
-  \]
-  \item \textbf{(tie-crossing feedback: rate-proportional growth)} If $\pi_{\mathrm{dep}}$ is
-  discontinuous across a tie locus $\calT_\ast$ with jump size $J>0$, and the sampled trajectory
-  chatters across $\calT_\ast$ --- successive samples on alternating sides, the regime
-  \cref{rem:sel-measured} measures --- then each chattering sample contributes a jump, so
-  \[
-    \mathrm{TV/s}\ \sim\ \frac{J\,\rho_\ast}{h},
-  \]
-  where $\rho_\ast\in(0,1]$ is the fraction of samples in the chattering regime. In a log-log
-  plot of $\mathrm{TV/s}$ against $1/h$, (a) has slope $0$ and (b) slope $1$; mixtures
-  interpolate.
-\end{enumerate}
-Scope: (a) exact under its hypotheses; (b) exact within the chattering regime, descriptive of
-the mixture.
-\end{proposition}
-\begin{proof}
-(a)는 연쇄 부등식 그대로다: 상태가 $h$ 동안 $Mh$ 이상 못 움직이고, Lipschitz 되먹임이 그것을
-$LMh$의 명령 변화로 옮기며, 초당 $1/h$개 표본이 이를 합산한다 --- $h$가 소거된다. (b)에서
-chattering 표본 각각은 $\calT_\ast$의 반대편에서 평가되므로 도약 크기 $J$ 이상을 기여하고, 그런
-표본이 초당 $\rho_\ast/h$개다. 기울기 주장은 두 식을 $\log(1/h)$에 대해 미분한 것이다.
-\end{proof}
-
-\begin{remark}[Measured: continuity is read off as an exponent]\label{rem:rate-slope}
-\cref{prop:tv-rate}는 실현의 연속성을 배포 관측량의 \emph{지수}로 검정 가능하게 만든다 ---
-상수가 아니라 지수이므로 우연 일치의 여지가 좁다. 측정(v2.8.0, canonical pool, dual-arm
-deliverable checkpoint, $20/100/500$~Hz): $\log$-$\log$ 기울기는 dual solve
-$0.124\pm0.033$, enumeration $0.531\pm0.069$ --- 각각 (a)와 (b) 쪽에 붙었고 차이가 합성
-표준오차의 $5$배를 넘는다. $500$~Hz에서 TV/s는 $37.4$ 대 $179.8$($4.8\times$)이다.
-
-대조가 해석을 잠근다: 표본간 barrier 상승 --- hold 구간 내 $\Vhat$ 증가의 최대치 --- 은 두
-realization에서 같은 기울기 $-1.2$로 감소한다. 이산화 효과는 realization과 무관하게 공통이고,
-TV만이 연속성에 반응한다. 이로써 v2.7.5의 $100$~Hz H3 실패(TV/s 중앙값 $+40.5\%$)는 결함이
-아니라 당시 배포된 selection의 (b)-거동으로 소급 설명된다.
-
-dual solve의 잔여 TV는 rate가 오를수록 empty branch로 집중된다($500$~Hz에서 $51\%$) --- 두
-realization이 공유하는, 여전히 유한-후보 argmin인 그 분기다. \cref{prop:tv-rate}(a)의 상계가
-무조건 성립하려면 그 분기의 연속 실현이 남은 조건이며, \cref{prop:empty-prox}가 그 실현을 준다. 범위: 단일
-seed, 하나의 계, 두 checkpoint lineage; 기울기는 $3$점 적합.
-\end{remark}
-
-\begin{proposition}[Lag transfer: what a first-order actuator does to the enforced row]\label{prop:lag-transfer}
-Let the plant apply $u_a$ governed by $\tau\dot u_a=u_c-u_a$ while the filter enforces
-$a^\top u_c\le b$ on the command. Then at any time,
+\paragraph{Notation.}
+제어 아핀계 $\dot x = f(x) + g(x)u$, $u \in U = \prod_i [\underline u_i, \overline u_i]$.
+$A(x) = \Lg \Vhat(x) \in \R^{1 \times m}$, $\Lf \Vhat(x)$는 통상의 의미.
 \[
-  a^\top u_a-b\ =\ a^\top(u_a-u_c)+\underbrace{(a^\top u_c-b)}_{\le0}
-  \ \le\ \norm{a}\,\norm{u_a-u_c},
+\sigma_{\min}(x) = \min_{u \in U} A u = \sum_i \min\!\big(A_i \underline u_i,\, A_i \overline u_i\big),
+\qquad
+R(x) = \max_{u\in U} Au - \sigma_{\min}(x) = \sum_i \abs{A_i}\,(\overline u_i - \underline u_i),
 \]
-and along a command of bounded variation the tracking error obeys the standard first-order
-bound $\norm{u_a-u_c}\lesssim\tau\,\norm{\dot u_c}$ in steady following, so the realized
-violation of the enforced row is bounded by $\norm{a}\,\tau\,\norm{\dot u_c}$: command
-irregularity converts into guarantee loss \emph{at most} linearly in $\tau$ and linearly in the
-command rate. Scope: exact inequality in the first display; the second is the first-order
-tracking estimate and degrades as $\tau$ approaches the loop's dominant time constants.
-\end{proposition}
+\[
+s(x) \;=\; -\Lf \Vhat(x) \;-\; \sigma_{\min}(x).
+\]
+배포되는 행은 $A u \le b$이며 $b = -\Lf\Vhat - D$, 요구량 $D$는 구성에 따른다.
+출하 구성은 $D_0 = \alpha(\Vhat)\,\Vhat$이다.
+
+\begin{lemma}[Attainable decay]\label{lem:attain-decay}
+$\displaystyle \min_{u \in U} \tfrac{d}{dt}\Vhat(x) = -s(x)$.
+Consequently a decay rate $\rho$ is attainable at $x$ by some admissible control
+iff $\rho \le s(x)$, and the row with demand $D$ has a nonempty feasible set over
+$U$ iff $D \le s(x)$.
+\end{lemma}
 \begin{proof}
-첫 표시는 항등 분해와 Cauchy--Schwarz이다. 둘째는 1차 지연의 표준 추종 추정으로, 명령 도함수가
-유계인 구간에서 $u_a-u_c=-\tau\dot u_a\approx-\tau\dot u_c$가 성립하는 데서 온다; $\tau$가
-루프의 지배 시정수 규모에 접근하면 근사가 무너지고 위반은 더 이상 이 항이 지배하지 않는다.
+$\frac{d}{dt}\Vhat = \Lf\Vhat + Au$이고 $u \mapsto Au$는 $U$ 위에서 선형이므로
+최솟값은 $\sigma_{\min}$에서 달성된다. 따라서
+$\min_u \frac{d}{dt}\Vhat = \Lf\Vhat + \sigma_{\min} = -s$.
+행의 실행 가능성은 $\sigma_{\min} \le b = -\Lf\Vhat - D$와 동치이고, 이는
+$D \le -\Lf\Vhat - \sigma_{\min} = s$와 같다.
 \end{proof}
 
-\begin{remark}[Measured: the registered lag prediction failed, and the failure is the
-finding]\label{rem:lag-null}
-\cref{prop:lag-transfer}에서 자연스러운 예측이 등록되었다: enumeration의 명령이 $4.8\times$
-거칠므로(\cref{rem:rate-slope}), $\tau$가 커질수록 그 위반 상계가 먼저 소진되어 enumeration의
-충돌이 dual solve보다 빨리 오르고 격차가 rate와 함께 벌어진다는 것. falsifier --- 두
-realization이 $\tau$에서 등속으로 열화한다 --- 가 발화했다: 측정(v2.8.0, $30$-cell 격자,
-$\tau\in\{0,0.005,0.01,0.02,0.05\}$~s $\times$ 두 realization $\times$ 세 rate, canonical
-pool)에서 $\tau\le0.02$~s의 충돌 격차는 전 구간 등가대역 $\pm0.005$ 안이고,
-$\tau=0.05$~s에서는 rate가 높을수록 두 realization이 \emph{함께} 파괴된다.
+\noindent
+$\sigma_{\min}$이 부호별 코너에서 닫힌 형식으로 주어지므로 $s$는 배포 시점에
+추가 비용 없이 계산된다. 이하 전부가 이 한 줄에서 나온다.
 
-기전 독해: \cref{prop:lag-transfer}의 상계는 참이나 지배 항이 아니다. 파괴를 일으키는 것은
-chatter의 지연 전이가 아니라 지연 자체가 만드는 위상 손실이며, 그것은 명령의 거칠기와 무관하게
-양쪽에 같게 작용한다. 따라서 exact projection의 배포상 가치는 이 $\tau$ 범위($\le0.02$~s,
-전형적 모터 시정수 대역)에서 안전이 아니라 명령 품질이다 --- \cref{prop:tv-rate}(a)의
-rate-무관 TV 상계는 하드웨어 논거(구동기 부담)이지 성능 주장이 아니다. 등록된 예측의 기각을
-그대로 기록한다. 범위: 단일 seed, 하나의 계, 하나의 checkpoint.
+\begin{proposition}[Feasibility of the clamped row]\label{prop:clamp-feas}
+Let $E_0 = \{x : D_0(x) > s(x)\}$ be the empty set of the shipped row.
+\begin{enumerate}
+\item[(i)] For the multiplicative clamp $D_\kappa = \min(D_0,\ \kappa s)$ with
+$\kappa \in [0,1)$, the row is infeasible exactly on $E_0 \cap \{s < 0\}$, and
+this set does not depend on $\kappa$.
+\item[(ii)] At $\kappa = 1$ the row is feasible everywhere, but on $E_0$ it is
+exactly tight: $b = \sigma_{\min}$ and the feasible set is
+$\arg\min_{u \in U} Au$, a face of $U$, and a single vertex whenever every
+$A_i \neq 0$.
+\item[(iii)] For the additive retreat $D_\varepsilon = \min(D_0,\ s - \varepsilon)$
+with $\varepsilon > 0$, the row is feasible everywhere and, where the clamp binds,
+its feasible set is $\{u \in U : Au \le \sigma_{\min} + \varepsilon\}$, of positive
+measure in the minimizing face whenever $A \neq 0$.
+\item[(iv)] None of the three creates infeasibility: each is feasible wherever the
+shipped row is.
+\end{enumerate}
+\end{proposition}
+\begin{proof}
+\cref{lem:attain-decay}에 의해 실행 불가능 $\iff D > s$.
+
+(i) $s \ge 0$이면 $\kappa s \le s$이므로 $D_\kappa \le \kappa s \le s$, 실행 가능.
+$s < 0$이면 $\kappa s > s$이므로 $\min(D_0, \kappa s) > s \iff D_0 > s$. 따라서
+실행 불가능 집합은 $E_0 \cap \{s<0\}$이고 $\kappa$가 소거된다.
+
+(ii) $D_1 = \min(D_0, s) \le s$이므로 어디서나 실행 가능. $E_0$ 위에서는
+$D_1 = s$이므로 $b = -\Lf\Vhat - s = \sigma_{\min}$이고, 실행 가능 집합은
+$\{u \in U: Au \le \sigma_{\min}\} = \arg\min_U Au$이다. 모든 $A_i \neq 0$이면
+이 집합은 한 꼭짓점이다.
+
+(iii) $D_\varepsilon \le s - \varepsilon < s$이므로 어디서나 실행 가능하고,
+바인딩 시 $b = \sigma_{\min} + \varepsilon$이다.
+
+(iv) 세 구성 모두 $D \le D_0$를 만족한다. 출하 행이 실행 가능하면 $D_0 \le s$이고
+따라서 $D \le s$이다.
+\end{proof}
+
+\begin{remark}[The degenerate row is outside the clamp's scope]\label{rem:clamp-degenerate}
+$A \equiv 0$인 상태에서는 $\sigma_{\min} = R = 0$이고 행은 $0 \le b$로 읽히므로,
+허용 집합은 $b \ge 0$이면 $U$ 전체, $b < 0$이면 공집합이다. 출하 행은 이 지점에서
+$b = s - D_0 < 0$이므로 모든 $u$에 대해 위반이며, 이것이 singular-and-violated
+판정이다. 반면 곱셈형은 $s = 0$에서 $b = 0$, 덧셈형은
+$b = \varepsilon > 0$을 주어 두 경우 모두 \emph{공허하게 만족}으로 뒤집힌다.
+
+허용 집합이 $U$ 전체이므로 실행되는 행동도 바뀐다. 출하 구성에서는 빈 분기
+대체 규칙이 자기 기준으로 행동을 고르지만, clamp 하에서는 사영이 아무것도
+제약하지 않아 필터가 정책의 원출력을 그대로 통과시킨다. 즉 인증서가 권한을
+완전히 잃은 바로 그 지점에서 clamp는 필터를 무력화한다.
+
+이 집합에는 애초에 실행 가능성 문제가 존재하지 않는다. 결핍은 행이 아니라
+인증서에 있으며, $\{A \equiv 0\}$은 clamp의 적용 대상에서 제외하고 기존 대체
+규칙을 유지하는 것이 옳다. 측정도 같은 방향이다: 포착된 빈 상태 11\,825개 중
+16개가 이 집합에 속하고 전부 $\Vhat$ 상한 절단과 $s = 0$을 동반하며, 이 16개만
+제외한 구성이 제외하지 않은 구성보다 $\mathrm{cps}$ $+0.008$, 충돌 $-0.0025$
+우위였다.
 \end{remark}
 
-\begin{proposition}[The repair is argument-continuity; state-continuity needs the whole
-chain]\label{prop:obs-chain}
-Let the deployed feedback be
-$x\mapsto F\big(\pi_\theta(o(x)),\,a(x),\,b(x)\big)$, where $F$ is the realization, and let the
-constraint row be built from a certificate that takes the observation,
-$\Vhat=\Vhat_{\mathrm{net}}\circ o$, so that $a$ and $b$ are functions of $x$ through $o$ as
-well. Suppose $F$ is continuous in its arguments (\cref{prop:lambda-solve}) and
-$\pi_\theta,\Vhat_{\mathrm{net}}$ are continuous. Then:
-\begin{enumerate}[label=(\alph*)]
-  \item wherever $o$ is continuous, the feedback is continuous in $x$;
-  \item across a discontinuity locus of $o$, \emph{both} channels jump --- the nominal
-  $\pi_\theta(o)$ and the row $(a,b)$ --- so the command jump survives any regularization of
-  $\pi_\theta$ and any choice of continuous realization $F$;
-  \item the deployed encoder sorts obstacles by distance and truncates at $k$, so $o$ is
-  discontinuous exactly across the rank-crossing loci $\{d_i=d_j\}$ that exchange slot contents
-  (including the exchange at the $k$-th position) and is locally Lipschitz elsewhere.
-\end{enumerate}
-Scope: (a),(b) exact; (c) by the encoder's construction.
-\end{proposition}
+\begin{theorem}[Pointwise optimality of the additive retreat]\label{thm:eps-optimal}
+Under the additive row of \cref{prop:clamp-feas}(iii) with $\varepsilon > 0$ and the
+exact projection of \cref{prop:lambda-solve}, the executed action satisfies, at every
+state,
+\[
+\frac{d}{dt}\Vhat \;\le\; -\alpha(\Vhat)\,\Vhat
+\quad\text{where the clamp does not bind,}
+\]
+\[
+\frac{d}{dt}\Vhat \;\le\; \min_{u \in U} \frac{d}{dt}\Vhat \;+\; \varepsilon
+\quad\text{where it binds.}
+\]
+No bound of the second form holds for the shipped row on $E_0$.
+\end{theorem}
 \begin{proof}
-(a)는 연속 함수의 합성이다. (b) locus를 가로지르는 극한에서 $o$의 두 극한값이 다르면
-$\pi_\theta(o)$와 $(a,b)$의 극한값도 일반적으로 다르며, $F$의 연속성은 인자에 대한 것이므로
-서로 다른 인자 극한을 하나의 출력으로 접합하지 않는다. 어느 한 채널만 고치는 수리는 다른
-채널의 도약을 남긴다. (c) 정렬은 비교 결과가 바뀌는 곳, 즉 동거리 locus에서만 출력 배치를
-바꾸고, 그 밖에서는 각 slot이 고정된 장애물의 매끄러운 함수다; $k$-절단은 $k$번째와
-$k{+}1$번째의 동거리 locus를 같은 방식으로 추가한다.
+바인딩하지 않으면 $D_\varepsilon = D_0$이므로 행이 출하 조건 그대로이고 첫 식이
+따른다. 바인딩하면 $b = \sigma_{\min} + \varepsilon$이고 실행 행동 $u^\star$가
+$A u^\star \le b$를 만족하므로
+\[
+\tfrac{d}{dt}\Vhat = \Lf\Vhat + Au^\star \le \Lf\Vhat + \sigma_{\min} + \varepsilon
+= -s + \varepsilon = \min_{u\in U}\tfrac{d}{dt}\Vhat + \varepsilon .
+\]
+출하 행은 $E_0$ 위에서 실행 가능 집합이 공집합이므로 사영이 정의되지 않고,
+반환되는 행동은 유한 격자 위에서 $k$-단계 후 $\Vhat$ 끝점을 최소화하는 별개의
+목적으로 선택된다. 그 선택은 점별 감소율과 무관하며, 따라서 두 번째 형태의
+어떤 상계도 성립하지 않는다.
 \end{proof}
 
-\begin{remark}[Measured: the crossing jumps sit in the row itself]\label{rem:obs-chain-measured}
-측정(v2.8.0 D3, canonical pool, 세 rate): 순위 교차 스텝은 드물지만 그 스텝의
-$\norm{\Delta u}$는 비교차 스텝 중앙값의 약 $33\times$이고, $\norm{\Delta a}$와
-$\abs{\Delta b}$가 동시에 도약한다 --- \cref{prop:obs-chain}(b)의 두 채널 중 constraint 채널이
-실측으로 확인된 것으로, 이 성분은 정책측 정규화로도 realization 교체로도 제거되지 않는다. 총
-TV에서의 몫은 낮은 rate에서 작다(빈도가 낮으므로). 제거는 순서-불변이고 compact support로
-연속 소멸하는 encoding을 요구하며, 그것은 관측 차원을 바꾸므로 이 문서의 범위 밖 후속이다.
-범위: 단일 seed, 하나의 계, 하나의 checkpoint.
+\begin{remark}[Pointwise optimality does not imply closed-loop dominance]\label{rem:pointwise-not-closed-loop}
+\cref{thm:eps-optimal}은 순간 도함수에 대한 점별 진술이며 궤적 수준의 우월을
+함의하지 않는다. 유한 시야 선택 규칙은 점별로 열등한 감소를 고르면서도 폐루프에서
+이길 수 있고, 이 계에서는 실제로 그렇다: 정리의 상계를 달성하는 구성이 공통
+평가 cell에서 장애물 충돌을 출하 기준의 3.0배에서 22.0배로 올렸으며, 악화는
+$\varepsilon$에 단조였다.
+
+같은 형태의 괴리가 이 계에서 반복된다. 인증서 정의를 상자 제약으로 다시 쓴
+구성은 점별 인증서 값을 개선하면서 결과를 개선하지 못했고, 필터 개입량을
+직접 줄인 손실 항은 그 양을 25\% 줄이면서 결과를 전혀 움직이지 못했다.
+점별 양의 개선은 그 자체로 성능의 증거가 아니며, 궤적 채점 없이 인용되어서는
+안 된다.
+\end{remark}
+
+\begin{proposition}[The clamped family is bracketed]\label{prop:clamp-bracket}
+Let $A \neq 0$ with every $A_i \neq 0$, let $u_v = \arg\min_{u\in U} Au$, and write
+$\norm{v}_A = \sum_i \abs{A_i}\,\abs{v_i}$. For $\varepsilon \ge 0$ set
+$F_\varepsilon = \{u \in U : Au \le \sigma_{\min} + \varepsilon\}$. Then
+\begin{enumerate}
+\item[(i)] $F_\varepsilon = \{u \in U : \norm{u - u_v}_A \le \varepsilon\}$, hence
+$\operatorname{diam}_{\norm{\cdot}_A} F_\varepsilon \le 2\varepsilon$ and
+$F_0 = \{u_v\}$.
+\item[(ii)] Whenever $u^{\mathrm{nom}} \notin F_\varepsilon$, the executed action
+satisfies $\norm{u^\star - u_v}_A \le \varepsilon$; therefore $u^\star \to u_v$ as
+$\varepsilon \to 0^+$.
+\item[(iii)] The clamped family does not contain the shipped closed loop as a
+limit: on $E_0$ the shipped action is the selection of the empty-branch rule,
+which is not a function of the row and generically differs from $u_v$.
+\item[(iv)] The policy's leverage through the filter, measured as
+$\operatorname{diam}_{\norm{\cdot}_A}$ of the image of $u^{\mathrm{nom}} \mapsto u^\star$
+on the binding set, is at most $2\varepsilon$; and on the set
+$\{s - \varepsilon < D_0 \le s\}$, where the shipped row was feasible, the enforced
+demand is reduced by at most $\varepsilon$. Both quantities are $\Theta(\varepsilon)$.
+\end{enumerate}
+\end{proposition}
+\begin{proof}
+(i) $u_v$의 성분은 $A_i > 0$이면 $\underline u_i$, $A_i < 0$이면 $\overline u_i$이다.
+따라서 임의의 $u \in U$에 대해 $A_i (u_i - u_{v,i}) = \abs{A_i}\,\abs{u_i - u_{v,i}} \ge 0$이고,
+\[
+Au - \sigma_{\min} = \sum_i A_i (u_i - u_{v,i}) = \norm{u - u_v}_A .
+\]
+그러므로 $Au \le \sigma_{\min} + \varepsilon \iff \norm{u-u_v}_A \le \varepsilon$.
+지름 상계와 $\varepsilon = 0$의 경우가 즉시 따른다.
+
+(ii) $u^{\mathrm{nom}} \notin F_\varepsilon$이면 사영은 $F_\varepsilon$ 안에 있고,
+(i)에 의해 $\norm{u^\star - u_v}_A \le \varepsilon$이다. 모든 $A_i \neq 0$이므로
+$\norm{\cdot}_A$는 노름이고 $\varepsilon \to 0^+$에서 $u^\star \to u_v$이다.
+
+(iii) (ii)의 극한은 최대 공급 행동 $u_v$이다. 출하 구성이 $E_0$에서 반환하는
+행동은 행이 아니라 대체 규칙이 결정하므로 $\varepsilon$의 함수가 아니며, 일반적으로
+$u_v$와 다르다. 따라서 어떤 $\varepsilon$ 열도 출하 폐루프로 수렴하지 않는다.
+
+(iv) 상은 $F_\varepsilon$에 포함되므로 (i)에 의해 지름이 $2\varepsilon$ 이하이다.
+후반부: $s - \varepsilon < D_0 \le s$이면 $D_\varepsilon = s - \varepsilon < D_0$이고
+차이는 $D_0 - (s-\varepsilon) \le \varepsilon$이다.
+\end{proof}
+
+\noindent
+\cref{prop:clamp-bracket}(iv)가 이 구성의 설계 한계를 확정한다. 정책이 필터를 통해
+쓸 수 있는 여지와, 상자가 공급 가능한 곳에서 잃는 집행량이 같은 상수에 같은 차수로
+묶여 있다. 하나를 키우면 다른 하나가 같이 커진다. 즉 \emph{행만 수정해서는} 미분
+경로의 복원과 집행의 보존을 동시에 얻을 수 없다.
+
+\begin{proposition}[Attainable invariance]\label{prop:attain-inv}
+Let $\calC = \{x : \Vhat(x) \le 0\}$.
+\begin{enumerate}
+\item[(a)] At $x \in \partial\calC$ there exists an admissible control holding
+$\Vhat$ non-increasing iff $s(x) \ge 0$. Hence $\calC$ is controlled-invariant
+at $x$ only on $\{s \ge 0\}$.
+\item[(b)] On $\partial\calC$ the shipped row enforces
+$\tfrac{d}{dt}\Vhat \le 0$ on $\{s \ge 0\}$ and enforces nothing on its complement;
+the additive row enforces it on $\{s \ge \varepsilon\}$. The two guarantee sets differ
+by the single band $0 \le s < \varepsilon$.
+\item[(c)] On $\{s < 0\}$ no admissible control preserves $\calC$, so no row is
+at fault there; the governing statement is \cref{thm:eps-optimal}.
+\end{enumerate}
+\end{proposition}
+\begin{proof}
+(a) \cref{lem:attain-decay}에서 $\min_u \frac{d}{dt}\Vhat = -s$이므로
+$\frac{d}{dt}\Vhat \le 0$을 만족하는 $u \in U$가 존재 $\iff s \ge 0$.
+
+(b) $\Vhat = 0$에서 $D_0 = \alpha_{\text{safe}} \cdot 0 = 0$이므로 출하 행은
+$D = 0$을 요구하고, \cref{lem:attain-decay}에 의해 $0 \le s$일 때 실행 가능하다.
+덧셈형은 $D_\varepsilon = \min(0, s-\varepsilon)$이므로 $s \ge \varepsilon$이면
+$D_\varepsilon = 0$으로 동일한 조건을 집행하고, $s < \varepsilon$이면
+$D_\varepsilon = s - \varepsilon < 0$이 되어 $\frac{d}{dt}\Vhat \le \varepsilon - s$,
+즉 증가를 허용한다. 두 집합의 차이는 $0 \le s < \varepsilon$이다.
+
+(c) (a)의 대우.
+\end{proof}
+
+\noindent
+$\{s<0\}$을 도달 불가 영역으로 읽어서는 안 된다는 점이 측정으로 확인되었다.
+공통 pool의 활성 빈 단계 중 $s<0$은 32.9\%이지만, 그 상태들에서 결합 경계가
+탈출을 제시하지 못하는 비율은 2.18\%와 0.77\%에 그치고, 제시하지 못하는 상태의
+대부분은 종료 1--5 단계 전에 놓인다. 반면 목표 도달 궤적 안의 같은 상태들은 종료까지
+56--95 단계가 남아 있고 회복한다. 따라서 $\{s<0\}$은 갇힘이 아니라 통과 구간이며,
+그 위에서 의미 있는 성질은 불변성이 아니라 \cref{thm:eps-optimal}의 최소 위반
+성질이다.
+
+\begin{remark}[The infeasibility flag is read off the shipped test]\label{rem:clamp-flag}
+행을 바꾸는 기전은 필터가 반환할 수 있는 행동을 바꿀 뿐 실행 불가능성의 의미를
+바꾸지 않는다. 따라서 단계별 판정은 배포되는 행이 무엇이든
+$D_0 > s$ 및 singular-and-violated 조건으로, 즉 $(A, \Lf\Vhat, \Vhat)$에서
+닫힌 형식으로 계산한다. 수정된 행에서 읽은 판정은 다른 이름을 가진 별개의 양이며
+$\mathrm{cps}$에 들어가지 않는다.
+
+이 구분은 형식적이지 않다. 한 clamp 구성에서 수정된 행 기준 빈 분기 비율은
+정확히 $0.00000$으로, 설계대로 분기가 완전히 닫혔다. 같은 구성에서 출하 판정은
+$0.30160$으로 기준선의 약 다섯 배였다. 수정된 행의 판정만 보고했다면 그 구성은
+깔끔한 성공으로 보였을 것이다. \cref{rem:clamp-degenerate}의 축퇴 행이 극단이다:
+출하 판정은 위반, 모든 clamp 판정은 공허한 만족, 그리고 실행되는 행동은 동일하다.
+\end{remark}
+
+\begin{remark}[Screening the retreat constant]\label{rem:eps-screen}
+$\varepsilon$은 논증이 아니라 선별로 정해지며 두 경계 사이에 놓인다.
+
+\emph{하한은 수치적이다.} 바인딩 시 $b = \sigma_{\min} + \varepsilon$이고 배포
+경로는 이를 상쇄가 발생하는 형태로 계산하므로, 실행 가능성 판정이 신뢰되려면
+$\varepsilon$이 그 상쇄 오차를 넘어야 한다. 척도는 이미 측정 가능하다:
+$\kappa = 1$ 구성은 해석적으로 어디서나 실행 가능해야 하는데
+(\cref{prop:clamp-feas}(ii)) 배포 정밀도에서 일부 행이 빈 것으로 판정되고,
+그 잔차의 분포가 곧 하한이다. 측정값은 $9.5 \times 10^{-7}$ 규모였다.
+
+\emph{상한은 제어량이다.} 바인딩 시 포기되는 감소량이 정확히 $\varepsilon$이므로
+(\cref{prop:clamp-bracket}(iv)) 척도는 $s$이며, 제어 권한 폭 $R$이 아니다. $R$은
+실행 가능 집합의 두께 $\varepsilon/R$, 즉 기울기 생존의 척도일 뿐 감소 예산의
+척도가 아니다. 그리고 상한을 재는 모집단은 빈 집합이 아니다. 빈 집합에서는
+정의상 모든 상태가 바인딩하므로 그 위의 $s$ 분위수는 상한과 무관하다. 잃는 것이
+있는 곳은 출하 행이 이미 실행 가능하던 상태들, 즉 여유 $s - D_0$가 작은 띠이며,
+선별 통계량은 그 위의 $s - D_0$ 분포이다.
+
+두 경계 사이에 값이 존재하더라도 \cref{prop:clamp-bracket}이 그 구성의 결과를
+이미 결정한다는 점을 함께 기록한다. $\varepsilon$을 하한 쪽으로 보낼수록 실행
+행동은 최대 공급 코너로 수렴하고, 출하 폐루프로는 수렴하지 않는다.
+\end{remark}
+
+\section{The policy loss gate and the failure phase}\label{sec:gate}
+
+\textbf{직관.} \cref{sec:jt}는 gradient가 filter를 통과해 살아남는 조건을 다루었다. 이 절은 그
+gradient가 \emph{어디에} 도달하는지를 묻는다. 배포되는 정책 손실은 $\sigma(-\Vhat/\tau)$를
+가중으로 두 항을 섞는다: filter를 통과해 미분되는 성능 항과, 정책의 \emph{여과되지 않은}
+행동 위에서 계산되는 value descent 형태의 회복 항이다. 실패가 결정되는 국면에서 그 가중이
+사실상 $0$이고, 남는 유일한 신호의 방향이 절반가량 어긋나 있다는 것이 이 절의 앞부분이며,
+gate를 열어도 무엇이 흐르는지가 뒷부분이다.
+
+\begin{remark}[The recovery term is a descent on the unfiltered action]\label{rem:rec-identity}
+회복 항은 filter가 실행한 행동을 정책에 모방시키는 형태가 아니라, 정책의 원출력에 대한
+$\Vhat$의 하강이다(배포 기준 마찰 가중 $0$). 귀결이 하나 따른다: \emph{filter가 무엇을 했는지는
+정책 학습에 들어가지 않는다.} 특히 빈 분기에서 대체 규칙이 고른 행동의 품질은 정책의 교사가
+아니며, 그 품질을 개선하는 것으로 학습 신호를 개선한다는 경로는 성립하지 않는다.
+\end{remark}
+
+\begin{remark}[Measured: the gate is shut where failure is decided]\label{rem:gate-fail}
+spawn 국면(step $0$--$9$, tilt $>60^\circ$)의 실패 상태에서 $\tau=0.05$의 gate 값은
+$p_{50}<10^{-6}$이다. 따라서 성능 항의 유효 가중이 사실상 $0$이고 정책은 회복 항으로만
+학습된다. 그 항의 방향을 실측 hazard 감소 방향과 대조하면, $g_V=-\grad_u\Vhat$, $g_h$를
+실측 $h_\star$ 감소 방향이라 할 때
+\[
+  \Prob\big[\cos(g_V,g_h)<0\big]
+  \;=\; 51.0\%\ /\ 49.1\% \quad(\text{두 arm}),
+\]
+이며 대응하는 목표 도달 표본에서는 $20.4\%\,/\,18.2\%$다. 즉 실패 국면에서 학습 신호의 절반은
+hazard를 늘리는 방향을 가리킨다. 이 결과는 \cref{rem:CG-limit}의 direction-defect 계급과 같은
+episode 위에서 교차 확인되었다. 범위: 단일 seed, 두 arm의 충돌 episode 전수와 크기가 맞춰진
+목표 표본.
+\end{remark}
+
+\begin{remark}[Resolved: opening the gate admits nothing, because there is nothing to admit]\label{rem:gate-open}
+$\tau$를 키우면 실패 국면에 성능 항이 유입된다. 이전 판본은 혼합 방향
+$g_{\mathrm{mix}}=w(\tau)g_{\mathrm{perf}}+(1-w(\tau))g_{\mathrm{rec}}$의 정렬이 아직 측정되지
+않았다고 열린 문제로 두었다. 측정되었고, 답은 정렬이 아니라 \emph{피가수의 부재}다.
+
+$g_{\mathrm{perf}}$가 실패 국면 상태의 $85$--$91\%$에서 \emph{정확히} $0$이다: spawn window에서
+$258/293$과 $280/329$, pre-contact window에서 $266/293$과 $286/329$이며, 크기를 맞춘 목표
+표본에서는 $0/500$과 $93/550$이다 --- 실패 계급이 $5$--$14$배 enrich되어 있다. 그리고 그
+영집합은 \cref{cor:jt-deployed}(b)의 집합과 일치한다: 두 arm에서 zero 상태의
+$257/258$과 $280/280$이 empty-flagged이면서 동시에 fully box-clipped이고, 그 상태들의
+filter Jacobian Frobenius 중앙값이 $0.000000$이다.
+
+이 소멸은 one-step 형태의 artifact가 아니다. 배포된 $\texttt{detach\_filter\_coeffs}$ 아래에서
+$u_{\mathrm{nom}}$은 $u_{\mathrm{safe}}$를 통해서만 task 항에 도달하므로,
+$\partial u_{\mathrm{safe}}/\partial u_{\mathrm{nom}}=0$인 곳에서는 full-BPTT task gradient
+전체가 함께 소멸한다(\cref{cor:jt-deployed}(b)).
+
+따라서 $\tau$ 축은 그것이 겨눈 모집단에서 작동할 수 없다: $\tau$는 계수를 조정하고 Jacobian을
+만들지 않는다. 신호 수준에서도 같다 --- 표적 모집단에서 $\tau\in\{0.05,0.2\}$의 양방향 교환
+계수가 한 자릿수이고 두 arm에서 부호가 갈리는 반면(각각 $+3/-2$와 $+4/-7$), 목표 표본에서는
+한 자릿수 크고($+60/-18$, $+68/-67$) 두 arm의 방향이 일치하지 않는다. $g_{\mathrm{perf}}=0$인
+곳에서 혼합은 두 $\tau$ 모두에 대해 $(1-w)g_{\mathrm{rec}}$이고 방향이 $\tau$-불변이다.
+
+열린 문제는 닫혔다. 남는 것은 \cref{rem:gate-fail}의 방향 결손이며, 그것은 gate가 아니라
+회복 항이 읽는 $\Vhat$의 기하에 있고 \cref{cor:label-dir}에 의해 label 측 스칼라 상수로는
+움직이지 않는다. 범위: 단일 seed, 두 arm, canonical pool; 재계산은 세 정규화 아래 보고되었고
+그중 어느 것도 선택되지 않았다.
+\end{remark}
+
+\begin{remark}[Measured: chattering is the policy's own output]\label{rem:chatter-src}
+\cref{sec:rate}의 chatter를 filter 개입의 서명으로 읽는 해석은 측정으로 기각된다. 개입 구간
+\emph{안}과 \emph{밖}의 per-step $\norm{\Delta u}$ 진폭이 $p_{95}$ 기준 $3.10$ 대 $3.39$로, 밖이
+오히려 크거나 같다. bang-bang은 정책 자신의 출력 성질이며, filter는 그것을 만들지 않는다.
+다만 빈 분기 구간의 $p_{95}$는 $4.90500$, 즉 상자 전폭에 고정되는데 이는 $k$-step 대체 규칙이
+구성상 유한 후보 열거이기 때문이다(\cref{prop:enum-exact}). 두 원천은 구별된다.
+\end{remark}
+
+\section{Deployment regularity: what the rate can and cannot buy}\label{sec:rate}
+
+\begin{proposition}[Sampled total variation of the filtered command]\label{prop:tv-rate}
+Fix a control period $\Delta$ and let $u^{\mathrm{safe}}_k$ be the executed command at $t_k$.
+\begin{enumerate}[label=(\alph*)]
+  \item \textbf{(continuous branch)} On an interval where the filter's realization is locally
+  Lipschitz in $(x,u_{\mathrm{nom}})$ with constant $L$ and the closed loop has bounded speed
+  $\norm{\dot x}\le S$, the per-step increment obeys
+  $\norm{u^{\mathrm{safe}}_{k+1}-u^{\mathrm{safe}}_k}\le L(S+\norm{\dot u_{\mathrm{nom}}})\Delta$,
+  so the \emph{total} variation over a fixed horizon is $O(1)$ in $\Delta$ while the count of
+  steps is $O(1/\Delta)$: the per-step increment shrinks and the switching \emph{rate} does not
+  grow.
+  \item \textbf{(selection branch)} Across the tie locus $\calT_\ast$ of \cref{prop:sel}(b) the
+  increment does not shrink with $\Delta$: it is bounded below by the candidate gap. If the
+  closed loop crosses $\calT_\ast$ at a rate $\nu$ per unit time, the number of $O(1)$ jumps
+  per unit time is $\nu$ regardless of $\Delta$, and the number \emph{per step} is $\nu\Delta$.
+  Hence a finer loop leaves the jump rate invariant and increases the count of samples that
+  witness it.
+\end{enumerate}
+Scope: exact, given the stated regularity on each branch.
+\end{proposition}
+\begin{proof}
+(a) 국소 Lipschitz성과 $\norm{x_{k+1}-x_k}\le S\Delta$의 결합. (b) $\calT_\ast$ 통과 시 점프
+크기는 candidate 간격으로 아래에서 유계이고 이는 $\Delta$와 무관하다. 단위 시간당 통과 수는
+궤적의 성질이므로 $\nu$이며, 스텝당으로는 $\nu\Delta$이다.
+\end{proof}
+
+\begin{remark}[Measured: the rate-proportional component and its slope]\label{rem:rate-slope}
+$20$과 $50$~Hz에서 $u^{\mathrm{safe}}$의 스텝당 switching이 $u_{\mathrm{nom}}$ 대비
+$2.9\times\to4.2\times$로 성장하며, 이는 \cref{prop:tv-rate}(b)가 예측하는 $\nu\Delta$ 성분과
+정합한다. $u_{\mathrm{nom}}$ 자신의 switching은 rate와 함께 거의 변하지 않는다. 따라서 증폭은
+filter realization의 성질이지 정책의 성질이 아니다 --- 다만 \emph{진폭}은 정책의 것이다
+(\cref{rem:chatter-src}). 범위: 단일 seed, 하나의 checkpoint, 두 rate.
+\end{remark}
+
+\begin{proposition}[A latency layer transfers, a rate layer does not]\label{prop:lag-transfer}
+Suppose the deployed loop applies the command computed from $x(t_k)$ over
+$[t_k+\ell,\,t_{k+1}+\ell)$ for a fixed latency $\ell\ge0$. Then the bound of
+\cref{prop:zoh-layer} holds with $\Delta$ replaced by $\Delta+\ell$, so the blind band
+$\delta_{\Delta+\ell}$ grows quadratically in the sum. Consequently reducing $\Delta$ while
+$\ell$ is held fixed has a floor: $\delta_{\Delta+\ell}\ge\delta_\ell>0$.
+\end{proposition}
+\begin{proof}
+지연 하에서 한 명령이 유지되는 최대 구간 길이가 $\Delta+\ell$이므로 \cref{prop:zoh-layer}의
+증명을 그 길이에 적용하면 된다.
+\end{proof}
+
+\begin{remark}[Measured: the deployed loop has no latency layer, and the null is informative]\label{rem:lag-null}
+simulator는 $\ell=0$으로 실행되므로 \cref{prop:lag-transfer}의 바닥은 이 계에서 $\delta_0=0$이고,
+관측된 rate 효과 전부가 $\Delta$에만 귀속된다. 이는 hardware 이전에 대한 진술이 아니라 현재
+측정에 대한 진술이다: hardware에서는 $\ell>0$이 바닥을 만들고, $5\times$ 미세화가 산 $6.5\times$
+감소(\cref{rem:layer-measured})는 그만큼 잠식된다.
+\end{remark}
+
+\begin{proposition}[The observation encoder's sort is a discontinuity source]\label{prop:obs-chain}
+Let the encoder select the Top-$K$ obstacles by a continuous key and emit their features in
+sorted order. At a state where two obstacles have equal key, the emitted observation is
+discontinuous in $x$ with a jump equal to the difference of the two feature blocks, unless the
+downstream map is symmetric in those blocks. Consequently $\Vhat$ and $\pi_\theta$, as functions
+of $x$, inherit that discontinuity even when both networks are smooth functions of $o$.
+\end{proposition}
+\begin{proof}
+정렬 순열이 동률에서 바뀌므로 $o$가 그 지점에서 두 feature block을 맞바꾼다. downstream이
+그 교환에 대해 대칭이 아니면 출력이 다르고, 따라서 $x\mapsto\Vhat(o(x))$가 불연속이다.
+\end{proof}
+
+\begin{remark}[Measured: the sort crossing is rare per episode but sharp per step]\label{rem:obs-chain-measured}
+crossing 자체는 드물다 --- episode당 중앙값 $0$ --- 그러나 crossing 스텝에서
+$\norm{\Delta\Vhat}$는 인접 스텝 중앙값의 $33\times$이다. \cref{rem:sel-measured}의 selection
+불연속과 합치면 배포 사상은 두 개의 독립된 불연속 원천을 갖는다: 관측의 정렬과 filter의 selection.
+전자는 \cref{sec:obs}의 encoder 설계에, 후자는 \cref{prop:lambda-solve}의 채택에 의해 각각
+다뤄지며, 후자만이 이 lineage에서 제거되었다.
+\end{remark}
+
+\section{The projection centre is a free parameter}\label{sec:center}
+
+\begin{proposition}[Invariance of the feasible set, variance of the selected action]\label{prop:center-inv}
+Let $P_\rho(u_{\mathrm{nom}})\eqdef\operatorname{argmin}\{\norm{u-\rho}^2:\ u\in\calU,\
+a^\top u\le b\}$ for a centre $\rho\in\R^m$. Then the feasible set does not depend on $\rho$,
+while the selected action does: $P_\rho=\mathrm{clip}(\rho-\lambda^\star_\rho a,\calU)$ with
+$\lambda^\star_\rho$ the root of $\varphi_\rho(\lambda)=a^\top\mathrm{clip}(\rho-\lambda a,\calU)$
+at level $b$. In particular $P_{u_{\mathrm{nom}}}$ is the deployed choice, and
+$\partial P_\rho/\partial u_{\mathrm{nom}}=0$ for any $\rho$ not depending on $u_{\mathrm{nom}}$.
+\end{proposition}
+\begin{proof}
+feasible 집합은 $\rho$를 포함하지 않는 제약만으로 정의된다. 나머지는 \cref{prop:lambda-solve}를
+$u_{\mathrm{nom}}\to\rho$로 치환한 것이다. 마지막 주장은 $\rho$가 $u_{\mathrm{nom}}$의 함수가
+아니면 사슬이 끊어짐에서 따른다.
+\end{proof}
+
+\begin{remark}[The empty branch is where the centre could matter]\label{rem:center-empty}
+feasible branch에서 centre를 $u_{\mathrm{nom}}$이 아닌 것으로 바꾸면 \cref{prop:center-inv}의
+마지막 주장에 의해 정책 gradient가 사라지므로 joint training과 양립하지 않는다. 반면 empty
+branch에서는 정책 gradient가 이미 $0$이므로(\cref{cor:jt-deployed}(b)) centre 선택이 gradient를
+잃을 것이 없다. \cref{prop:empty-prox}가 그 지점에서 centre를 $u_{\mathrm{nom}}$으로 두는 특정
+선택이며, gradient를 \emph{되찾는} 유일한 선택이다.
+\end{remark}
+
+\begin{remark}[Measured: the centre is a null on this system]\label{rem:rho-null}
+empty branch의 centre를 hover trim, 이전 실행 명령, $u_{\mathrm{nom}}$ 사이에서 바꾼 배포측
+격자에서, band\_lower 충돌 계급의 $35$개 scene이 모든 값에서 동일하게 실패했고 사건 step의
+중앙값이 $5$($\approx0.3$~s)였다. 즉 그 계급은 배포측 어떤 개입에도 닿지 않으며, 원인이 실행
+행동의 선택이 아니라 초기 조건에 있다는 \cref{rem:floor-bracket}의 판정과 정합한다. 범위:
+단일 seed, canonical pool, eval-only.
 \end{remark}
 
 \section{Corrections to earlier statements}\label{sec:dt-corrections}
 
-\begin{remark}[Resolved: the infeasible branch does carry a gradient, on a minority of its states]\label{rem:empty-resolved}
-fallback은 고정 vertex가 아니다. empty row에서 filter는 least-violating candidate, 즉
-\cref{def:sel}의 family 위 $\operatorname{argmin}\{\text{violation}+\mathrm{tol}\cdot
-\text{dist}^2\}$를 반환하며, 이는 $\Lg\Vhat$와 $\Lf\Vhat$를 통해 $x$에, candidate 집합과 tiebreak을
-통해 $u_{\mathrm{nom}}$에 의존한다. 따라서 \cref{rem:empty-grad}이 추측한 메커니즘 --- 상수 ---
-은 거짓이다.
+\begin{remark}[Resolved: the empty branch is a spawn condition, not a trajectory event]\label{rem:empty-resolved}
+\cref{rem:empty-grad}은 $\mathcal E$ 위 배포 행동의 gradient 문제를 열어 두었고,
+\cref{prop:sel}(a)와 \cref{cor:jt-deployed}(b)가 그 메커니즘을 닫았다. 남은 것은 그 branch가
+궤적의 어디에 사는가였고, 측정이 이를 닫는다.
 
-그럼에도 gradient는 규칙의 상수성이 아니라 \cref{prop:sel}(a)에 의해 $\mathcal E$의 대부분에서
-소멸한다: empty 스텝에서 배포 action은 대부분의 경우 box vertex이고 나머지에서 clipped
-nominal이며, 중간의 edge-solve candidate는 선택되지 않는다. 그 몫은 설정에 강하게 의존한다 ---
-seed42 band-feasible pool 위의 추적 가능한 측정은 $52.13\%$이고, canonical pool의 배포
-fallback($k$-step, $k=5$)에서 v2.8.0 S1이 잰 값은 두 arm 모두 $99.99999\%$이다. 이전 판본이
-인용한 한 쌍의 수치($71.1\%/65.7\%$)는 어떤 persisted artifact로도 재현되지 않아 삭제한다.
+배포 실패 계급에서 $\mathcal E$는 궤적이 진입하는 집합이 아니라 \emph{태어나는} 집합이다: 두
+arm의 충돌 episode 중 step $0$에서 이미 empty인 것이 $47/50$과 $54/55$이고, 궤적을 따라
+진입하는 것이 $3$(step $2$, $8$, $10$)과 $1$(step $2$)이다. step 수준에서도 empty step의
+$269/383$과 $336/365$가 spawn-empty episode에 있다. 그리고 그 enrichment는 실패 특유다:
+spawn window에서 zero-gradient 몫이 충돌 episode $88.1\%\,/\,85.1\%$, 크기를 맞춘 목표 표본
+$6.4\%\,/\,16.9\%$로 $5$--$14$배다.
 
-두 귀결이 재서술되어야 한다. 첫째, \cref{prop:jt}의 배포 이전은 $\mathcal E$에서만 실패하는 것이
-아니다: \cref{cor:jt-deployed}은 vertex가 이기는 곳이면 feasible branch에서도 같은 gap을 보이고,
-\cref{rem:sel-measured}은 feasible branch가 그 불연속이 처음 발생하는 곳임을 보인다. 둘째, 이
-filter를 통해 수행되는 training scheme 비교는 vertex-selecting 영역에서 양쪽이 모두 꺼지는 집합
-위에서 gradient 경로를 비교한다; 그 영역은 배포 period에서 스텝의 $8$--$10\%$이고, control
-decision당으로는 5배 미세한 period에서 약 네 배 더 많다. 범위: 단일 seed, 하나의 계.
+세 귀결이 따른다. 첫째, \cref{prop:sinfty-decomp}(b)의 궤적 조향 지렛대는 이 계급에 적용할
+모집단을 갖지 못한다 --- 조향할 궤적이 존재하지 않는다. 이것이 \cref{rem:sinfty-signal}의
+등록된 전제가 실패한 이유이자, \cref{rem:empty-prox-measured}의 학습 arm이 null이었던 이유와
+정합하는 사실이다. 둘째, \cref{prop:exact-value-feasible}이 인증하는 label 오류가 spawn에서
+공집합인 것($0/257$, $0/297$)과 함께 읽으면, 이 상태들은 "인증서가 틀렸다"가 아니라
+"인증서가 다루지 않는 영역에 있다"로 읽어야 한다. 셋째, 이것이 \cref{rem:floor-bracket}의
+회복가능성 join과 같은 사실의 다른 얼굴이다: 그 계급의 충돌 episode 전부가 미확정 class에
+있으며, $\mathcal E$-at-spawn과 그 class 소속은 같은 초기 조건 집합을 서로 다른 도구로 가리킨다.
+범위: 단일 seed, 두 arm, canonical pool.
 \end{remark}
 
-\begin{remark}[Retracted: the state-dependence reading of the $k$-step fallback's benefit]\label{rem:kstep-reading-retract}
-\cref{rem:kstep-empirical-2}은 $k$-step fallback의 기여가 ``constraint가 infeasible한 곳이면 임의
-action을 state-dependent한 것으로 대체하는 것''이라고 제시했다. 그 해석은 반박된다:
-\cref{rem:empty-resolved}에 의해 baseline fallback은 \emph{이미} state-dependent이고 추가로
-$u_{\mathrm{nom}}$-dependent다. $k$-step fallback을 구별하는 것이 무엇이든 그것은 state 의존성의
-도입이 아니다.
-
-admissible하게 남는 것은 더 좁고 \cref{prop:kstep}을 따른다: $k$-step 규칙은 $k$ 스텝 앞에서
-평가된 기준으로 선택하며, \cref{cor:kstep-spread}은 pointwise row가 눈먼 곳에서 $\Vhat$의 reachable
-값이 $T^2$ 차수로 분리됨을 보인다. cylinder-only $h_\star$가 encode하지 않는 채널에서 측정된
-boundary exit 감소는 이 문서의 어떤 결과로도 설명되지 않은 채 남으며, 귀속되는 대신 그대로
-기록된다.
+\begin{remark}[Retracted: the state-dependence reading of the fallback]\label{rem:kstep-reading-retract}
+\cref{rem:kstep-empirical-2}의 boundary-exit 감소를 fallback의 state 의존성에 귀속한 해석은
+철회된다. 당시의 $h_\star$는 수직 채널을 전혀 encode하지 않았고(\cref{cor:vert-filter}), fallback의
+목적함수도 그 채널을 읽지 않는다. 관측은 서 있고 설명은 서지 않는다.
 \end{remark}
 
-\begin{remark}[Registered predictions that failed, kept as calibration]\label{rem:dt-nulls}
-\cref{sec:dt,sec:selection} 뒤의 프로그램은 각 falsifier를 그 측정 전에 등록했다. 다섯 예측이
-실패했고, 그 실패가 주장 가능한 것을 제약하므로 기록한다. (i) coarse-grid contact 검정이 cylinder
-통과를 놓친다는 것 --- 반증, $33$ 중 $0$개 straddle. (ii) outcome 재배치가 certificate의 one-step
-label 잔차가 큰 곳에 집중된다는 것 --- 반증($\abs{\Vhat}$에 대해 $\abs r\le0.23$, surface distance에
-대해 $\abs r\le0.17$). (iii) raw inter-sample envelope이 이차라는 것 --- 반증, 명제가 아니라 측정
-설계가 잘못이었다. (iv) boundary 집중이 sub-quadratic crossing rate를 설명한다는 것 --- 반증,
-$\beta\le0$. (v) convex 집합으로의 projection이 연속이므로 feasible branch가 연속이라는 것 ---
-반증, 오류는 구현이 projection을 계산한다고 가정한 것이었다(\cref{prop:enum-exact}).
-
-\cref{sec:dt,sec:selection}의 네 proposition은 추론이 아니라 증명되었으므로 이 중 어느 것에도
-영향받지 않았다. 그 비대칭이 calibration이다: 이 계에서 메커니즘 서사는 측정에 반복적으로 실패한
-반면 증명된 서술은 그러지 않았으며, 유도가 가능한 곳이면 측정에 앞서 유도하라는 논거다.
+\begin{remark}[The measured nulls of the deployment-period axis]\label{rem:dt-nulls}
+이 축에서 등록된 예측 넷 중 셋이 반증되었고 그 반증들이 축을 닫았다: detection 가설
+(\cref{rem:grid-structural}), density 가설(\cref{rem:layer-measured}), 그리고 label-refinement
+지렛대(\cref{rem:grid-magnitude}). 서 있는 것은 layer의 존재와 그 $\Delta^{1.16}$ scaling이며,
+그 scaling은 $C_2$의 두꺼운 꼬리로 설명된다. 배포 주기는 이 계에서 성능 지렛대가 아니다.
 \end{remark}
 
-\textbf{해석 (이 두 절이 기여하는 것).}
-\cref{sec:dt}는 학습과 배포가 공유하는 눈먼 층을 정량화하여, 배포 주기를 줄이는 것이 왜 도움이 되고
-왜 그 도움이 $\Delta t^2$로 커지지 않는지를 함께 설명한다. \cref{sec:selection}은 \cref{prop:jt}가
-전제한 대상이 배포 구현과 다름을 증명하고, 그 차이가 action 차원 $2$를 넘는 순간 발생함을 보이며,
-차원과 무관하게 정확하고 연속인 대안을 제시한다. 두 절 모두 규범적이다: 전자는 배포 주기의 선택을
-근거 있게 만들고, 후자는 joint training이 성립하기 위해 filter 구현이 만족해야 할 조건 ---
-연속성과 $u_{\mathrm{nom}}$ 의존성 --- 을 명시한다.
+\textbf{해석.} 이 절의 세 항목은 하나의 패턴을 보인다: 기전 서사가 반복적으로 측정에 실패했고,
+살아남은 것은 증명과 직접 측정뿐이다. 이 lineage에서 신뢰되는 것은 그 둘이며, 그 사이를 잇는
+그럴듯한 이야기는 등록 전에 반증되거나 등록 후에 반증되었다.
+
+\clearpage
+\section{The rotor-level input interface}\label{sec:inputspace}
+
+\textbf{직관.} 이 절은 성능 주장이 아니라 \emph{범위} 주장을 기록한다. 이 lineage는 per-rotor
+box를 action space로 삼는다. 표준 sampling planner 계열이 같은 interface에서 목표 도달 기준선으로
+기능하는지는 측정 가능한 질문이며, 세 개의 서로 다른 interface 층에서 측정되었다.
+
+\begin{remark}[The interface hierarchy]\label{rem:iface-hier}
+quadrotor 제어 문헌은 세 층을 구별한다. (i) \emph{rotor-level}: 명령이 개별 rotor 추력이고
+box가 $[0,\bar u]^m$; (ii) \emph{body-wrench}: 명령이 $(f_{\mathrm{thr}},\tau)$이며 mixer가 그것을
+rotor로 배분하고 box는 배분 \emph{후}에만 존재; (iii) \emph{cascaded}: 명령이
+$(f_{\mathrm{thr}},\omega_{\mathrm{des}})$ 또는 $(f_{\mathrm{thr}},a_{\mathrm{des}})$이며 내부
+rate loop이 나머지를 담당. 층이 올라갈수록 계획 문제가 쉬워지고 box 제약이 멀어진다. 이
+lineage는 (i)에서 학습하고 배포한다.
+\end{remark}
+
+\begin{remark}[Measured: three interfaces, three nulls, and the located reason]\label{rem:rotor-measure}
+표준 sampling planner(MPPI)를 세 interface 층에서 이 plant와 이 pool 위에 구현하여 측정했다.
+
+\emph{(i) rotor-level.} 다섯 세대에 걸쳐 표본 수 $N\in[256,16384]$, 온도, 상관 잡음, 예산을
+훑었고 모든 cell에서 도달 $0.0000$이었다. 관측된 정상 상태는 목표에서 $1.8$--$2.5$~m 떨어진
+approach equilibrium이며, $N$을 $8$배 늘려도 최근접이 $1.96\to1.84$~m로 움직였다.
+
+\emph{(ii) body-wrench cascade($a_{\mathrm{des}}$).} 네 cell 전부 도달 $0.0000$, 완화된
+terminal에서도 $0.0000$.
+
+\emph{(iii) cascaded $(f_{\mathrm{thr}},\omega_{\mathrm{des}})$.} 여덟 cell($N\in\{1024,4096\}
+\times\lambda\in\{0.05,0.2\}\times$ inner gain $\times2$) 전부 도달 $0.0000$이고 충돌
+$0.12$--$0.175$, timeout $0.82$--$0.88$이다 --- 두 항의 합이 거의 $1$이므로 모든 episode가
+충돌 아니면 시간 초과다.
+
+\emph{구현 결함 가설의 배제.} 공개 참조 구현과의 등가성 시험에서 첫 불일치 양이 국소화되었다:
+참조는 Williams 계열의 action-perturbation 항을 갖고 우리 구현은 갖지 않으며, UAV 문헌의 가중
+식(min-cost baseline만)은 그 항을 갖지 않는다 --- 즉 우리 구현은 UAV 관례를 따른다. 그리고
+참조 쪽이 장애물 없는 직선에서 \emph{더 나쁘다}($1.432$ 대 $1.056$~m). horizon 부족도 배제된다
+($H\Delta t\,v_{\max}=5.0$~m $\ge$ 최대 $3.09$~m). 가중 붕괴 가설도 반증된다: nominal은 실제로
+움직이고, 유효 표본 수를 $1$로 몰면 오히려 나빠진다.
+
+\emph{원인의 국소화.} 남은 두 사실이 원인을 정한다. 첫째, $1024$개 표본 중 최근접 거리의
+최솟값이 $p_{50}$ $0.124$~m로 goal 반경 안쪽이다 --- \emph{도달하는 궤적은 표본 안에 있다}.
+둘째, 비용 최소 rollout의 최근접은 $1.466$~m다 --- \emph{비용이 그것을 고르지 않는다}. 따라서
+실패는 탐색이 아니라 목적함수에 있다. 그리고 그 목적함수는 문헌 표준이다: 참조 running cost는
+목표 거리 제곱, 충돌 지시자, 제어 이차형, 속도 이차형(가중 $0.01$), 고도 지시자로 구성되며
+정착을 함의하는 항이 없다. 우리 terminal 조건이 요구하는 $\norm v\le v_{\mathcal G}$와
+$\norm\omega\le\omega_{\mathcal G}$(\cref{def:reach})는 그 cost가 인코딩하지 않는 조건이다:
+측정된 목표 반경 통과 시점의 속도는 $1.95$--$2.50$~m/s, 각속도는 $2.59$--$4.34$~rad/s였다.
+
+\emph{장면 밀도.} 참조 벤치마크의 척도로 환산하면 이 pool은 $0.128$ obstacles/m$^2$이고 그
+Easy 설정은 $1.000$이다. 고도 slice 기준으로도 Easy의 $1.5$배 아래다 --- 실린더는 넘어갈 수
+없으므로 이 환산은 유리한 쪽이 아니다.
+
+범위: 단일 seed, 하나의 plant, 하나의 pool; 표준 cell과 우리 terminal 조건. 학습된 정책과의
+직접 비교가 아니라 이 계열이 이 interface와 이 목표 조건에서 기준선으로 기능하는지에 대한 진술이다.
+\end{remark}
+
+\begin{remark}[Scope of the interface claim]\label{rem:iface-scope}
+위 측정이 배제하지 않는 것을 명시한다: 이 결과는 sampling planner 계열 일반에 대한 진술이
+아니라 \emph{이 목표 조건과 이 예산에서} 그것이 기준선으로 기능하지 않는다는 진술이다.
+배제되지 않은 것은 --- upstream reference trajectory(문헌의 UAV-MPPI는 tracking 과제다),
+결정론 제어기로 생성한 seeded rollout, 정착을 인코딩하는 목적함수, 제어 주기당 다중 반복,
+그리고 자동 조율된 가중 --- 각각 독립된 변경이며 어느 것도 여기서 반증되지 않았다.
+seeded rollout에 대해서는 부분 측정이 있다: 배포 결정론 cascade를 표본 집합에 넣으면 장애물
+없는 직선에서 도달하나, 도달하는 모든 구성이 가중의 $0.71$ 이상을 그 seeded row에 싣는다 ---
+그 경우 baseline은 sampling 결과가 아니라 결정론 제어기의 가중 평균이며, 그렇게 서술되어야 한다.
+아울러 그런 baseline은 세 번째 비대칭 --- 배포 결정론 제어기를 넘겨받는다 --- 을 갖는다.
+\end{remark}
 
 \clearpage
 \part{Double integrator, self-conditioning}
-\noindent\emph{Synopsis.}
-This part formalizes the joint-training framework that co-trains a task policy $\pi_\theta$ and
-a policy-conditioned neural CBF $\Vhat$ through a differentiable HardNet safety filter. Three
-groups of results are given. (i) \emph{Separation}: with an exact conditioning value
-$\Vhp{\pi_b}$, safety of the filtered closed loop holds for every nominal policy, feasibility is
-guaranteed on the certified set with the conditioning policy as witness, and the filtered policy
-class realizes exactly the CBF-admissible controller class, so performance optimization suffers
-no representational loss; the only unbounded error term is isolated from the safety channel.
-(ii) \emph{Degeneracy}: the self-referential evaluation used by the stored-rollout conditioning
-admits only margin-free fixed points that certify nothing about any filter-independent policy,
-and worst-case-noise conditioning is the implicit margin that keeps the baseline alive.
-(iii) \emph{Error budget}: a fully discrete margin theorem for a learned, discounted value, with
-a feasibility-localization corollary that turns the measured empty-intersection rate into a
-runtime falsification statistic, and a closed-form discount bias giving a schedule floor
-$H_0\ge37$ for the double integrator. The maneuver-family barrier then realizes the safety
-guarantees with no learned object in the safety channel, and the certified reach-time
-construction is recorded together with its refutation as a training terminal.
 
 \section{Overview}\label{sec:di-overview}
 
-\textbf{직관 (읽는 순서).} 이 part의 결과는 \cref{fig:chain}의 네 사슬로 요약된다. 초록 사슬은 exact
-conditioning value에 대한 무조건부 결과(\cref{sec:safety})로 안전이 nominal policy와 무관함을
-확립한다. 파랑 사슬은 성능 채널(\cref{sec:perf})로 filter가 표현력을 깎지 않음을 보인다. 빨강
-사슬은 자기참조 operator의 퇴화(\cref{sec:degen})를, 주황 사슬은 학습된 $\Vhat$에 대한 조건부
-보장(\cref{sec:budget})을 보인다. 회색 certificate box는 non-circularity를 기록한다: 안전 사슬은
-학습된 $\pi_\theta$의 어떤 성질도 사용하지 않고, feasibility의 witness는 filter 출력이 아니라
-conditioning policy $\pi_b$이다.
+\textbf{직관.} Part~I은 underactuated 계에서 학습된 인증서가 입력 권한을 갖는 조건을 다루었다.
+Part~II는 다른 축을 다룬다: 인증서와 정책이 서로를 조건으로 삼을 때 무엇이 well posed하고 무엇이
+퇴화하는가. directly-actuated double integrator에서는 underactuation이 없으므로 그 축이 홀로 드러난다.
+세 결과가 나온다. 안전 채널을 정책 최적화에서 분리하면 두 objective가 서로를 오염시키지 않는다.
+자기참조적 평가 --- 인증서가 자신이 유도한 정책으로 평가되는 --- 는 퇴화한다. 그리고 안전 채널에
+학습된 대상을 두지 않는 실현이 존재하며, 그 실현은 완전히 이산인 margin 정리와 측정 가능한 오차
+예산을 갖는다.
 
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}[
-  font=\scriptsize,
-  box/.style={draw, rounded corners=2pt, align=center, inner sep=3pt, minimum height=8mm},
-  gbox/.style={box, fill=green!12},
-  obox/.style={box, fill=orange!18},
-  rbox/.style={box, fill=red!12},
-  bbox/.style={box, fill=blue!10},
-  cbox/.style={box, fill=gray!14, text width=15.2cm},
-  arr/.style={-{Stealth[length=2mm]}, semithick},
-  lab/.style={font=\tiny, align=center, fill=white, inner sep=1pt}
-]
-\node[gbox, text width=2.5cm] (a1) {fixed conditioning $\pi_b$;\\ exact $V=\Vhp{\pi_b}$};
-\node[gbox, right=5mm of a1, text width=2.4cm] (a2) {$V\ge h$;\ $V$ non-increasing along $\pi_b$};
-\node[gbox, right=5mm of a2, text width=2.7cm] (a3) {CBF row feasible on $\{V\le 0\}$;\\ witness $u=\pi_b(x)$};
-\node[gbox, right=5mm of a3, text width=2.6cm] (a4) {$\{V\le 0\}$ invariant for \emph{every} nominal $\pi_\theta$};
-\node[gbox, right=5mm of a4, text width=1.9cm] (a5) {$h(x_t)\le 0$\ $\forall t$};
-\draw[arr] (a1)--(a2) node[lab, midway, above=1pt] {Lem.~\ref{lem:mono}};
-\draw[arr] (a2)--(a3) node[lab, midway, above=1pt] {Lem.~\ref{lem:feas}};
-\draw[arr] (a3)--(a4) node[lab, midway, above=1pt] {Thm.~\ref{thm:inv}};
-\draw[arr] (a4)--(a5) node[lab, midway, above=1pt] {$V\ge h$};
-\node[bbox, below=7mm of a1, text width=2.5cm] (b1) {$P_V$ = exact convex projection\\ (nonexpansive)};
-\node[bbox, right=5mm of b1, text width=2.4cm] (b2) {filtered class $=$ admissible class $\calK_V$};
-\node[bbox, right=5mm of b2, text width=2.7cm] (b3) {$\sup_\theta J(P_V\!\circ\!\pi_\theta)$\\ $=$ admissible optimum};
-\node[bbox, right=5mm of b3, text width=2.6cm] (b4) {$\ge J(P_V\!\circ\!\pi_{\mathrm{LQR}})$;\ LQR not stationary for composite $J$};
-\node[bbox, right=5mm of b4, text width=1.9cm] (b5) {G4 (SGD) isolated from safety};
-\draw[arr] (b1)--(b2) node[lab, midway, above=1pt] {Lem.~\ref{lem:range}};
-\draw[arr] (b2)--(b3) node[lab, midway, above=1pt] {Thm.~\ref{thm:perf}};
-\draw[arr] (b3)--(b4) node[lab, midway, above=1pt] {Prop.~\ref{prop:jac}};
-\draw[arr] (b4)--(b5) node[lab, midway, above=1pt] {Prop.~\ref{prop:gaps}};
-\node[rbox, below=7mm of b1, text width=2.5cm] (c1) {conditioning $=$ own filtered rollout ($\Phi$)};
-\node[rbox, right=5mm of c1, text width=2.4cm] (c2) {fixed point $V^\ast$: flags only own-filter failures};
-\node[rbox, right=5mm of c2, text width=2.7cm] (c3) {no fallback semantics;\\ zero value margin};
-\node[rbox, right=5mm of c3, text width=2.6cm] (c4) {single-substitution fragility;\\ collapse class};
-\node[rbox, right=5mm of c4, text width=1.9cm] (c5) {tested in-system};
-\draw[arr] (c1)--(c2) node[lab, midway, above=1pt] {Thm.~\ref{thm:fixed}};
-\draw[arr] (c2)--(c3) node[lab, midway, above=1pt] {Ex.~\ref{ex:nofallback}};
-\draw[arr] (c3)--(c4) node[lab, midway, above=1pt] {Prop.~\ref{prop:frag}};
-\draw[arr] (c4)--(c5) node[lab, midway, above=1pt] {Rem.~\ref{rem:toy}};
-\node[obox, below=7mm of c1, text width=2.5cm] (d1) {learned $\Vhat$: $\varepsilon_0$, discount $\gamma$, step $dt$};
-\node[obox, right=5mm of d1, text width=2.4cm] (d2) {$K$-step fallback certificate};
-\node[obox, right=5mm of d2, text width=2.7cm] (d3) {discrete enforcement;\\ witness slack $s$};
-\node[obox, right=5mm of d3, text width=2.6cm] (d4) {$h \le \varepsilon_0-\gamma_m$ if feasibility holds (measured)};
-\node[obox, right=5mm of d4, text width=1.9cm] (d5) {infeasibility localizes to a value band};
-\draw[arr] (d1)--(d2) node[lab, midway, above=1pt] {Prop.~\ref{prop:disc}};
-\draw[arr] (d2)--(d3) node[lab, midway, above=1pt] {Lem.~\ref{lem:bridge},\ref{lem:witness}};
-\draw[arr] (d3)--(d4) node[lab, midway, above=1pt] {Thm.~\ref{thm:margin}};
-\draw[arr] (d4)--(d5) node[lab, midway, above=1pt] {Cor.~\ref{cor:band}};
-\node[cbox, below=7mm of d1.south west, anchor=north west] (cert) {\textbf{Certificate (non-circularity and sharpening).} The green and orange safety chains use no property of the trained $\pi_\theta$: the feasibility witness is $\pi_b$, never the filter output; the optimization gap G4 enters the blue chain only. Sharpening: the measured empty-intersection rate falsifies the exactness hypothesis at runtime (Cor.~\ref{cor:falsify}) and, under Thm.~\ref{thm:margin}, must concentrate in an explicit value band (Cor.~\ref{cor:band}).};
-\end{tikzpicture}
-\caption{Logic chains of the safety, performance, degeneracy, and error-budget results}
-\label{fig:chain}
-\end{figure}
-
-\section{Setup}\label{sec:di-setup}
-
-\begin{definition}[Plant, flows, and policies]\label{def:plant}
-\leavevmode
-\begin{itemize}
-\item $\calX\subset\R^n$ := the compact state space;
-$\calU:=\prod_{i=1}^{m}[u_i^{\mathrm{lo}},u_i^{\mathrm{hi}}]\subset\R^m$ := the control box.
-\item $f:\calX\to\R^n$, $g:\calX\to\R^{n\times m}$ := the drift and input vector fields of
-$\dot x=f(x)+g(x)u$.
-\item $F:\calX\times\calU\to\calX$ := the zero-order-hold flow map over one sampling period
-$dt>0$. The discrete plant is $x_{k+1}=F(x_k,u_k)$.
-\item A \textbf{\emph{policy}} is a map $\pi:\calX\to\calU$. $x_t^{\pi}$ := the continuous-time
-closed-loop state; $x_k^{\pi,F}$ := the discrete closed-loop state.
-\end{itemize}
+\begin{definition}[Double integrator with a box]\label{def:di}
+$x=(p,v)\in\R^{2d}$, $\dot p=v$, $\dot v=u$, $u\in\calU=[-\bar u,\bar u]^d$. Hazard
+$h(x)=\phi(p)$ with $\phi$ as in \cref{def:ramp} or any $C^2$ generator, avoid set
+$\calA=\{h>0\}$. The system is directly actuated: $\Lg h=0$ but $\Lg\Lf h=\grad\phi^\top\neq0$,
+so $h$ has uniform relative degree two and the PNCBF collapse of \cref{prop:validity} is the
+only mechanism producing a relative-degree-one certificate.
 \end{definition}
 
-\begin{definition}[Safety cost and avoid set]\label{def:h}
-$h:\calX\to[-a,b]\subseteq[-1,1]$ := the geometric safety cost, Lipschitz with constant $L_h$,
-with $a,b>0$. $\calA:=\{x\in\calX: h(x)>0\}$ := the avoid set; $\calC:=\{h\le0\}$.
-\end{definition}
+\section{Separation of the safety channel}\label{sec:di-sep}
 
-\begin{definition}[Policy value function]\label{def:V}
-For a policy $\pi$,
-\[
-\Vhp{\pi}(x) := \sup_{t\ge 0} h\big(x_t^{\pi}\big),
-\qquad
-\Vhp{\pi,F}(x) := \sup_{k\ge 0} h\big(x_k^{\pi,F}\big).
-\]
-\end{definition}
+\begin{proposition}[The safety row does not read the task objective]\label{prop:di-sep}
+Let $\Vhat$ be any certificate and let the deployed action be
+$P(u_{\mathrm{nom}})$ of \cref{prop:lambda-solve} with row data $(a,b)=(\Lg\Vhat,-\alpha\Vhat-\Lf\Vhat)$.
+Then:
+\begin{enumerate}[label=(\alph*)]
+  \item the feasible set $\{u\in\calU:a^\top u\le b\}$ is a function of $(x,\Vhat,\alpha)$ alone
+  and contains no term of the task cost;
+  \item consequently, for two nominal policies $\pi_1,\pi_2$ sharing $\Vhat$, the safety
+  guarantee of \cref{prop:validity}(b) holds identically under both, and any difference in
+  realized outcome is attributable to the selection inside a common feasible set;
+  \item the converse fails: the certificate is not independent of the policy, since
+  $\Vhat$ regresses $V^{h,\pi}$, which is defined by $\pi$'s flow.
+\end{enumerate}
+Scope: exact.
+\end{proposition}
+\begin{proof}
+(a)는 row 데이터의 정의에서 읽힌다. (b)는 (a)와 \cref{prop:validity}(b). (c)는 $V^{h,\pi}$의
+정의에서 따른다.
+\end{proof}
 
-\begin{definition}[Discounted avoid operator]\label{def:T}
-For $\gamma\in(0,1)$, a policy $\pi$, and $W$ in the space $\calB(\calX)$ of bounded functions,
-\[
-(\calT_\gamma^{\pi} W)(x) := \max\Big\{\,h(x),\ (1-\gamma)h(x) + \gamma\, W\big(F(x,\pi(x))\big)\Big\}.
-\]
-The clamped variant is $\bar\calT_\gamma^{\pi} := \mathrm{clip}_{[-1,1]}\circ\,\calT_\gamma^{\pi}$.
-\end{definition}
-
-\begin{definition}[CBF row, validity, and the HardNet box-aware filter]\label{def:filter}
-Let $V\in C^1(\calX)$, $\alpha_s,\alpha_u>0$, and $\alpha_V(x):=\alpha_s$ if $V(x)\le0$,
-$\alpha_u$ otherwise.
-\begin{itemize}
-\item $R_V(x):=\{u\in\calU: \grad V(x)^{\top}(f(x)+g(x)u)\le-\alpha_V(x)V(x)\}$ := the row set at
-$x$, a closed convex subset of $\calU$.
-\item $V$ is \textbf{\emph{valid}} on $\calS:=\{V\le0\}$ iff (i) $V\ge h$ on $\calX$ and
-(ii) $R_V(x)\neq\emptyset$ for all $x\in\calS$.
-\item $P_V:\calX\times\R^m\to\calU$ := the box-aware filter:
-\[
-P_V(x,u) :=
-\begin{cases}
-\displaystyle\arg\min_{w\in R_V(x)} \norm{w-u}^2, & R_V(x)\neq\emptyset,\\[4pt]
-\displaystyle\arg\min_{w\in\calU}\ \big[\grad V(x)^{\top}(f(x)+g(x)w) + \alpha_V(x)V(x)\big], & R_V(x)=\emptyset,
-\end{cases}
-\]
-the second branch flagged \textbf{\emph{infeasible}}.
-\item The \textbf{\emph{filtered policy}} is $\pi^{V}:=P_V\circ\pi$.
-\end{itemize}
-\end{definition}
-
-\begin{definition}[Task return]\label{def:J}
-For an episode horizon $T_{\mathrm{ep}}\in\mathbb{N}$, discount $\gamma_T\in(0,1]$, an initial
-distribution $\mu$ on $\calX$, and a stage cost $c:\calX\times\calU\to\R$ Lipschitz with
-constants $L_c^x, L_c^u$,
-\[
-J(\kappa) := \E_{x_0\sim\mu}\Big[-\sum_{k=0}^{T_{\mathrm{ep}}-1}\gamma_T^{k}\, c\big(x_k,\kappa(x_k)\big)\Big],
-\qquad x_{k+1}=F\big(x_k,\kappa(x_k)\big).
-\]
-\end{definition}
-
-\begin{assumption}[Standing assumptions]\label{ass:standing}
-\leavevmode
-\begin{itemize}
-\item[\textbf{(B1)}] $\calX$ is compact and forward invariant under $F$ for every admissible input sequence.
-\item[\textbf{(B2)}] $f,g$ are Lipschitz and bounded on $\calX$;
-$M:=\sup_{x\in\calX,u\in\calU}\norm{f(x)+g(x)u}<\infty$; $F$ is Lipschitz with constants
-$L_F^x, L_F^u$.
-\item[\textbf{(B3)}] $h$ is as in \cref{def:h}.
-\item[\textbf{(B4)}] Every policy maps $\calX\to\calU$; every \emph{conditioning} policy $\pi_b$
-is Lipschitz.
-\item[\textbf{(B5)}] Statements invoking $\grad\Vhp{\pi}$ are read at points of differentiability
-or in the viscosity sense \cite{so2024pncbf}; every deployed or learned $\Vhat$ is a Softplus
-network, so all filter-side derivatives of $\Vhat$ are classical.
-\end{itemize}
-\end{assumption}
-
-\begin{remark}[Instantiation]\label{rem:inst}
-double integrator에서 (B1)은 velocity clamp $\norm{v}\le v_{\max}=2.5$와 arena 종료가 제공하고,
-(B2)의 상수는 $M\le\sqrt{v_{\max}^2+2u_{\max}^2}\approx3.78$ ($u_{\max}=2$)이다. ZOH 하에서 DI의
-flow는 $t$의 2차 다항식이므로 RK4 적분기가 $F$를 정확히 실현한다. 신경망이 대리하는 대상은 둘이다:
-닫힌 형식이 없는 HJ variational inequality의 해 $\Vhp{\pi_b}$와 제약 최적 제어기. 대칭성,
-매끄러움, 입력 제약은 전부 학습 이전에 고정된다.
+\begin{remark}[What separation buys and what it does not]\label{rem:di-sep}
+\cref{prop:di-sep}(a)--(b)는 안전 주장이 task 설계와 독립임을 준다: reward를 바꿔도 인증된 집합은
+그대로다. (c)는 그 독립성이 한 방향뿐임을 상기시킨다 --- 인증서가 policy-conditioned이므로 policy가
+바뀌면 인증서가 재학습되어야 하고, 그것이 joint training의 기술적 내용이다. 두 방향을 혼동하면
+"filter가 있으니 어떤 정책도 안전하다"는 잘못된 진술이 나온다: 옳은 진술은 "고정된 인증서에 대해
+그 인증서가 인증한 집합 위에서 안전하다"이다.
 \end{remark}
 
-\section{Safety channel under exact conditioning}\label{sec:safety}
+\section{Degeneracy of self-referential evaluation}\label{sec:di-self}
 
-\textbf{직관.} certificate가 conditioning policy $\pi_b$의 정확한 policy value이면 안전은 nominal
-policy가 무엇이든 성립한다. 사슬은 \cref{lem:mono}의 단조성 $\Rightarrow$ \cref{lem:feas}의
-feasibility $\Rightarrow$ \cref{thm:inv}의 invariance이고, 두 따름정리가 이를 배포 계측과 잇는다.
-
-\begin{lemma}[Monotonicity along the conditioning policy]\label{lem:mono}
-Under \textup{(B3)--(B5)}, for every policy $\pi$ and every $x\in\calX$:
+\begin{proposition}[Self-referential evaluation is vacuous]\label{prop:vacuum}
+Let $\Vhat$ be flat on an open $O$: $\Vhat\equiv c$ with $c<0$. Then on $O$:
 \begin{enumerate}[label=(\alph*)]
-\item $t\mapsto \Vhp{\pi}(x_t^{\pi})$ is non-increasing on $[0,\infty)$;
-\item $\Vhp{\pi}(x)\ge h(x)$;
-\item at every differentiability point,
-$\grad\Vhp{\pi}(x)^{\top}(f(x)+g(x)\pi(x))\le0$.
+  \item $a=\Lg\Vhat=0$ and $b=-\alpha c>0$, so the row reads $0\le b$ and is satisfied by
+  \emph{every} $u\in\calU$; the feasible set is all of $\calU$ and the filter is the identity;
+  \item the deployed infeasibility flag, if defined as $\{\text{singular}\}$ alone, fires on all
+  of $O$ although nothing is wrong there; defined as $\{\text{empty}\}\cup\{\text{singular and
+  violated}\}$ it does not fire;
+  \item the policy gradient through the certificate vanishes on $O$ --- for the discrete
+  one-step form, $\partial[\Vhat(x_{k+1})]/\partial u_k=\grad\Vhat(x_{k+1})^\top
+  \partial x_{k+1}/\partial u_k=0$ --- while the task gradient through the plant is unaffected.
 \end{enumerate}
-The same holds for $\Vhp{\pi,F}$ with $k\in\mathbb{N}$ in place of $t$; (c) becomes
-$\Vhp{\pi,F}(F(x,\pi(x)))\le\Vhp{\pi,F}(x)$.
-\end{lemma}
+Scope: exact. This is the floor-side mirror of \cref{prop:ceiling}.
+\end{proposition}
 \begin{proof}
-Flow의 semigroup 성질로 $\Vhp{\pi}(x_t^{\pi})=\sup_{s\ge t}h(x_s^{\pi})$이고, $t$가 커질수록 sup의
-대상 집합이 축소되므로 (a)가 성립한다. $s=t$ 항이 (b)를 준다. (a)에 의해 미분 가능한 점에서
-$\tfrac{d}{dt}\Vhp{\pi}(x_t^\pi)|_{t=0}\le0$이며 이것이 (c)이다. 이산 경우도 동일하다.
+열린 집합 위 상수이므로 $\grad\Vhat\equiv0$, 따라서 $a=0$과 $\Lf\Vhat=0$이며 $b=-\alpha c>0$이다.
+(a),(b)는 대입. (c)는 $\grad\Vhat=0$의 직접 결과이고, task 항은 $\Vhat$를 읽지 않는다.
 \end{proof}
 
-\begin{lemma}[Feasibility on the certified set, with witness]\label{lem:feas}
-Let $V:=\Vhp{\pi_b}$ under \textup{(B3)--(B5)} and $\calS:=\{V\le0\}$. At every differentiability
-point $x\in\calS$:
-\begin{enumerate}[label=(\alph*)]
-\item $\pi_b(x)\in R_V(x)$; in particular $R_V(x)\neq\emptyset$ and $V$ is valid on $\calS$;
-\item if $\grad V(x)^{\top}g(x)=0$ (singular row), then $R_V(x)=\calU$.
-\end{enumerate}
-\end{lemma}
-\begin{proof}
-(a) \cref{lem:mono}(c)와 $V(x)\le0$에서
-$\grad V(x)^{\top}(f(x)+g(x)\pi_b(x))\le0\le-\alpha_s V(x)$.
-(b) 특이 행에서 row 조건은 $u$-독립인 $\grad V^{\top}f(x)\le-\alpha_s V(x)$로 축약되고, 이는 (a)의
-좌변에서 $\grad V^\top g=0$을 대입한 것과 같으므로 모든 $u\in\calU$가 만족한다.
-\end{proof}
+\begin{remark}[Measured: the exact barrier saturates, and the flag must be the v2 form]\label{rem:cpsv2}
+정확한 maneuver-family barrier(\cref{sec:di-vm})는 설계상 안전 내부 전반에서 clip floor에 포화하므로
+\cref{prop:vacuum}의 $O$가 넓다. legacy flag $\{\text{singular}\}$는 활성 스텝의 거의 전부에서
+발화하여(raw infeasibility $0.87$--$0.91$) \emph{정확성을 벌한다}. 병리적인 것은 empty와
+singular-and-violated이며 현행 정의가 정확히 그것을 센다. 재채점 lift는 learned 인증서에서
+$+0.03$--$0.05$, 정확한 barrier에서 $+0.24$였다 --- 후자가 큰 것은 그 대상이 포화를 가장 많이
+쓰기 때문이다. 계측이 무엇을 세는지가 결론을 뒤집은 사례이며, 두 clause를 분리해 보고하는 규칙이
+여기서 나온다.
+\end{remark}
 
-\begin{theorem}[Nominal-independent invariance]\label{thm:inv}
-Let $V:=\Vhp{\pi_b}$ satisfy the hypotheses of \cref{lem:feas}, and suppose the executed input
-obeys $u(t)\in R_V(x(t))$ for all $t$, with the closed-loop solution existing in the
-Carath\'eodory sense (\cref{rem:sol}). Then, for \emph{every} nominal policy $\pi_\theta$:
-(a) $x(0)\in\calS\Rightarrow x(t)\in\calS$ for all $t\ge0$; (b) $h(x(t))\le0$ for all $t\ge0$.
+\section{A fully discrete margin theorem}\label{sec:di-margin}
+
+\textbf{직관.} 연속시간 CBF 논증은 배포되는 이산 loop에 그대로 이전되지 않는다.
+\cref{prop:zoh-layer}가 그 gap을 $O(\Delta t^2)$로 재지만, 그 상계는 $C_2$라는 global
+$\sup$을 요구하고 \cref{rem:layer-measured}가 보였듯 그 양은 두꺼운 꼬리를 갖는다. 이 절은
+연속시간을 전혀 거치지 않는 margin 정리를 준다: 모든 양이 배포되는 이산 사상에서 직접 정의되고
+측정된다.
+
+\begin{theorem}[Discrete margin]\label{thm:di-margin}
+Let $F_\Delta(x,u)$ be the deployed one-step map (RK4 with zero-order hold), let $\Vhat$ be the
+deployed certificate, and suppose that at every $x$ in a set $S$ the executed action $u^\star(x)$
+satisfies the discrete row
+\begin{equation}\label{eq:di-row}
+\Vhat\big(F_\Delta(x,u^\star(x))\big)\ \le\ (1-\eta)\,\Vhat(x)\ -\ \mu,
+\end{equation}
+for constants $\eta\in(0,1]$ and $\mu\ge0$. Then for every $x_0\in S$ with $\Vhat(x_0)\le0$, as
+long as the trajectory remains in $S$,
+\begin{equation}
+\Vhat(x_k)\ \le\ (1-\eta)^k\,\Vhat(x_0)\ -\ \mu\,\frac{1-(1-\eta)^k}{\eta}\ \le\ -\mu\,\frac{1-(1-\eta)^k}{\eta}\ \le\ 0 ,
+\end{equation}
+so $\{\Vhat\le0\}\cap S$ is forward invariant under the deployed map, with no continuous-time
+argument and no curvature constant. If moreover $\Vhat\ge h$ pointwise, then $h(x_k)\le0$ for all
+$k$: the hazard is avoided at every deployed sample.
 \end{theorem}
 \begin{proof}
-Row 조건에서 $\calS$ 위의 매 시각 $\tfrac{d}{dt}V(x(t))\le-\alpha_s V(x(t))$이고, comparison
-lemma로 $V(x(t))\le V(x(0))e^{-\alpha_s t}\le0$이므로 (a)이다. \cref{lem:mono}(b)의 $h\le V$가
-(b)를 준다.
+\cref{eq:di-row}을 반복 적용하면 $\Vhat(x_k)\le(1-\eta)^k\Vhat(x_0)-\mu\sum_{j=0}^{k-1}(1-\eta)^j$
+이고 기하급수를 합하면 표시가 나온다. $\Vhat(x_0)\le0$과 $(1-\eta)^k\ge0$에서 첫 항이 비양이다.
+마지막 주장은 $h\le\Vhat\le0$.
 \end{proof}
 
-\begin{remark}[Solution existence and boundary rigor]\label{rem:sol}
-Filter 출력의 상태 의존 불연속에 따른 해의 존재와 Nagumo 경계 논증의 측도론적 세부는 CBF 문헌의
-표준 처리 \cite{ames2017cbf,blanchini1999set}에 위임한다. 이 part의 다른 모든 배포 측
-결과(\cref{sec:budget})는 이산 시간으로 정식화되어 이 조건을 필요로 하지 않는다.
+\begin{remark}[The error budget is measurable]\label{rem:di-budget}
+\cref{thm:di-margin}이 요구하는 것은 \cref{eq:di-row}이 실행되는 행동에서 성립하는지이며, 이는
+배포 loop에서 스텝마다 직접 검정 가능하다 --- $C_2$도, Lipschitz 상수도, 연속시간 flow도 필요
+없다. 위반이 관측되면 그 스텝이 곧 반례이고, 그 분포가 오차 예산이다. 이것이 \cref{prop:zoh-layer}과
+상보적이다: 후자는 연속시간 보장을 이산 loop로 이전하며 그 대가로 $C_2$를 요구하고, 전자는
+보장을 이산 loop 안에서 직접 세우며 그 대가로 \cref{eq:di-row}의 측정을 요구한다. 이 lineage는
+후자를 채택한다 --- 측정 가능한 조건이 측정 불가능한 상수보다 낫다.
 \end{remark}
 
-\begin{corollary}[Fallback semantics]\label{cor:fallback}
-Under the hypotheses of \cref{lem:feas}, for every $x\in\calS$ running $\pi_b$ alone from $x$ is
-safe for all time: $\sup_{t\ge0}h(x_t^{\pi_b})=V(x)\le0$, independently of the filter, of
-$\pi_\theta$, and of how $V$ is deployed.
-\end{corollary}
-\begin{proof}
-\cref{def:V}의 정의 자체이다.
-\end{proof}
+\section{The maneuver-family barrier}\label{sec:di-vm}
 
-\begin{corollary}[Empty intersection falsifies exactness]\label{cor:falsify}
-If there is $x\in\calX$ with $\Vhat(x)\le0$ and $R_{\Vhat}(x)=\emptyset$, then
-$\Vhat\neq\Vhp{\pi}$ for every policy $\pi$. Consequently the measured empty-intersection rate on
-$\{\Vhat\le0\}$ is, per step, the frequency of \emph{witnessed} violations of the exactness
-hypothesis.
-\end{corollary}
-\begin{proof}
-\cref{lem:feas}(a)의 대우이다.
-\end{proof}
+\textbf{직관.} 앞 절들은 학습된 인증서를 전제한다. double integrator에서는 학습 없이 정확한
+인증서를 쓸 수 있다: 유한한 maneuver family에 대한 최악 hazard를 닫힌 형식으로 계산하는 것이다.
+그 대상은 안전 채널에 학습된 객체를 전혀 두지 않으므로, 학습이 안전에 기여하는 몫을 분리해 재는
+대조군이 된다.
 
-\begin{remark}[Singular events are not falsifications; the adopted instrumentation]\label{rem:cpsv2}
-특이 플래그는 그 자체로 반증이 아니다(\cref{lem:feas}(b): exact value에서는 row가 자명하게
-만족된다). 특이 행은 두 부류로 갈린다: \emph{row-satisfied} --- benign, 모든 $u$가 row를 만족하고
-filter는 불활성 --- 와 \emph{row-violated} --- \cref{prop:flat}의 authority-loss 병리. exact
-$V_{\calM}$은 인증 far field에서 clip floor에 포화해 전자를 대량 생산하므로(\cref{prop:vacuum}), 두
-부류를 합산하는 계측은 정확성 자체를 벌점한다(raw infeasibility $0.87$--$0.91$). 채택된 계측
-\texttt{infeasible\_v2} := empty-intersection 또는 (singular이면서 row-violated)는 정확히
-\cref{cor:falsify}의 witnessed-violation 통계와 \cref{prop:flat}의 병리만을 계수한다. 실측: 모든
-측정 시스템에서 empty-only 관례와 소수 4자리까지 일치하고, 재채점 lift는 learned $+0.03$--$0.05$ /
-$V_{\calM}$ $+0.24$이다.
-\end{remark}
-
-\section{Control authority of the conditioning value}\label{sec:authority}
-
-\textbf{직관.} Filter의 행동 능력은 row의 방향 $\grad V^{\top}g$에서 나오고, 그 방향은 conditioning
-policy의 속도-감도에서 상속된다. 이 절은 그 상속을 정리로 만들고, 관측된 ceiling의 원인인
-hazard-blind conditioning의 내부 평탄성을 특정한다.
-
-\begin{proposition}[Gradient inheritance from the conditioning policy]\label{prop:grad}
-Let $V:=\Vhp{\pi_b}$ and let $x$ be a point at which the maximizing time $t^{\ast}(x)$ is unique
-and the flow $x\mapsto x^{\pi_b}_{t^{\ast}}$ is differentiable. Then by Danskin's theorem
-\cite{danskin1966},
-\[
-\grad V(x) \;=\; \Big(\tfrac{\partial x^{\pi_b}_{t^{\ast}}}{\partial x}\Big)^{\!\top}\,\grad h\big(x^{\pi_b}_{t^{\ast}}\big),
-\qquad
-\norm{\grad V(x)^{\top} g(x)} \;\le\; L_h\, S_g,
-\quad
-S_g := \Big\lVert \tfrac{\partial x^{\pi_b}_{t^{\ast}}}{\partial x}\, g(x) \Big\rVert .
-\]
-For the double integrator with the deadband brake, at states whose maximizer is the stopped
-point $p_{\mathrm{stop},i}=p_i+v_i\abs{v_i}/(2u_{\max})$,
-\[
-\frac{\partial V}{\partial v_i} \;=\; \frac{\abs{v_i}}{u_{\max}}\,\partial_i h\big(p_{\mathrm{stop}}\big):
-\]
-the braking-distance geometry is embedded in the gradient, nonvanishing whenever $v_i\neq0$ and
-growing linearly in speed.
-\end{proposition}
-\begin{proof}
-$V(x)=\max_{t}h(x_t^{\pi_b}(x))$는 compact 시간 구간 위 매개변수 최대이고, 유일 최대점에서
-Danskin으로 미분이 통과한다. 둘째 부등식은 chain rule과 $\norm{\grad h}\le L_h$이다. Brake의 경우
-$\partial p_{\mathrm{stop},i}/\partial v_i=\abs{v_i}/u_{\max}$이므로 성분별 chain rule로 주장이
-따른다.
-\end{proof}
-
-\begin{proposition}[Interior flatness of hazard-blind conditioning]\label{prop:flat}
-Suppose an open set $O\subseteq\calX$ on which the $\pi_b$-trajectory from every $x'\in O$
-attains the clip ceiling, $\sup_t h=b$. Then on $O$: $V\equiv b$, $\grad V\equiv0$, every row is
-singular, and the row with $\alpha_u V>0$ is infeasible with a direction-free least-violating
-objective --- the filter retains no first-order authority precisely where recovery is demanded.
-\end{proposition}
-\begin{proof}
-열린 집합 위 상수이므로 $\grad V=0$. Row 좌변은 $0$, 우변은 $-\alpha_u b<0$이므로 모든 $u$가
-위반하고, least-violating 목적이 $u$-독립이라 방향이 없다.
-\end{proof}
-
-\begin{remark}[Measured correlates]\label{rem:authmeas}
-unfiltered $\pi_b$ 재-roll 종점은 speed $\approx2.07$ ($\approx v_{\max}$), $13\%$
-post-collision의 hazard-blind charger 특성이고, 관측된 singular 성분 $0.089$--$0.166$과
-filter-active stuck $0.90$--$0.95$가 \cref{prop:flat}의 코드-측 상관물이다.
-\end{remark}
-
-\begin{remark}[Noise as a mollifier: the second role of $\sigma$]\label{rem:mollify}
-stored-rollout conditioning의 label은 per-rollout 확률변수이고, 평균제곱 회귀의 극한은
-\[
-m(x) \;:=\; \E_{\xi}\Big[\,\sup_{t}\,h\big(x_t^{\,\pi_\theta+\xi,\,P}\big)\Big],
-\]
-즉 basin indicator의 $\sigma$-mollification이다. $m$은 gradient를 폭 $\sim\sigma\sqrt{T}$ 급의
-band에 분산시켜 filter에 authority를 공급한다: \cref{prop:noise}의 margin 역할에 더한 $\sigma$의 제2
-기능이다. 노이즈를 제거한 lagged conditioning은 margin과 authority를 동시에 제거했다.
-\end{remark}
-
-\begin{proposition}[Benign interior flatness of the exact certificate]\label{prop:vacuum}
-Suppose an open set $O\subseteq\{V\le0\}$ on which the deployed (clipped) certificate saturates
-at the floor, $V\equiv-1$. Then on $O$:
-\begin{enumerate}[label=(\alph*)]
-\item $\grad V\equiv0$ and every row is singular;
-\item with margin $\gamma_m<1$ the row is $u$-independently \emph{satisfied}, so $R_V(x)=\calU$
-and the filter is inactive;
-\item every policy-objective term that reads the certificate --- the region gates, the terminal
-$V(x_T)$, and the filter path of the BPTT graph --- contributes identically zero $\theta$-gradient
-from rollout segments confined to $O$; the only credit reaching $\pi_\theta$ from such segments
-is the $T$-step task return.
-\end{enumerate}
-\end{proposition}
-\begin{proof}
-(a) 열린 집합 위 상수이다. (b) $\grad V^{\top}f=0$과 $V+\gamma_m=\gamma_m-1<0$을 row에 대입하면
-모든 $u$가 만족한다. (c) 각 항이 $V$와 $\grad V$를 통해서만 $\theta$에 닿으므로, 상수 $V$와 영
-gradient에서 기여가 소멸한다.
-\end{proof}
-
-\begin{remark}[Measured credit-horizon gap]\label{rem:credit}
-\cref{prop:flat}의 병리적 평탄(위반)과 대조되는 benign 평탄(만족)이며, 병리 대신 \emph{유도 공백}을
-남긴다. 실측이 (c)의 결과를 계량한다: open-area stall onset에서 filtered-LQR 탈출의 도달 소요는
-$4.65$--$7.85$\,s(평균 $6.11$; 15건 중 10건 탈출)로 BPTT 창 $T\,dt=1.5$\,s의 $3$--$5\times$이고
-초과율 $100\%$다. 재선택 peak 이후 cps $-0.0589$는 reach $-0.0295$와 stuck $+0.0285$로 갈리고
-collision은 평탄하다 --- 안전 채널 절연과 정합한다. horizon 연장은 무효다: $T=60$($3.0$\,s)은 최단
-payback에도 미달하고, 커버에는 $T\approx93$--$157$이 필요하나 메모리·처리량·stall 평형에서의 탐색
-부재로 비현실적이다. 학습 $\Vhat$의 내부 gradient가 사실상 항행 유도를 겸했다는 것이 학습
-certificate 성능의 숨은 기제였고 정확성이 그것을 제거했다 --- 남은 격차는 이 공백의 성능-채널
-문제다.
-\end{remark}
-
-\section{Performance channel}\label{sec:perf}
-
-\textbf{직관 (표현력 무손실).} Filter가 성능을 해치는 경로는 둘이다: 도달 가능한 controller class를
-좁히거나, 최적화 landscape를 왜곡하거나. 이 절은 전자가 발생하지 않음을 보인다 --- 배포되는
-box-aware filter가 볼록 집합 위의 정확한 유클리드 사영이라는 사실 하나에서 filtered class가
-admissible class와 일치하고(\cref{lem:range}) 사영이 nonexpansive여서 universal approximation이
-filter를 그대로 통과한다(\cref{thm:perf}). 후자에 대해서는 \cref{prop:jac}이 LQR이 composite
-목적함수의 stationary point가 아님을 보인다.
-
-\begin{definition}[Admissible controller classes]\label{def:adm}
-Given $V\in C^1(\calX)$ with $R_V(x)\neq\emptyset$ for all $x\in\calX$:
-\[
-\calK_V := \{\kappa:\calX\to\calU\ \text{measurable}:\ \kappa(x)\in R_V(x)\ \forall x\},
-\qquad
-\calK_V^{L} := \{\kappa\in\calK_V:\ \kappa\ \text{Lipschitz}\}.
-\]
+\begin{definition}[Maneuver-family value]\label{def:vm}
+Fix a finite family $\mathcal M$ of admissible open-loop maneuvers $u:[0,\infty)\to\calU$ and set
+\begin{equation}
+V_{\mathcal M}(x)\ \eqdef\ \min_{u\in\mathcal M}\ \sup_{t\ge0}\ h\big(x_t(x,u)\big).
+\end{equation}
+For the double integrator with a box and a distance-type $\phi$, the family of constant maximal
+decelerations along each coordinate yields $V_{\mathcal M}$ in closed form.
 \end{definition}
 
-\begin{lemma}[Filter range identity]\label{lem:range}
-Under the hypothesis of \cref{def:adm}: (a) $P_V\circ\kappa=\kappa$ for every $\kappa\in\calK_V$;
-(b) $P_V\circ\pi\in\calK_V$ for every measurable $\pi:\calX\to\R^m$. Hence
-$\{P_V\circ\pi:\pi\ \text{measurable}\}=\calK_V$.
-\end{lemma}
-\begin{proof}
-(a) 닫힌 볼록 집합의 원소는 자기 자신으로 사영된다. (b) \cref{def:filter}에서
-$R_V(x)\neq\emptyset$이면 출력이 $R_V(x)$의 원소이다.
-\end{proof}
-
-\begin{lemma}[Nonexpansiveness]\label{lem:nonexp}
-For every $x$ with $R_V(x)\neq\emptyset$ and all $u_1,u_2\in\R^m$:
-$\norm{P_V(x,u_1)-P_V(x,u_2)}\le\norm{u_1-u_2}$.
-\end{lemma}
-\begin{proof}
-닫힌 볼록 집합 위의 유클리드 사영 $P$는 $\inner{u_i-P(u_i)}{w-P(u_i)}\le0$을 모든
-$w\in R_V(x)$에 대해 만족한다. $w$에 서로의 사영점을 대입해 더하면
-\[
-\norm{P(u_1)-P(u_2)}^2 \;\le\; \inner{u_1-u_2}{P(u_1)-P(u_2)} \;\le\; \norm{u_1-u_2}\,\norm{P(u_1)-P(u_2)}. \qedhere
-\]
-\end{proof}
-
-\begin{lemma}[Return continuity against a Lipschitz feedback]\label{lem:Jcont}
-Under \textup{(B1)--(B2)} and \cref{def:J}, let $\kappa_1$ be $L_\kappa$-Lipschitz, $\kappa_2$
-measurable, and $\varepsilon:=\sup_{x\in\calX}\norm{\kappa_1(x)-\kappa_2(x)}$. Then
-\[
-\abs{J(\kappa_1)-J(\kappa_2)} \;\le\; L_J\,\varepsilon,
-\qquad
-L_J := \sum_{k=0}^{T_{\mathrm{ep}}-1}\gamma_T^{k}\Big[(L_c^x+L_c^uL_\kappa)\,L_F^u\,\tfrac{\rho^{k}-1}{\rho-1} + L_c^u\Big],
-\quad \rho := L_F^x+L_F^uL_\kappa
-\]
-(with $\tfrac{\rho^k-1}{\rho-1}$ read as $k$ when $\rho=1$).
-\end{lemma}
-\begin{proof}
-동일 초기조건의 두 closed loop 편차 $d_k:=\norm{x_k^{(1)}-x_k^{(2)}}$에 대해
-$d_{k+1}\le\rho\,d_k+L_F^u\varepsilon$이므로
-$d_k\le L_F^u\varepsilon(\rho^{k}-1)/(\rho-1)$이다. 단계 비용 편차는
-$(L_c^x+L_c^uL_\kappa)d_k+L_c^u\varepsilon$ 이하이고, 이를 $\gamma_T^k$ 가중 합산하면 주장이
-나온다.
-\end{proof}
-
-\begin{theorem}[No representational loss]\label{thm:perf}
-Let $\Vhat\in C^1(\calX)$ with $R_{\Vhat}(x)\neq\emptyset$ for all $x\in\calX$, and let the
-nominal class be dense in $(C(\calX,\R^m),\norm{\cdot}_\infty)$. Then:
+\begin{proposition}[$V_{\mathcal M}$ is a valid certificate and is an upper bound on the optimal]\label{prop:vm}
 \begin{enumerate}[label=(\alph*)]
-\item $\displaystyle \sup_{\kappa\in\calK_{\Vhat}^{L}} J(\kappa)\ \le\ \sup_{\theta} J\big(P_{\Vhat}\circ\pi_\theta\big)\ \le\ \sup_{\kappa\in\calK_{\Vhat}} J(\kappa)$;
-\item if in addition $x\mapsto P_{\Vhat}(x,\pi_{\mathrm{LQR}}(x))$ is Lipschitz (hypothesis
-\textup{(R)}), then $\sup_\theta J(P_{\Vhat}\circ\pi_\theta)\ge J(P_{\Vhat}\circ\pi_{\mathrm{LQR}})$;
-and for every Lipschitz $\pi_b\in\calK_{\Vhat}$,
-$\sup_\theta J(P_{\Vhat}\circ\pi_\theta)\ge J(\pi_b)$.
+  \item $V_{\mathcal M}\ge h$ and $V_{\mathcal M}\ge V^\star\eqdef\inf_{u\ \mathrm{adm}}\sup_t h$,
+  so $\{V_{\mathcal M}\le0\}\subseteq\{V^\star\le0\}$: the certified set is an inner
+  approximation of the true viability kernel and never over-claims;
+  \item along the minimizing maneuver, $t\mapsto V_{\mathcal M}$ is non-increasing, so the row of
+  \cref{def:feas} built from $V_{\mathcal M}$ is feasible with that maneuver's instantaneous
+  action as witness;
+  \item enlarging $\mathcal M$ decreases $V_{\mathcal M}$ pointwise, so the certified set grows
+  monotonically --- the same one-sided order as \cref{prop:label-order}(a).
 \end{enumerate}
-\end{theorem}
-\begin{proof}
-(a) 하한: $\kappa\in\calK^L_{\Vhat}$, $\delta>0$을 고정하고 조밀성으로
-$\sup_x\norm{\pi_\theta(x)-\kappa(x)}\le\varepsilon$인 $\theta$를 고른다. \cref{lem:range}(a)와
-\cref{lem:nonexp}에서 $\norm{P_{\Vhat}(x,\pi_\theta(x))-\kappa(x)}\le\varepsilon$이고,
-\cref{lem:Jcont}로 $\abs{J(P_{\Vhat}\circ\pi_\theta)-J(\kappa)}\le L_J\varepsilon\le\delta$가
-되도록 $\varepsilon$을 잡는다. 상한: \cref{lem:range}(b). (b) clamp$\circ$linear는 Lipschitz이므로
-$\pi_\theta\to\pi_{\mathrm{LQR}}$ 균등 근사를 잡고 \cref{lem:nonexp}, (R), \cref{lem:Jcont}를
-적용한다. $\pi_b$의 경우 \cref{lem:range}(a)에서 $J(\pi_b)=J(P\circ\pi_b)$이다.
-\end{proof}
-
-\begin{remark}[Scope and relation to HardNet]\label{rem:hardnet}
-(a)의 Lipschitz-대-measurable sup 간극은 기술적 잔여(O7)이다. HardNet의 universal approximation
-정리 \cite{min2024hardnet}는 base half-space projection class에 대한 대응 결과이고, 여기서는 배포
-filter가 half-space$\cap$box 위의 \emph{정확한} 볼록 사영이라는 사실이 \cref{lem:nonexp}를 통해 더
-짧은 경로를 준다. 결론: JT의 최적화 대상은 해당 certificate 아래에서 도달 가능한 최고 성능 그
-자체이며, filtered-LQR은 그 하한이다.
-\end{remark}
-
-\begin{proposition}[Composite first-order structure; the optimal nominal is not LQR]\label{prop:jac}
-Consider the base half-space projection with regularizer $\varepsilon_h\ge0$,
-\[
-u_{\mathrm{safe}} \;=\; u - \frac{A(x)}{\norm{A(x)}^2+\varepsilon_h^2}\,\big(A(x)^{\top}u - b(x)\big)_+ ,
-\qquad A(x) := g(x)^{\top}\grad V(x),\ \ b(x) := -\grad V^{\top}f - \alpha_V V .
-\]
-At every $(x,u)$ with $A^{\top}u>b$ at which no box clamp binds,
-\[
-\frac{\partial u_{\mathrm{safe}}}{\partial u} \;=\; I - \frac{A A^{\top}}{\norm{A}^2+\varepsilon_h^2} \;=:\; \Pi(x).
-\]
-Consequently, almost everywhere along closed-loop trajectories, the chain-rule factor of
-$\grad_\theta J(P\circ\pi_\theta)$ at active steps is $\Pi(x_t)$, which annihilates the
-row-normal direction. Hence first-order stationarity of $\pi_{\mathrm{LQR}}$ for the
-unconstrained LQ objective does not imply stationarity for $\theta\mapsto J(P\circ\pi_\theta)$;
-the two coincide only if the active set has closed-loop visitation measure zero, or the
-row-normal component of the return gradient vanishes on it. Scope: base-projection regime;
-activation boundaries, box facets, and candidate-selection ties are excluded as measure-zero
-kink sets.
+Scope: exact.
 \end{proposition}
 \begin{proof}
-활성 영역에서 $(A^{\top}u-b)_+=A^{\top}u-b$는 $u$에 대해 선형이므로 미분하면 주어진 $\Pi(x)$가
-나온다. 나머지는 chain rule의 직접 결과이다.
+(a) $t=0$ 항에서 $\ge h$; $\mathcal M$이 admissible control의 부분집합이므로 min이 inf보다 크다.
+(b) \cref{prop:validity}(a)의 논증을 최소화 maneuver의 flow에 적용한다. (c) 더 큰 집합 위의
+min은 작거나 같다.
 \end{proof}
 
-\textbf{해석 --- scope 정정.} $\Pi$의 null space는 사실이지만, ``학습이 filter 개입 크기를 낮추는
-방향으로 nominal을 이동시킨다''는 이전 판의 해석은 기각한다: friction 항
-$\lambda_f\norm{u_{\mathrm{safe}}-u_{\mathrm{nom}}}^2$을 부과해도 active-band 개입 크기가
-$1.335\approx1.341$로 불변이었다 --- 경계 개입의 대부분은 과제 기하가 강제하는 \emph{필요
-성분}이지 무상 법선 표류가 아니다. friction의 실효과는 per-step 개입 축소가 아니라 open-area
-행동 수준의 stuck 감소였다(감소분의 $80\%$; cps\_v2 $+0.007$).
-
-\begin{remark}[Equivalence standard for branch-discrete filters]\label{rem:equiv}
-\cref{prop:jac}의 scope가 배제한 measure-zero kink 집합은 구현 등가성의 정의를 바꾼다: 선택자가
-branch-discrete이므로 부동소수점 연산 순서가 다른 두 구현은 궤적 bit-parity를 원리적으로 달성할 수
-없다 --- reference 구현 자신이 $10^{-7}$ state jitter에 $24/512$ 행동과 $114/256$ 궤적을 뒤집는다.
-올바른 등가성은 \emph{함수 parity}($\abs V$ 차 $\le10^{-6}$, $\abs{\grad V}$ 차 $\le10^{-5}$)와
-\emph{안전 등가성}(paired-episode collision·region-flag delta 허용치)의 결합이고, verdict-급
-비교는 같은 구현끼리로 정합화한다. parity 시험은 라이브러리 버전 변경마다 재실행된다.
+\begin{remark}[Measured: the exact barrier separates learning's contribution]\label{rem:vm-measured}
+$V_{\mathcal M}$을 배포하면 안전 채널에 학습된 객체가 없다. 이 대조군에 대해 학습된 인증서가
+더하는 몫이 직접 측정된다. 이 lineage의 등록된 대조에서 인증서 기여는
+$\Delta\mathrm{cps}=+0.0746$(CI 분리), 정책 기여는 $+0.1936$(CI 분리)이었다. 후자는 최소 수정
+집행이 강제된 조건에서만 성립하며, 그 조건을 풀면 부호가 뒤집힌다($-0.1079$) --- 학습된 정책의
+이점이 무조건적이지 않다는 진술이며, 그대로 기록한다. 범위: 공통 pool, 공통 cell, 등록된 다중
+seed 집합.
 \end{remark}
 
-\begin{proposition}[Dual role of the task cost under self-conditioning]\label{prop:taskcost}
-\leavevmode
-\begin{enumerate}[label=(\alph*)]
-\item Under a $\pi_\theta$-independent conditioning, \cref{thm:perf} holds for \emph{every} task
-return $J$ of the form \cref{def:J}: the cost choice is safety-free, and a filter-friction term
-may be added to $J$ without affecting any certificate claim.
-\item Under self-conditioning, $J$ acquires a second role --- label-distribution generator. For
-the DI cost with vanishing velocity and effort weights the unconstrained optimum approaches the
-time-optimal saturating controller, a hazard-blind charger, which by \cref{prop:flat} degrades
-the certificate's authority; conversely a friction term starves the label's unsafe signal. The
-cost that is optimal for role one is adversarial for role two.
-\end{enumerate}
-Scope: (a) is structural and was exercised in-system --- the friction term was added under the
-$\pi_\theta$-independent $V_{\calM}$ and every certificate statistic stayed flat; (b) is
-sketch-grade, its charger limit anchored by the measured re-roll speed $\approx2.07\approx
-v_{\max}$.
-\end{proposition}
-\begin{proof}
-(a)는 \cref{thm:perf}의 증명이 $J$의 형태만 사용한다는 사실과 friction 항이 같은 형태라는
-사실이다. (b): label 분포가 $\pi_\theta$의 함수이므로 $J$-최적화가 label을 성형한다; charger
-극한과 그 authority 결과는 \cref{prop:flat}, unsafe-signal 기아는 \cref{sec:degen}의 기제이다.
-\end{proof}
-
-\section{Exact policy iteration}\label{sec:pi}
-
-\begin{definition}[Certified sets]\label{def:sets}
-$\calS_\pi:=\{\Vhp{\pi}\le0\}$ for a policy $\pi$ with well-posed closed loop;
-$\calS^{\cup}:=\bigcup_{\pi}\calS_\pi$ over all such policies.
-\end{definition}
-
-\begin{theorem}[Monotone joint improvement under exact evaluation]\label{thm:pi}
-Let $\pi_{b,0}$ satisfy \textup{(B4)}, let $V_k:=\Vhp{\pi_{b,k}}$ be evaluated exactly, and let
-$\pi_{b,k+1}:=P_{V_k}\circ\pi_\theta^{(k)}$ for an arbitrary nominal sequence, with the
-enforcement hypotheses of \cref{thm:inv} at each stage. Then for all $k$:
-(a) $\calS_k:=\calS_{\pi_{b,k}}$ satisfies $\calS_k\subseteq\calS_{k+1}\subseteq\calS^{\cup}$;
-(b) every deployment stage is collision-free from $\calS_k$;
-(c) the confined-behavior optimum $J^{\star}(\calS)$ is non-decreasing along $k$.
-\end{theorem}
-\begin{proof}
-(a) $x\in\calS_k$를 고정한다. \cref{thm:inv}로 $\pi_{b,k+1}$-궤적이 $\calS_k$에 머물고 그 위에서
-$h\le V_k\le0$이므로 $V_{k+1}(x)\le0$이다. (b)는 \cref{thm:inv}(b)이다. (c)는
-$\calS\mapsto J^{\star}(\calS)$가 집합 포함에 단조라는 사실과 (a)의 결합이다.
-\end{proof}
-
-\textbf{해석.} \cref{thm:pi}가 ``safety와 performance의 동시 향상''의 이상화된 증명이다: 매 단계
-안전은 exact하고, 인증 집합은 단조 성장하며, 그 집합에 갇힌 이상 최적 성능도 단조 증가한다. 상충의
-자유변수는 안전이 아니라 certificate의 크기뿐이다. 따라서 실제 시스템의 붕괴는 어느 가정이 깨져
-발생하는가 --- 답은 $V_k$의 \emph{평가}이며, 다음 절이 그 대상을 특정한다.
-
-\section{Degeneracy of self-referential evaluation}\label{sec:degen}
-
-\textbf{직관.} 구현은 value label을 자기 rollout의 $h$-sequence에서 만든다. 즉 학습이 겨냥하는
-population 대상은 고정 $\pi_b$의 값이 아니라 자기참조 operator $\Phi$의 고정점이다. 이 절은 (i)
-고정 conditioning은 $\gamma$-contraction이어서 학습이 잘 정의되는 반면, (ii) $\Phi$의 고정점은
-``자기 filter의 잔여 위험''만을 기록하는 margin-free 퇴화 certificate임을, (iii) baseline이 그럼에도
-살아 있는 이유는 탐사 노이즈가 임차해 주는 암묵적 margin임을 보인다.
-
-\begin{definition}[Self-referential evaluation operator]\label{def:phi}
-Given a nominal $\pi_\theta$ and the filter of \cref{def:filter} (whose least-violating fallback
-makes $\kappa_V:=P_V\circ\pi_\theta$ defined for every $V\in C(\calX)$),
-\[
-\Phi(V)(x) \;:=\; \sup_{k\ge 0}\, h\big(x_k^{\kappa_V,F}\big).
-\]
-\end{definition}
-
-\begin{proposition}[Fixed conditioning is a $\gamma$-contraction]\label{prop:contr}
-For every policy $\pi$, every $\gamma\in(0,1)$ and all $W_1,W_2\in\calB(\calX)$:
-$\norm{\calT_\gamma^{\pi}W_1-\calT_\gamma^{\pi}W_2}_\infty\le\gamma\norm{W_1-W_2}_\infty$, and
-the same for $\bar\calT_\gamma^{\pi}$. Hence each admits a unique fixed point $\tV_\gamma^{\pi}$.
-Moreover, for every $x$ whose $\pi$-trajectory attains its supremum at a finite index,
-$\tV_\gamma^{\pi}(x)\to\Vhp{\pi,F}(x)$ as $\gamma\uparrow1$.
-\end{proposition}
-\begin{proof}
-$\abs{\max(a,b_1)-\max(a,b_2)}\le\abs{b_1-b_2}$에서 contraction이 따르고, clip은 1-Lipschitz이므로
-상수가 보존된다. 극한 주장은 \cref{prop:disc}(a),(b)에서 따른다. 이 형태의 discounted safety
-Bellman contraction은 \cite{fisac2019bridging}의 계보이다.
-\end{proof}
-
-\begin{theorem}[Fixed points of the self-referential evaluation are degenerate]\label{thm:fixed}
-Let $V^\ast\in C(\calX)$ satisfy $V^\ast=\Phi(V^\ast)$, write
-$\kappa^\ast:=P_{V^\ast}\circ\pi_\theta$ and $\calS^\ast:=\{V^\ast\le0\}$. Then:
-\begin{enumerate}[label=(\alph*)]
-\item $V^\ast\ge h$ on $\calX$;
-\item $\{V^\ast>0\}=\calD(V^\ast):=\{x:\exists k,\ x_k^{\kappa^\ast,F}\in\calA\}$: the certificate
-flags exactly the failure set of \emph{its own} filtered closed loop, and constrains
-$\Vhp{\pi_\theta}$ in no way;
-\item if $\emptyset\neq\calS^\ast\neq\calX$ and $\calX$ is connected, then
-$\sup_{x\in\calS^\ast}V^\ast(x)=0$: for every $\eta>0$ there exist certified states whose
-own-filter trajectory approaches contact within $\eta$.
-\end{enumerate}
-\end{theorem}
-\begin{proof}
-(a) $k=0$ 항. (b) 고정점 정의에서
-$V^\ast(x)>0\iff\sup_k h(x_k^{\kappa^\ast,F})>0\iff x\in\calD(V^\ast)$.
-(c) $\calS^\ast$는 닫힌 진부분집합이고 $\calX$가 연결이므로 경계점 $x^\dagger$에서 연속성으로
-$V^\ast(x^\dagger)=0$이고, (b)에 의해 그 값은 그 상태에서 출발한 $\kappa^\ast$-궤적의 최근접
-$h$-값이다.
-\end{proof}
-
-\begin{example}[No fallback: a three-state instance]\label{ex:nofallback}
-States $\{0,1,2\}$ with $h(0)=b>0$, $h(1)=h(2)=-a$; $0,2$ absorbing; $\calU=\{\ell,r\}$ with
-$F(1,\ell)=0$, $F(1,r)=2$; $\pi_\theta(1)=\ell$. For any $V$ with $V(0)>0\ge V(1),V(2)$ the
-filter overrides at state $1$ to $r$, so $\Phi(V)(1)=-a$. Hence
-$V^\ast(0)=b$, $V^\ast(1)=V^\ast(2)=-a$ is a fixed point with $V^\ast(1)\le0$ while
-$\Vhp{\pi_\theta}(1)=b$: the certificate asserts nothing about any $V^\ast$-independent policy.
-\cref{cor:fallback}과의 대조가 건전한 conditioning과의 형식적 분리선이다.
-\end{example}
-
-\begin{proposition}[Single-substitution fragility]\label{prop:frag}
-Suppose hypothesis \textup{(H)}: there exist $x_0\in\calS^\ast$, an index $j$, and $u'\in\calU$
-such that the $\kappa^\ast$-trajectory from $x_0$ satisfies
-$F(x_j,u')\in\calD(V^\ast)\cup\calA$. Then the trajectory that executes $\kappa^\ast$ at every
-step except $u'$ at step $j$ enters $\calA$.
-\end{proposition}
-\begin{proof}
-$F(x_j,u')\in\calA$이면 즉시 위반이다. $F(x_j,u')\in\calD(V^\ast)$이면 \cref{thm:fixed}(b)에 의해
-그 상태에서의 후속 궤적이 $\calA$에 진입한다.
-\end{proof}
-
-\begin{remark}[Numerical instantiation and the collapse signature]\label{rem:toy}
-\textup{(H)}와 \cref{thm:fixed}의 기제는 210-상태 관성 testbed에서 수치로 실증되었다: unfiltered
-nominal의 위반율 $100\%$인 문제에서, 고정 raw conditioning의 certificate는 161/210 셀을 위험으로
-표시하고 $15\%$ action-noise 평가에서 위반 $0.000$을 유지한 반면, 자기참조 conditioning의 고정점은
-25/210 셀만 표시하고 동일 노이즈에서 위반 $0.93$을 보였다. 이는 유한 사례의 기제 실증이며 학습된
-시스템의 정확한 고정점에 대한 주장이 아니다. 학습 시스템에서 같은 퇴화의 함수근사 실현이 관측된
-collapse 서명이다: $\Vhat\to$ 평탄, $\grad\Vhat^{\top}g\to0$, filter 불활성, 그 후 파국.
+\begin{remark}[Implementations and equivalence]\label{rem:vm-impl}
+$V_{\mathcal M}$의 reference 구현과 배포용 fast 구현은 function parity 기준으로 일치해야 하며,
+bit parity는 요구되지 않는다: 두 구현이 서로 다른 부동소수 연산 순서를 갖기 때문이다. parity
+검정은 독립 구현으로 작성되며 배포 경로의 코드를 공유하지 않는다. 같은 규율이 HardNet과 L2-QP의
+일치 검정에 적용된다.
 \end{remark}
-
-\begin{proposition}[Worst-case-noise conditioning purchases margin]\label{prop:noise}
-For $\bar\sigma\ge0$ define
-\[
-\Phi_{\bar\sigma}(V)(x) := \sup_{\{\xi_k\}:\norm{\xi_k}\le\bar\sigma}\ \sup_{k\ge0}\ h(x_k),
-\qquad x_{k+1}=F\big(x_k,\ \mathrm{sat}_{\calU}(\kappa_V(x_k)+\xi_k)\big).
-\]
-At any fixed point $V^\ast_{\bar\sigma}$, every certified state
-$x\in\{V^\ast_{\bar\sigma}\le0\}$ satisfies $\sup_k h(x_k)\le0$ along \emph{every}
-$\bar\sigma$-bounded perturbation sequence of the filtered execution.
-\end{proposition}
-\begin{proof}
-고정점에서 $V^\ast_{\bar\sigma}(x)$가 정의상 그 worst-case 값이다.
-\end{proof}
-
-\begin{remark}[The baseline's implicit margin]\label{rem:sigma}
-가우시안 $\sigma$-노이즈 수집 $+$ 평균제곱 회귀 $+$ unsafe-fraction 목표의 adaptive $\sigma$로 된
-구현은 $\Phi$와 $\Phi_{\bar\sigma}$ 사이에 놓인다: label의 노이즈가 \cref{prop:noise}의 margin을
-확률적으로 임차하고, 목표 unsafe fraction과 $\sigma_{\min}$이 그 암묵적 margin knob이다. 이것이
-baseline이 생존하는 이유이자 노이즈가 부족해진 policy-iteration 시도들이 동일하게 붕괴한 이유다.
-\end{remark}
-
-\begin{proposition}[Sound lagged-policy conditioning]\label{prop:lagged}
-Let $\pi_{b}$ be a $V$-independent, unfiltered policy copy updated by
-$\theta_b\leftarrow(1-\tau_b)\theta_b+\tau_b\theta_\pi$ with $\tau_b$ small relative to the
-effective value-learning rate. Then:
-\begin{enumerate}[label=(\alph*)]
-\item between policy updates the value target is the fixed point of $\bar\calT_\gamma^{\pi_b}$,
-whose exact limit is the valid certificate of \cref{lem:feas,thm:inv};
-\item with zero tail weight the label of a stored pair is a deterministic function of that pair
-given $\pi_b$, so a single visit yields a permanently correct label; for positive tail weight the
-label depends on the target network through the bootstrap tail evaluated at the re-roll
-endpoint --- the mixed operator of \cref{sec:mixed}, whose endpoint lies off the collection
-support;
-\item tracking of the slowly varying family follows the standard two-timescale
-stochastic-approximation argument \cite{borkar1997two} (sketch).
-\end{enumerate}
-\end{proposition}
-\begin{proof}
-(a)는 \cref{prop:contr}와 \cref{lem:feas}의 결합, (b)의 첫 절반은 conditioning rollout의
-결정론에서 즉시 따르고 둘째 절반은 \cref{def:mixedop}의 정의이다. (c)는 스케치 등급으로 남긴다.
-\end{proof}
-
-\section{The implemented label operator: the mixed estimator}\label{sec:mixed}
-
-\textbf{직관.} 구현된 label은 \cref{def:T}의 $\calT_\gamma^{\pi_b}$가 아니라 truncated rollout과
-bootstrap tail의 rectified 혼합이다. 이 절은 그 연산자를 정의하고 수렴상수·두 편향 채널·고장
-방향을 정리로 만든다.
-
-\begin{definition}[Mixed estimator]\label{def:mixedop}
-For a horizon $T$, mixing weight $c\in[0,1]$, and discount $\gamma$, define for
-$W\in\calB(\calX)$:
-\begin{itemize}
-\item $\mathrm{lhs}_T(x)$ := the $T$-step discounted-avoid value of the $h$-sequence along
-$\pi_b$ from $x$ ($W$-independent);
-\item $\mathrm{rhs}_T(W)(x)$ := the within-horizon integral term $+\ \gamma^{T}W(x_T^{\pi_b})$;
-\item $M_c(W)(x) := \mathrm{lhs}_T(x) + c\,(\mathrm{rhs}_T(W)(x)-\mathrm{lhs}_T(x))_{+}$.
-\end{itemize}
-\end{definition}
-
-\begin{theorem}[Contraction, bias channels, and failure direction]\label{thm:mixed}
-Let $\tV:=\tV_\gamma^{\pi_b}$ and $\beta:=c\,\gamma^{T}$. Then:
-\begin{enumerate}[label=(\alph*)]
-\item $M_c$ is a sup-norm contraction with modulus $\beta$, with a unique fixed point
-$V_\infty^{c}$;
-\item (truncation channel, one-sided) $M_c(\tV)-\tV=-(1-c)\,g_{\mathrm{trunc}}\le0$ with
-$g_{\mathrm{trunc}}:=(\mathrm{rhs}_T(\tV)-\mathrm{lhs}_T)_{+}$, hence
-$\norm{V_\infty^{c}-\tV}_\infty\le(1-c)\norm{g_{\mathrm{trunc}}}_\infty/(1-\beta)$, and the bias
-is downward: hazards realized only beyond the horizon are under-weighted;
-\item (tail channel, rectified) if the tail is evaluated with error $e$ at $x_T$, the
-per-application label perturbation is $c[(A+\gamma^{T}e)_{+}-(A)_{+}]$ with
-$A:=\mathrm{rhs}_T(\tV)-\mathrm{lhs}_T$, bounded by $\beta\abs{e}$ and, for zero-mean $e$,
-non-negative in expectation: the tail channel biases upward only. Hence the estimation failure
-mode is structurally conservative, and
-\[
-\big|M_c^{e}(W) - M_1(\tV)\big| \;\le\; (1-c)\,g_{\mathrm{trunc}} + \beta\big(\norm{W-\tV}_\infty + \abs{e}\big).
-\]
-\end{enumerate}
-Scope: (a)--(c) complete at the stated level; the fixed-point version of (c) under an
-off-support error model is sketch-grade.
-\end{theorem}
-\begin{proof}
-(a) $(\cdot)_+$는 1-Lipschitz이고 $W$-의존은 $\gamma^{T}W(x_T)$뿐이므로
-$\abs{M_c(W_1)-M_c(W_2)}\le\beta\norm{W_1-W_2}_\infty$. (b) $c=1$에서
-$M_1(W)=\max\{\mathrm{lhs}_T,\mathrm{rhs}_T(W)\}$는 정확한 $T$-step backup이고 $\tV$는 그
-고정점이므로 $M_c(\tV)-\tV=(c-1)g_{\mathrm{trunc}}\le0$이며, 고정점 섭동
-$\norm{V_\infty^{c}-\tV}\le\norm{M_c(\tV)-\tV}/(1-\beta)$로 닫힌다. (c) 첫 부등식은 $(\cdot)_+$의
-1-Lipschitz, 기대값 부등식은 Jensen
-$\E(A+\gamma^{T}e)_{+}\ge(A+\gamma^{T}\E e)_{+}=(A)_{+}$이며, 마지막 상계는 (b)의 잔차와 (a)의
-Lipschitz를 삼각부등식으로 결합한 것이다.
-\end{proof}
-
-\begin{remark}[Measured instantiation]\label{rem:instmix}
-두 실험(비제한 schedule 대 단일 축 $c_{\mathrm{final}}$ $0.9\to0.5$)의 측정이 \cref{thm:mixed}의 각
-항에 대응한다.
-\begin{center}\small
-\begin{tabular}{lcc}
-\toprule
-quantity & Exp 1 ($c_{\mathrm{final}}{=}0.9$) & Exp 2 (cap $c_{\mathrm{final}}{=}0.5$)\\
-\midrule
-$\beta$ endpoint / amplification $\tfrac{1}{1-\beta}$ & $0.84$ / $6.1\times$ & $\le0.47$ / $\le1.9\times$\\
-tail push probe, early$\to$late & $0.045 \to 0.298$ & $0.011 \to 0.156$\\
-late empty-intersection & $0.160$ & $0.092$\\
-in-loop peak$\to$final decline & $0.259$ & $0.195$\\
-re-selected $n{=}2000$ cps & $0.7448$ & $0.7466$\\
-\bottomrule
-\end{tabular}
-\end{center}
-(a)--(c)의 방향 예측이 전부 적중했다. 결정적 사실: 편향 채널을 절반으로 줄여도 재선택 cps가
-불변($0.7448\approx0.7466$) --- \textbf{ceiling은 이 절의 채널이 아니라 \cref{sec:authority}의 권한
-문제다}. stored-rollout conditioning이 같은 schedule에서 이 채널에 면역인 이유도 닫힌다: 그 tail
-평가점은 저장된 filtered 궤적 위(on-support)라 $e$가 작다.
-\end{remark}
-
-\begin{remark}[Trilemma of self-conditioned joint training]\label{rem:trilemma}
-세 성질 --- (A) 건전성(label의 $\Vhat$/filter 비참조), (B) 정보성(deployment tube 위 authority와
-unsafe signal), (C) conditioning의 유능성 --- 은 $\pi_b=f(\pi_\theta)$인 자기-conditioning에서
-동시에 성립하지 못한다: raw $\pi_\theta$가 위험하면 \cref{prop:flat}로 (B)의 authority가,
-안전해지면 label의 unsafe signal이, filter/$\Vhat$로 (B)를 복구하면 (A)가 무너진다. 세 꼭짓점이
-각각 실측되었다(\cref{tab:cond}). 탈출구는 $\pi_\theta$-독립이면서 brake보다 유능한 해석적
-family --- \cref{def:lib}.
-\end{remark}
-
-\section{Error budget for a learned, discounted value}\label{sec:budget}
-
-\textbf{직관 (세 개의 오차, 세 개의 이름).} 배포되는 것은 $\Vhp{\pi_b}$가 아니라 (i) discount
-$\gamma<1$의 고정점 $\tV$를 (ii) 오차 $\varepsilon_0$로 근사한 $\Vhat$를 (iii) 주기 $dt$의
-sampled-data로 강제한 것이다. 이 절은 세 오차를 각각 닫힌 형식으로 계량하고
-\cref{thm:margin}으로 합성한다. 부산물은 새 예측이다: infeasibility 사건은 명시적 value band에
-국한되어야 한다(\cref{cor:band}).
-
-\begin{proposition}[Discount bias and the $K$-step fallback certificate]\label{prop:disc}
-Fix a policy $\pi$ and $\gamma\in(0,1)$, and let $\tV:=\tV_\gamma^{\pi}$ be the fixed point of
-$\bar\calT_\gamma^{\pi}$. Then:
-\begin{enumerate}[label=(\alph*)]
-\item $h\le\tV\le\Vhp{\pi,F}$ on $\calX$;
-\item for all $x_0\in\calX$ and $k\ge0$ along the $\pi$-trajectory:
-$\tV(x_0)\ge\gamma^{k}h(x_k)-(1-\gamma^{k})a$;
-\item for all $K\ge0$: $\tV(x_0)\le-(1-\gamma^{K})a\Rightarrow h(x_k)\le0$ for all $k\le K$;
-\item (tightness) for the two-piece profile $h(x_j)=-a$ for $j<k$ and $h(x_j)=b$ for $j\ge k$
-(absorbing), $\tV(x_0)=-a+(a+b)\gamma^{k}$, with zero crossing at
-\[
-k^{\dagger}(\gamma) \;=\; \frac{\ln\!\big(\tfrac{a+b}{a}\big)}{\ln(1/\gamma)} .
-\]
-Hence (b) is tight, and $\{\tV\le0\}$ is \emph{not} invariant along $\pi$: a state more than
-$k^{\dagger}$ steps before a certain violation is certified.
-\end{enumerate}
-\end{proposition}
-\begin{proof}
-$h\in[-1,1]$이므로 clip이 항등이라 unclamped 형태로 논증한다.
-(a) 하한은 $\tV=\calT\tV\ge h$이다. 상한: $V:=\Vhp{\pi,F}$에 대해
-\[
-(\calT_\gamma^\pi V)(x)=\max\{h(x),(1-\gamma)h(x)+\gamma V(F(x,\pi(x)))\}
-\le\max\{h(x),V(F(x,\pi(x)))\}=V(x),
-\]
-따라서 $\calT^{n+1}V\le\calT^{n}V$이고 단조성과 유일 고정점 수렴으로 $\tV\le V$이다.
-(b) $k$에 대한 귀납: $k=0$은 (a)이고,
-\[
-\tV(x_0)\ge(1-\gamma)h(x_0)+\gamma\tV(x_1)
-\ge(1-\gamma)(-a)+\gamma[\gamma^{k-1}h(x_k)-(1-\gamma^{k-1})a]
-=\gamma^{k}h(x_k)-(1-\gamma^{k})a .
-\]
-(c) (b)를 재배열하면 $k\le K$에서
-$\gamma^{k}h(x_k)\le\tV(x_0)+(1-\gamma^{k})a\le0$이다.
-(d) 흡수 상태에서 $\tV=b$이고 그 앞에서는 affine 점화식 $v_j=\gamma v_{j+1}-(1-\gamma)a$가
-성립하므로 $\tV(x_0)=\gamma^{k}b-(1-\gamma^{k})a$이고, $0$ 교차는
-$\gamma^{k}=\tfrac{a}{a+b}$이다.
-\end{proof}
-
-\begin{corollary}[Blindness horizon and a schedule floor]\label{cor:sched}
-With $a=b=1$: $k^{\dagger}(\gamma)=\ln2/\ln(1/\gamma)$, giving $13.5$ at $\gamma=0.95$ ($H=20$),
-$69.0$ at $\gamma=0.99$ ($H=100$), and $277.3$ at $\gamma=e^{-0.0025}$, under the schedule
-identity $\gamma=1-1/H$. For the double integrator the minimal braking horizon is
-$T_{\mathrm{stop}}:=\lceil v_{\max}/(u_{\max}\,dt)\rceil=25$ steps; representing braking-range
-hazards therefore requires
-\[
-k^{\dagger}(\gamma_0)\ \ge\ T_{\mathrm{stop}}
-\;\Longleftrightarrow\;
-\gamma_0\ \ge\ 2^{-1/25}\approx 0.9727
-\;\Longleftrightarrow\;
-H_0 = (1-\gamma_0)^{-1}\ \ge\ 37 ,
-\]
-whereas the warm-up value in use is $H_0=20$ ($k^{\dagger}=13.5<25$).
-\end{corollary}
-\begin{proof}
-\cref{prop:disc}(d)의 단조 대수:
-$k^\dagger(\gamma)\ge T_{\mathrm{stop}}\iff\gamma_0\ge2^{-1/T_{\mathrm{stop}}}$.
-\end{proof}
-
-\begin{corollary}[Certificate validity is a pair property]\label{cor:resel}
-Every guarantee involving the discounted target attaches to the pair (value checkpoint, schedule
-state at its training step). A checkpoint trained at $\gamma$ with
-$k^{\dagger}(\gamma)<T_{\mathrm{stop}}$ cannot represent braking-range hazards irrespective of
-when it is evaluated; hence checkpoint re-selection must be restricted to
-$k^{\dagger}\ge T_{\mathrm{stop}}$, or the floor imposed from step $0$.
-\end{corollary}
-
-\begin{remark}[Empirical status, with the confound stated]\label{rem:reselmeas}
-재선택 best는 $k^{\dagger}=22.2<25$인 checkpoint였고 collision이 baseline의 $4\times$였다. 다만 그
-run에서 $k^{\dagger}<25$ 집합은 정확히 최초기 checkpoint 집합과 일치하므로 훈련 성숙도와 floor
-효과가 분리되지 않는다 --- \cref{cor:resel}의 힘은 \cref{cor:sched}의 이론이며 confound는 floor를
-적용한 run에서만 소멸한다.
-\end{remark}
-
-\begin{definition}[Discrete enforcement and the discrete filter]\label{def:enforce}
-For a rate $\hat\alpha\in(0,1)$ and margin $\gamma_m\ge0$,
-\[
-\viol(x,u) \;:=\; \Vhat\big(F(x,u)\big) - (1-\hat\alpha)\Vhat(x) + \hat\alpha\gamma_m,
-\qquad
-E_{\hat\alpha,\gamma_m}(x,u):\iff \viol(x,u)\le0 .
-\]
-The \textbf{\emph{discrete filter}} selects any $u\in\calU$ with $E_{\hat\alpha,\gamma_m}(x,u)$ if
-one exists; otherwise it selects $u^{\star}\in\arg\min_{u\in\calU}\viol(x,u)$ and flags the step
-\textbf{\emph{infeasible}}.
-\end{definition}
-
-\begin{lemma}[Continuous-row enforcement implies discrete enforcement]\label{lem:bridge}
-Let $\Vhat\in C^{2}(\calX)$, and let $L_\psi$ be a Lipschitz constant, uniform over
-$u\in\calU$, of $x\mapsto\psi_u(x):=\grad\Vhat(x)^{\top}(f(x)+g(x)u)$ on $\calX$. If the
-continuous row holds at $x$ with margin $\gamma_m$, i.e.\
-$\psi_u(x)\le-\alpha(\Vhat(x)+\gamma_m)$, then $E_{\hat\alpha,\gamma_m'}(x,u)$ holds with
-\[
-\hat\alpha := \alpha\,dt,
-\qquad
-\gamma_m' := \gamma_m - \frac{\delta_F}{\hat\alpha},
-\qquad
-\delta_F := \tfrac{1}{2}L_\psi M\,dt^{2}.
-\]
-\end{lemma}
-\begin{proof}
-ZOH 해 $\xi(\tau)$를 따라 $\Vhat(F(x,u))-\Vhat(x)=\int_0^{dt}\psi_u(\xi(\tau))d\tau$이고
-$\abs{\psi_u(\xi(\tau))-\psi_u(x)}\le L_\psi M\tau$이므로
-\[
-\Vhat\big(F(x,u)\big) \;\le\; \Vhat(x) + dt\,\psi_u(x) + \tfrac{1}{2}L_\psi M\,dt^{2}
-\;\le\; (1-\hat\alpha)\Vhat(x) - \hat\alpha\gamma_m + \delta_F . \qedhere
-\]
-\end{proof}
-
-\begin{remark}[Integrator exactness]\label{rem:rk4}
-\cref{rem:inst}에서 DI의 ZOH flow는 다항식이라 RK4가 $F$를 정확히 실현한다. 일반 시스템에서
-RK4-대-flow 오차는 step당 $O(dt^{5})$로 $\delta_F$에 흡수된다.
-\end{remark}
-
-\begin{lemma}[Witness slack of the conditioning policy]\label{lem:witness}
-Let $\tV:=\tV_\gamma^{\pi_b}$ and suppose $\norm{\Vhat-\tV}_{\infty}\le\varepsilon_0$ on
-$\calX$. Then for every $x$ with $\Vhat(x)\le0$:
-\[
-\Vhat\big(F(x,\pi_b(x))\big)\ \le\ \Vhat(x) + s,
-\qquad
-s := 2\varepsilon_0 + \big(\gamma^{-1}-1\big)\big(a+\varepsilon_0\big).
-\]
-\end{lemma}
-\begin{proof}
-고정점 부등식 $\tV(x)\ge(1-\gamma)h(x)+\gamma\tV(F(x,\pi_b(x)))$를 재배열하면
-\[
-\tV\big(F(x,\pi_b(x))\big)\ \le\ \tV(x) + (\gamma^{-1}-1)\big(\tV(x)+a\big),
-\]
-$\Vhat(x)\le0$에서 $\tV(x)\le\varepsilon_0$이므로
-$\tV(F(x,\pi_b(x)))\le\tV(x)+(\gamma^{-1}-1)(\varepsilon_0+a)$이고, 양변을 $\Vhat$로 옮기면
-($\pm\varepsilon_0$ 두 번) 주장이 따른다.
-\end{proof}
-
-\begin{theorem}[Deployable margin, fully discrete]\label{thm:margin}
-Assume the hypotheses of \cref{lem:witness}, the discrete filter of \cref{def:enforce} with
-$\hat\alpha\in(0,1)$ and $\gamma_m\ge\varepsilon_0$, and a start $\Vhat(x_0)\le-\gamma_m$. Along
-the filtered closed loop:
-\begin{enumerate}[label=(\alph*)]
-\item \textbf{(feasibility localization)} $E_{\hat\alpha,\gamma_m}$ is feasible, with witness
-$u=\pi_b(x)$, at every $x$ with $\Vhat(x)\le-\gamma_m-s/\hat\alpha$; consequently every
-infeasible-flagged step satisfies $\Vhat(x)>-\gamma_m-s/\hat\alpha$.
-\item \textbf{(conditional invariance)} If $E_{\hat\alpha,\gamma_m}$ is feasible at every visited
-step, then for all $k$: $\Vhat(x_k)\le-\gamma_m$ and $h(x_k)\le\varepsilon_0-\gamma_m\le0$.
-\item \textbf{(unconditional dwell-time bound)} Without the feasibility assumption of (b), the
-first violation index $k_{\mathrm{viol}}:=\min\{k: h(x_k)>0\}$ satisfies
-$k_{\mathrm{viol}}\ge(\gamma_m-\varepsilon_0)/s$.
-\end{enumerate}
-\end{theorem}
-\begin{proof}
-(a) \cref{lem:witness}로 $\Vhat(x)\le0$인 곳에서
-\[
-\viol\big(x,\pi_b(x)\big)\ \le\ \hat\alpha\big(\Vhat(x)+\gamma_m\big) + s\ \le\ 0
-\;\iff\;
-\Vhat(x)\le-\gamma_m-\tfrac{s}{\hat\alpha}.
-\]
-(b) 귀납: $\Vhat(x_k)\le-\gamma_m$이면
-$\Vhat(x_{k+1})\le(1-\hat\alpha)(-\gamma_m)-\hat\alpha\gamma_m=-\gamma_m$이고,
-\cref{prop:disc}(a)와 $\varepsilon_0$-근사로
-$h\le\tV\le\Vhat+\varepsilon_0\le\varepsilon_0-\gamma_m$이다.
-(c) $\Vhat(x_k)\le0$인 모든 $k$에서: $E$ feasible이면
-$\Vhat(x_{k+1})\le\max\{\Vhat(x_k),-\gamma_m\}$; infeasible이면 least-violating 선택과
-\cref{lem:witness}로
-\[
-\Vhat(x_{k+1})\ \le\ (1-\hat\alpha)\Vhat(x_k)-\hat\alpha\gamma_m+\viol\big(x_k,\pi_b(x_k)\big)
-\ =\ \Vhat\big(F(x_k,\pi_b(x_k))\big)\ \le\ \Vhat(x_k)+s .
-\]
-두 경우를 합쳐 $\Vhat(x_{k+1})\le\max\{\Vhat(x_k),-\gamma_m\}+s$이므로, $k_1$을 $\Vhat$가 처음
-양이 되는 지수라 하면 $k\le k_1$까지 $\Vhat(x_k)\le-\gamma_m+ks$이다. 위반 $h(x_k)>0$은
-$\Vhat(x_k)>-\varepsilon_0$을 요구하므로, $k_{\mathrm{viol}}\le k_1$이면
-$k_{\mathrm{viol}}>(\gamma_m-\varepsilon_0)/s$이고, $k_{\mathrm{viol}}>k_1$이면
-$k_{\mathrm{viol}}>k_1>\gamma_m/s\ge(\gamma_m-\varepsilon_0)/s$이다.
-\end{proof}
-
-\begin{corollary}[Testable localization of infeasibility]\label{cor:band}
-Under the hypotheses of \cref{thm:margin}, every empty-intersection event along the deployed
-trajectory lies in the value band
-\[
-\calB \;:=\; \big\{x:\ \Vhat(x) > -\gamma_m-\tfrac{s}{\hat\alpha}\big\},
-\qquad
-s = 2\varepsilon_0+(\gamma^{-1}-1)(a+\varepsilon_0).
-\]
-At the schedule endpoint $\gamma=e^{-0.0025}$, $a=1$: $s\approx2\varepsilon_0+0.0025(1+\varepsilon_0)$;
-with the deployed $\hat\alpha=\alpha_s\,dt=0.1$ and $\gamma_m=0$, the band is $\{\Vhat>-10s\}$.
-This localization was exercised on the evaluation artifacts: the antecedent --- small
-$\varepsilon_0$ --- was itself violated and the instrument detected it; the bound remains
-conditional.
-\end{corollary}
-
-\begin{remark}[Honesty about the unconditional bound]\label{rem:honest}
-(c)의 수치 솔직성: $\gamma_m=0.05$, $\varepsilon_0=0.02$이면 $s\approx0.0426$이고 하한은 $0.7$
-step --- 약하다. 작동하는 보장은 (b) $+$ 측정된 feasibility이며, (c)의 가치는 정성적이다: 누출
-속도가 $s=2\times$(학습오차) $+$ (discount slack)로 스케일한다는 구조. 한편 이 이산 정식화는 연속
-경로의 gradient 오차 항을 제거한다: 강제가 $\Vhat$ 자신의 row에 대해 이루어지므로 진짜 값과의
-오차는 $\varepsilon_0$ 하나로만, $\Vhat$의 자체 매끄러움은 $\delta_F$로만 들어온다.
-\end{remark}
-
-\begin{proposition}[Static fallback certificate under discount and learning error]\label{prop:static}
-Under the hypotheses of \cref{lem:witness}:
-$\Vhat(x)\le-\varepsilon_0-(1-\gamma^{K})a$ implies that running $\pi_b$ alone from $x$ is
-violation-free for $K$ steps.
-\end{proposition}
-\begin{proof}
-$\tV(x)\le\Vhat(x)+\varepsilon_0\le-(1-\gamma^K)a$에 \cref{prop:disc}(c)를 적용한다.
-\end{proof}
-
-\begin{remark}[Boundary-tube coverage as a data-side necessary condition]\label{rem:coverage}
-\cref{thm:inv,thm:margin}의 논증은 $\Vhat$를 인증 경계의 근방에서만 평가한다. 경험 위험 최소화는
-표본 분포의 support 밖에서 $\Vhat$를 식별하지 못하고 weight decay는 미지지 영역을 $0$으로
-견인한다. 따라서 수집 분포가 tube에 질량을 두는 것은 $\varepsilon_0$ 가정의 데이터 측
-필요조건이다. \cref{prop:lagged}(b)의 결정론적 label 아래에서는 tube의 일회 방문이 영구 label을
-남겨 요구가 ``재방문 유지''에서 ``일회 도달''로 약화된다.
-\end{remark}
-
-\textbf{해석 (margin 합성).} 구현이 연속 row를 강제하므로 작동 사슬은 \cref{lem:bridge}
-$\to$ \cref{thm:margin}(b)이고 충분조건은
-\[
-\gamma_{\mathrm{margin}}\ \ge\ \varepsilon_0 + \frac{\delta_F}{\hat\alpha}
-\qquad\text{(feasibility는 측정으로 확인)}
-\]
-이다. 배포 config의 margin은 현재 $0$ --- 위 두 항을 $0$으로 가정하는 것과 동치이며,
-$\varepsilon_0$의 런타임 대리는 empty-intersection rate(\cref{cor:falsify})와 그 band
-분포(\cref{cor:band}), 직접 측정 경로는 \cref{rem:comparator}이다. warm-up horizon은
-\cref{cor:sched}에 의해 $H_0\ge37$이 근거 있는 하한이다.
-
-\section{Optimality-gap decomposition}\label{sec:gaps}
-
-\begin{definition}[Gap chain]\label{def:gaps}
-Under exact conditioning $V=\Vhp{\pi_b}$ and the hypotheses of \cref{thm:perf}, define
-\[
-J_1^{\star} := J^{\star}(\calS^{\cup}),\quad
-J_2^{\star} := J^{\star}(\calS_{\pi_b}),\quad
-J_3^{\star} := \sup_{\kappa\in\calK_{V}} J(\kappa),\quad
-J_4^{\star} := \sup_{\theta} J(P_{V}\circ\pi_\theta),\quad
-J_5 := J(P_{V}\circ\pi_{\hat\theta}),
-\]
-with $J^{\star}(\cdot)$ the confined-behavior optimum of \cref{thm:pi}(c). The gaps are
-$G_1:=J_1^{\star}-J_2^{\star}$ (certificate conservatism),
-$G_2:=J_2^{\star}-J_3^{\star}$ (enforcement conservatism),
-$G_3:=J_3^{\star}-J_4^{\star}$ (representation),
-$G_4:=J_4^{\star}-J_5$ (optimization).
-\end{definition}
-
-\begin{proposition}[Status of the four gaps]\label{prop:gaps}
-\leavevmode
-\begin{enumerate}[label=(\alph*)]
-\item $G_1\ge0$, non-increasing along exact policy iteration (\cref{thm:pi});
-\item $G_2\ge0$, since every $\kappa\in\calK_V$ confines its trajectories to $\calS_{\pi_b}$ by
-\cref{thm:inv};
-\item $0\le G_3\le\sup_{\calK_V}J-\sup_{\calK_V^{L}}J$, and $G_3=0$ over the Lipschitz class by
-\cref{thm:perf}(a);
-\item $G_4\ge0$ is not bounded by any result here, and no result of
-\cref{sec:safety,sec:degen,sec:budget} uses any property of $\hat\theta$: the optimization risk
-is isolated in the performance channel.
-\end{enumerate}
-\end{proposition}
-\begin{proof}
-(a) 집합 포함의 단조성. (b) \cref{thm:inv}. (c) \cref{thm:perf}(a)의 이중 부등식. (d)는 의존성
-지도(\cref{tab:dep})의 열람으로 확인되는 사실 진술이다.
-\end{proof}
-
-\begin{remark}[Characterization of $G_2$]\label{rem:g2}
-Row는 내부에서 상승률 $\dot V\le\alpha_s\abs{V}$를 허용한다: 깊이에 비례한 climb이 허용되므로
-$G_2$는 필요 상승률이 $\alpha_s\abs{V}$를 넘는 궤적에서만 발생한다. 일반적으로 $0$은 아니며
-$\alpha_s$가 그 크기의 knob이다.
-\end{remark}
-
-\section{Candidate mechanisms: formal guarantees}\label{sec:cand}
-
-\begin{proposition}[Quantile barrier: conditional chance bound]\label{prop:quantile}
-Let $(O,Y)$ be a label pair with a regular conditional law, and let
-$\ell_\tau(r):=r(\tau-\mathbf{1}\{r<0\})$ for $\tau\in(0,1)$. Then every measurable minimizer
-$g^{\star}$ of $\E[\ell_\tau(Y-g(O))]$ satisfies, for almost every $o$, that $g^{\star}(o)$ is a
-conditional $\tau$-quantile of $Y\mid O=o$, and
-\[
-\Prob\big(Y > g^{\star}(O)\ \big|\ O\big)\ \le\ 1-\tau
-\qquad\text{almost surely.}
-\]
-\end{proposition}
-\begin{proof}
-조건화로 문제는 각 $o$에서의 스칼라 최소화로 분해되고, 그 one-sided 도함수가
-$\Prob(Y\le v\mid o)^{(\pm)}-\tau$이므로 최소화자 집합은 conditional $\tau$-quantile
-구간이다 \cite{koenker1978}. Quantile의 정의 성질이 주장을 준다.
-\end{proof}
-
-\begin{remark}[Finite sample, and what the current ensemble is]\label{rem:conformal}
-모집단 진술을 유한표본 보장으로 바꾸는 표준 경로는 held-out 잔차에 대한 split-conformal
-shift이다 \cite{angelopoulos2023}. 현재의 2-표본 min-ensemble은 조잡한 저분위 대리이며 quantile
-head는 그 원리적 일반화다. label의 무작위성은 노이즈 conditioning, Top-$K$ 부분관측, scene
-무작위성에서 오고 평균제곱 회귀는 unsafe 쪽에 낙관적이다. $\tau$는 해석 가능한 보수성 knob이고
-\cref{prop:disc}(c)와 결합하면 $K$-step chance certificate를 준다.
-\end{remark}
-
-\begin{proposition}[The brake-rollout barrier is exact for the double integrator]\label{prop:brake}
-For the DI define the deadband brake componentwise:
-\[
-\pi_{\mathrm{br}}(x)_i :=
-\begin{cases}
--\,u_{\max}\,\sgn(v_i) & \abs{v_i} > u_{\max}\,dt,\\
--\,v_i/dt & \abs{v_i} \le u_{\max}\,dt,
-\end{cases}
-\]
-which is admissible. Then under the ZOH plant each $\abs{v_i}$ decreases by exactly
-$u_{\max}dt$ per step until the deadband, is zeroed in one further step, and the position is
-constant afterwards; hence a full stop occurs within
-$T_{\mathrm{stop}}=\lceil v_{\max}/(u_{\max}dt)\rceil=25$ steps and
-\[
-\Vhp{\pi_{\mathrm{br}},F}(x) \;=\; \max_{0\le k\le T_{\mathrm{stop}}} h\big(x_k^{\pi_{\mathrm{br}},F}\big):
-\]
-the $T$-step rollout value equals the infinite-horizon value for every $T\ge T_{\mathrm{stop}}$,
-and it is a valid CBF by the discrete forms of \cref{lem:mono,lem:feas}. This instantiates the
-finite-horizon PCBF theorem of \cite{knoedler2025rpcbf}.
-\end{proposition}
-\begin{proof}
-첫 가지에서 ZOH 하에 $v_i'=v_i-u_{\max}dt\,\sgn(v_i)$이고 $\abs{v_i}>u_{\max}dt$이므로 부호가
-보존되며 크기가 정확히 $u_{\max}dt$ 감소한다. 둘째 가지에서 $v_i'=0$이고 이후
-$\pi_{\mathrm{br}}=0$이 이를 유지하므로 위치가 불변, 따라서 $h$가 상수다. 정지까지의 step 수는
-$\lceil v_{\max}/(u_{\max}dt)\rceil$ 이하이고 정지 후 $h$가 상수이므로 sup은 그 안에서 달성된다.
-\end{proof}
-
-\begin{remark}[Ground-truth comparator and the lookahead hybrid]\label{rem:comparator}
-\cref{prop:brake}는 DI에 대해 학습 없는 exact(단, 보수적) certificate를 준다. 용도 둘: (i)
-brake-인증 영역 위에서 $\Vhat$와의 직접 비교로 $\varepsilon_0$을 proxy가 아닌 실측으로 얻는
-비교기; (ii) 배포 hybrid $\max\{\max_{k\le H}h(x_k^{\pi_{\mathrm{br}}}),\Vhat(x_H)\}$는 $\Vhat$의
-오차 요구를 $H$-step lead time 이후 tail로 국소화한다. 보수성 주의: $\calS_{\pi_{\mathrm{br}}}$은
-작다.
-\end{remark}
-
-\begin{definition}[Maneuver library and its value]\label{def:lib}
-A \textbf{\emph{maneuver}} is a control law executed for at most $T_m$ steps. Fix $m_0$ := the
-deadband brake of \cref{prop:brake}, and for $j=1,\dots,J_{\max}$ and
-$d\in\{+e_\perp,-e_\perp\}$ (a transverse unit direction fixed at plan time in a goal-aligned
-frame):
-\[
-m_{j,d} := \text{apply } u = u_{\max}\, d \text{ for } j \text{ steps, then } m_0 ,
-\qquad
-T_{j} := j + T_{\mathrm{stop}} .
-\]
-The library $\calM:=\{m_0\}\cup\{m_{j,d}\}$ is \textbf{\emph{shift-closed}}: the one-step tail of
-every member is a member. The \textbf{\emph{maneuver-family value}} is
-\[
-V_{\calM}(x) \;:=\; \min_{m \in \calM}\ \max_{0 \le k \le T_m} h\big(x_k^{m}\big).
-\]
-\end{definition}
-
-\begin{proposition}[Validity of the maneuver-family barrier]\label{prop:mcvalid}
-Let $\pi_{\calM}(x)$ := the first action of an argmin maneuver at $x$. Then:
-(a) $V_{\calM}\ge h$ on $\calX$;
-(b) $V_{\calM}(F(x,\pi_{\calM}(x)))\le V_{\calM}(x)$ for every $x$;
-(c) hence, by the discrete forms of \cref{lem:feas,thm:inv}, $V_{\calM}$ is a valid CBF on
-$\{V_{\calM}\le0\}$ with feasibility witness $u=\pi_{\calM}(x)$, and the filtered loop with
-\emph{any} nominal is collision-free from $\{V_{\calM}\le0\}$.
-\end{proposition}
-\begin{proof}
-(a)는 $k=0$ 항이다. (b) $m^{\ast}$를 $x$의 argmin, $x^{+}:=F(x,\pi_{\calM}(x))$라 하자.
-Shift-closure로 $m^{\ast}$의 one-step tail $m'\in\calM$이고
-\[
-V_{m'}(x^{+}) \;=\; \max_{1 \le k \le T_{m^{\ast}}} h\big(x_k^{m^{\ast}}(x)\big)
-\;\le\; \max_{0 \le k \le T_{m^{\ast}}} h\big(x_k^{m^{\ast}}(x)\big) \;=\; V_{\calM}(x) ,
-\]
-따라서 $V_{\calM}(x^{+})\le V_{m'}(x^{+})\le V_{\calM}(x)$이다. (c)는 (a),(b)가
-\cref{lem:mono}의 이산형 결론을 재현하므로 그 증명이 그대로 적용된다.
-\end{proof}
-
-\begin{proposition}[Exactness, zero-bootstrap labels, measurable $\varepsilon_0$]\label{prop:mcexact}
-Every $m\in\calM$ reaches a full stop within $T_m$ steps and holds position thereafter
-(\cref{prop:brake}), so the finite-horizon value equals the infinite-horizon one, and
-$V_{\calM}$ is computed \emph{exactly on the rollout grid} by $\abs{\calM}$ analytic rollouts
-(the residual against the continuous-time supremum is \cref{prop:gridres}). Consequently the
-label operator is constant in $W$: $\beta=0$, no fixed-point iteration, no tail channel
-(\cref{thm:mixed} trivializes), no two-timescale requirement; value learning, if used at all, is
-pure supervised regression whose error $\varepsilon_0$ is directly measurable against the label.
-\end{proposition}
-\begin{proof}
-정지·유지 사실은 \cref{prop:brake}의 성분별 논증에 lateral $j$ step을 앞세운 것이다. $V_{\calM}$이
-$(x,\text{scene})$의 닫힌-형식 함수이므로 label 연산자에 $W$가 등장하지 않는다.
-\end{proof}
-
-\begin{proposition}[Grid-sampled certificate optimism]\label{prop:gridres}
-Let $V_{\calM}^{dt}$ denote the \cref{def:lib} value computed on the rollout grid $dt$, and let
-$V_{\calM}^{c}(x):=\min_{m}\sup_{0\le t\le T_m dt}h(x^{m}(t))$ be its continuous-time counterpart
-along the same maneuver flows. With $h$ $(1/h_{\mathrm{scale}})$-Lipschitz in position and speed
-bounded by $v_{\max}$:
-\[
-V_{\calM}^{dt}(x)\ \le\ V_{\calM}^{c}(x)\ \le\ V_{\calM}^{dt}(x) + \delta_{\mathrm{grid}},
-\qquad
-\delta_{\mathrm{grid}} := \frac{v_{\max}\, dt}{2\, h_{\mathrm{scale}}} .
-\]
-Hence a grid certificate with margin $\gamma_m$ guarantees only
-$h\le-\gamma_m+\delta_{\mathrm{grid}}$ in continuous time along the certifying maneuver, and
-margins $\gamma_m<\delta_{\mathrm{grid}}$ cannot exclude inter-sample excursions of depth in
-$(\gamma_m,\delta_{\mathrm{grid}}]$.
-\end{proposition}
-\begin{proof}
-하한은 grid가 연속 시간 집합의 부분집합이라는 사실이다. 상한: 각 구간에서 가장 가까운 grid 점까지의
-시간 거리가 $dt/2$ 이하이고 위치 변화율이 $v_{\max}$ 이하이므로 $h$의 excursion이
-$v_{\max}dt/(2h_{\mathrm{scale}})$로 제한된다.
-\end{proof}
-
-\begin{remark}[Measured grid law and the two deployment knobs]\label{rem:gridlaw}
-$v_{\max}=2.5$, $h_{\mathrm{scale}}=1$, $dt=0.05$에서 $\delta_{\mathrm{grid}}=0.0625$ --- 시험된
-margin $\gamma_m\in\{0.02,0.05\}$가 모두 이 cap 아래에 있으므로 관측된 margin-불변 collision
-floor($\approx0.0055$)는 \cref{prop:gridres}와 정합한다. grid 세분은 excursion을 직접 공격하며,
-실측 법칙은 $\mathrm{coll}\propto dt^{1.37}$($0.0055\to0.0010$ @ $0.01$), 모집단 flip 비율은
-$0.15\%$, Pareto knee는 $dt=0.025$에서 cert-coll $0.00102$이다. 따라서 certificate rollout grid는
-\emph{safety knob}, control period는 별개의 \emph{liveness knob}이다. 역방향 corroboration: 인증
-rollout과 실행 grid가 일치하는 plan-follower(\cref{rem:reachstatus})에서 grid-검출 collision이
-$0$이었다. 미시험 예측: fallback 의미론에 한정하면 $\gamma_m\ge\delta_{\mathrm{grid}}$가
-grid-허용 연속 excursion을 제거해야 한다(O13).
-\end{remark}
-
-\begin{proposition}[Monotone certified growth under library augmentation]\label{prop:mcmono}
-If $\calM\subseteq\calM'$, $\calM'$ is shift-closed, and every added maneuver is admissible and
-stopping, then $V_{\calM'}\le V_{\calM}$ pointwise,
-$\calS_{\calM}\subseteq\calS_{\calM'}\subseteq\calS^{\cup}$, and $V_{\calM'}$ remains valid.
-Verified admission of maneuvers --- including learned feedback recovery policies --- can only
-enlarge the certified set: improvement is monotone by construction.
-\end{proposition}
-\begin{proof}
-초집합 위 min은 pointwise 감소하고 sublevel set은 확대된다. Validity는 \cref{prop:mcvalid}의 증명이
-shift-closure만 사용하므로 보존된다.
-\end{proof}
-
-\begin{remark}[Authority, conservatism ordering, and the measured stages]\label{rem:mcstage}
-(i) \emph{Authority}: brake-argmin 영역에서 $\grad V_{\calM}$은 \cref{prop:grad}의
-$\abs{v}/u_{\max}$ 기하를 상속하고, lateral 성분은 횡방향 gradient를 label 구조 자체로 운반한다 ---
-gradient 감독 없이. (ii) \emph{보수성 순서}: $m_0\in\calM$이므로
-$\calS_{\mathrm{brake}}\subseteq\calS_{\calM}$: 구조적으로 brake보다 약한 보수성이 보장되고 잔여
-보수성은 stuck으로 측정된다. (iii) \emph{실측}: 해석적 exact $V_{\calM}$으로 LQR nominal을
-filtering한 단계에서 empty-intersection이 인증 집합 위 $0.7$--$1.5\%$ 대 비인증 위 $\sim95\%$로
-witness 정리를 정량 검증했고, library 확대 $\abs{\calM}=5\to9\to17$에서 stuck
-$0.067\to0.0535\to0.049$로 단조 감소했다(\cref{prop:mcmono}). 정책 단독 JT 단계는 \cref{thm:inv}의
-nominal-independence를 최초로 in-system 검증했다: collision이 30k-step 학습 전 구간
-$0.002$--$0.006$ 평탄, 세 run 재현. friction 단계는 안전 불변인 채 약양성(cps\_v2
-$0.8254\to0.8327$, stuck $0.049\to0.043$)이었고 그 이득은 open-area 행동 효과였다.
-\end{remark}
-
-\begin{definition}[Certified reach-time over a plan family]\label{def:reachtime}
-Fix a finite segment set (thrust $u=u_{\max}d$ for $j$ grid steps, $d$ in a plan-time frame
-direction set; coast $u=0$ for $j$ steps) and terminal maneuvers (the deadband brake $m_0$; an
-LQR-capture state feedback run for at most $T_{\mathrm{cap}}$ steps). A \emph{plan} $p$ is a
-sequence of at most $k$ segments followed by exactly one terminal, rolled on the certificate
-grid. $p$ is \emph{admitted at $x$} iff its rollout reaches the goal set at some step $k_g$
-within its budget with $h\le-\gamma_m$ and in-arena at every step $\le k_g$;
-$\mathrm{dur}(p):=k_g\,dt$. The \emph{certified reach-time} is
-\[
-R(x) \;:=\; \min\{\mathrm{dur}(p):\ p\ \text{admitted at}\ x\},
-\qquad
-R(x) := +\infty\ \text{if none.}
-\]
-\end{definition}
-
-\begin{proposition}[Certified execution and monotone families]\label{prop:reachmono}
-\leavevmode
-\begin{enumerate}[label=(\alph*)]
-\item Every prefix of an admitted plan executed open-loop on the certificate grid coincides with
-its certified rollout (deterministic plant, matching grid), so the executed trajectory satisfies
-$h\le-\gamma_m$ up to goal or replanning; if the argmin plan is executed to completion, the goal
-set is reached at time $R(x)$.
-\item If the family is extended, $R$ is pointwise non-increasing and $\{R<\infty\}$ is
-non-decreasing.
-\item If, in addition, the plan family is \emph{shift-closed}, the replanning follower decreases
-$R$ by exactly $dt$ per step, giving finite-time goal reach within $R(x_0)$ from every
-$x_0\in\{R<\infty\}$.
-\end{enumerate}
-\end{proposition}
-\begin{proof}
-(a) grid 일치와 plant의 결정론이다. (b) 초집합 위 min은 pointwise 비증가이고 유한성 집합은
-확대된다. (c) \cref{prop:mcvalid}(b)와 동형이다: 실행된 첫 step 후 남은 tail plan이 family에
-속하므로 replan의 min은 남은 duration 이하이고 매 step $dt$만큼 감소한다.
-\end{proof}
-
-\begin{remark}[Empirical instantiation]\label{rem:reachstatus}
-(b)의 실측: $j$-grid 확대, depth $1\to2$, 문법 superset 전이 어디에서도 pointwise 증가 $0$건
-($n=2000$). coverage는 문법 크기의 함수였고 binding constraint는 \emph{착지 정밀도}였다: 이산
-$(d,j)$ 격자는 goal box에 내리지 못하고(직선 depth-2 coverage $0.0945$), LQR-capture terminal
-단독이 $0.944$, full 문법이 $0.98$을 회복했다. 구현의 sparse $j$-grid는 (c)의 shift-closure를
-만족하지 않으므로 follower의 보장은 (a)의 인증 실행에 그친다 --- 실측: $n=2000$에서 reach
-$0.9615$, collision $0.000$(인증 grid $=$ 실행 grid), stuck $0.0385$, 도달 episode의 time-to-goal
-$-R(x_0)$ 중앙값 $0.05$\,s. 이 수치는 학습 없는 \emph{성능 anchor}다(cps\_v2 $0.9230$; full-scene
-접근 planner이므로 SOTA 비교 불가).
-\end{remark}
-
-\begin{remark}[Refutation as a training terminal]\label{rem:reachterm}
-의도된 용도 --- BPTT terminal $-R(x_T)$로 \cref{rem:credit}의 horizon-외 credit을 인증된 return
-하한 형태로 주입 --- 는 두 독립 근거로 반증되었다. (i) \emph{미분}: $\mathrm{dur}=k_g\,dt$의 정수
-양자화로 $R$은 구간별 상수 함수, $\grad_x R=0$ a.e.\ --- 연속 surrogate 없이는 gradient-dead다.
-(ii) \emph{비용}: beam 호출 $3476$\,ms 대 훈련 실행가능 bar $300$\,ms($11.6\times$)이며 coverage를
-나르는 capture terminal이 곧 비용원이라 결합이 풀리지 않는다. 부수 반증: stall 구제 $\le0.24$ ---
-인증 plan이 stall onset의 $0.19$에서만 존재하고 $T_{\mathrm{cap}}$에 불변 --- 전-궤적 margin
-인증은 row-filter가 허용하는 gap-grazing 탈출을 원리적으로 배제한다는 보수성 격차의 정량이다.
-Net: 인증 도달시간은 훈련 신호가 아니라 training-free 성능 anchor다.
-\end{remark}
-
-\section{Measurement map and dependency map}\label{sec:maps}
-
-\textbf{직관.} 이 framework의 검증 가능성은 두 표로 요약된다: \cref{tab:meas}는 각 가정이 어느 기존
-계측으로 반증·추정되는지를, \cref{tab:dep}는 각 결과가 어떤 가정 위에 서는지를 준다. 학습 기반 안전
-시스템의 통상적 약점 --- 배포 중 자기 가정의 위반을 알 수 없음 --- 이 여기서는 성립하지 않는다:
-정확성 가정의 위반은 empty-intersection으로 매 step 목격된다.
-
-\begin{table}[H]
-\centering\small
-\begin{tabular}{p{4.4cm}p{3.2cm}p{6.6cm}}
-\toprule
-Hypothesis / quantity & Formal role & Measurement\\
-\midrule
-Exactness error $\varepsilon_0$ & \cref{lem:witness,thm:margin} & empty-intersection rate (\cref{cor:falsify}); its value-band distribution (\cref{cor:band}); brake-region comparator (\cref{rem:comparator})\\
-Zero-level alignment of $\Vhat$ & validity, \cref{def:filter} & CBF contour, zero-velocity panels vs.\ obstacle perimeters\\
-$P_V$ is the exact convex projection & \cref{lem:range,lem:nonexp} & HardNet--QP agreement unit test\\
-Gradient isolation of the safety channel & \cref{prop:gaps}(d) & BPTT-detach unit test; runtime gradient-leak halt\\
-Bridge constants ($F$, $dt$) & \cref{lem:bridge,rem:rk4} & RK4 unit test; DI ZOH exactness\\
-Return comparability across versions & \cref{def:J} & byte-identical evaluation pools (SHA manifest test)\\
-Boundary-tube coverage & \cref{rem:coverage} & unsafe-label fraction telemetry; $\sigma$-pinning\\
-Conditioning soundness & \cref{thm:fixed} vs.\ \cref{prop:lagged} & registered in-system predictions\\
-Label-operator bias channels & \cref{thm:mixed} & tail-push telemetry; tail-ratchet probe\\
-Certificate grid residual $\delta_{\mathrm{grid}}$ & \cref{prop:gridres,rem:gridlaw} & grid sweep; cert-grid flip fraction; zero-collision follower\\
-Singular dichotomy & \cref{rem:cpsv2} & per-step feasibility flags; agreement with the empty-only convention\\
-Policy credit horizon & \cref{prop:vacuum,rem:credit} & stall-onset payback probe; per-checkpoint drift decomposition\\
-\bottomrule
-\end{tabular}
-\caption{Measurement map}
-\label{tab:meas}
-\end{table}
-
-\begin{table}[H]
-\centering\small
-\begin{tabular}{p{5.2cm}p{9.4cm}}
-\toprule
-Result & Hypotheses used\\
-\midrule
-\cref{lem:mono}, \cref{cor:fallback} & (B3)--(B5)\\
-\cref{lem:feas}, \cref{cor:falsify} & (B3)--(B5), exact $V=\Vhp{\pi_b}$\\
-\cref{thm:inv} & (B1)--(B5), exact $V$, continuous enforcement, solution existence (\cref{rem:sol})\\
-\cref{thm:perf} & (B1)--(B2), $\Vhat\in C^1$, $R_{\Vhat}\neq\emptyset$, density; (R) for the LQR clause\\
-\cref{prop:jac} & a.e.\ smoothness of the active-set decomposition\\
-\cref{thm:pi} & per-stage hypotheses of \cref{thm:inv}\\
-\cref{prop:contr}, \cref{prop:disc} & (B3)\\
-\cref{thm:fixed} & fixed-point existence; continuity of $V^{\ast}$ for (c)\\
-\cref{prop:frag} & hypothesis (H)\\
-\cref{prop:lagged} & (a) \cref{prop:contr}$+$\cref{lem:feas}; (b) determinism; (c) two-timescale SA (sketch)\\
-\cref{cor:sched} & \cref{prop:disc}, $T_{\mathrm{stop}}$ kinematics\\
-\cref{lem:bridge} & (B2), $\Vhat\in C^{2}$\\
-\cref{lem:witness}, \cref{thm:margin}, \cref{cor:band}, \cref{prop:static} & $\varepsilon_0$ bound, fixed point of $\bar\calT_\gamma^{\pi_b}$; (b) additionally measured feasibility\\
-\cref{prop:grad}, \cref{prop:flat} & (B3)--(B5), unique maximizer (Danskin)\\
-\cref{thm:mixed} & (B3); fixed point of $\bar\calT_\gamma^{\pi_b}$\\
-\cref{prop:mcvalid}--\cref{prop:mcmono} & (B1)--(B3), shift-closure, DI stopping kinematics\\
-\cref{prop:quantile} & regular conditional law\\
-\cref{prop:brake} & (B1)--(B3), DI dynamics\\
-\cref{prop:gridres} & (B2) speed bound; $h$ position-Lipschitz\\
-\cref{prop:vacuum} & clip-floor saturation on an open set; \cref{lem:feas}(b)\\
-\cref{prop:reachmono} & deterministic plant, matching grids; (c) additionally shift-closed plan family\\
-\bottomrule
-\end{tabular}
-\caption{Dependency map}
-\label{tab:dep}
-\end{table}
-
-\section{Comparison of conditioning schemes}\label{sec:compare}
-
-\begin{table}[H]
-\centering\small
-\begin{tabular}{p{3.0cm}p{2.8cm}p{2.6cm}p{2.8cm}p{3.0cm}}
-\toprule
- & stored rollout $+$ adaptive $\sigma$ & brake & learned recovery & lagged raw copy\\
-\midrule
-Conditioning object & fixed point of $\Phi_{\sigma}$ & $\Vhp{\pi_{\mathrm{br}}}$ & $V$-referential via $\pi_b$'s training & $\Vhp{\pi_b}$, lagged unfiltered copy\\
-Fallback semantics & none (\cref{ex:nofallback}) & yes & partial (drifts with $\Vhat$) & yes\\
-Margin source & rented from noise & basin depth of braking & mixed & basin depth of $\pi_b$; explicit $\gamma_m$\\
-Conservatism & low (degenerate) & high & medium & tracks $\pi_\theta$'s competence\\
-Label compute & none extra & re-roll & re-roll $+$ $\pi_b$ training & re-roll\\
-Staleness & drifts with $\pi_\theta$ and $\Vhat$ & none & drifts with $\Vhat$ & none\\
-Empirical status & cps $0.8698$, 3-seed CI $[0.8527,0.8869]$ & cps $0.6810$; collision $0.0025$, stuck $0.1125$ & cps $0.7092$ & $0.7448$ / $0.7466$; ceiling unmoved\\
-\bottomrule
-\end{tabular}
-\caption{Conditioning schemes}
-\label{tab:cond}
-\end{table}
-
-양측 정직성. Baseline의 실질적 장점은 셋이다: 재-roll 연산이 없고, 3-seed로 확인된 최고 성능을 이미
-보유하며, 노이즈 margin이 그 규모에서는 경험적으로 충분했다. 그 형식적 결함은 \cref{thm:fixed}가
-특정한다: certificate에 policy-독립적 의미가 없고 margin이 암묵적이라 제어 불가능하다. brake는
-건전하지만 인증 집합이 작아 보수성 비용을 치른다. learned recovery는 유능성은 얻지만 $\pi_b$의 학습
-신호를 통해 자기참조가 복귀한다. lagged raw copy는 건전성과 유능성을 동시에 갖는 유일 조합이었으나
-판정이 내려졌다: 편향 채널을 절반으로 감쇠시켜도 재선택 성능이 불변 --- ceiling은 label 채널이
-아니라 authority(\cref{prop:flat})이다. 이로써 trilemma의 세 꼭짓점이 전부 실측으로 채워졌고,
-탈출구인 $\pi_\theta$-독립 해석적 family가 \cref{def:lib}로 실현되었다.
 
 \section{Open problems}\label{sec:open}
 
-\begin{enumerate}[label=\textbf{(O\arabic*)}]
-\item \textbf{Disturbance and model error.} 결과는 무외란 plant에 대한 것이다. 경로: worst-case
-conditioning $\Phi_{\bar\sigma}$의 학습화, 또는 RPCBF의 robust 확장 \cite{knoedler2025rpcbf}.
-경계 위 strict decrease를 witness가 제공하지 못하므로 ISSf형 bound는 추가 가정 없이 닫히지 않는다.
-\item \textbf{Existence and regularity of $\Phi$ fixed points} in continuous state spaces (finite
-instances exist: \cref{ex:nofallback}, \cref{rem:toy}).
-\item \textbf{Approximate policy iteration.} \cref{thm:pi}의 근사판: 단계별 $\varepsilon_0$가
-$\calS_k$ 성장에 미치는 오차 전파율.
-\item \textbf{$G_4$.} 비볼록 학습 gap은 정량화되지 않는다; \cref{prop:gaps}(d)로 안전과
-절연되지만 성능 주장은 경험 평가에 의존한다.
-\item \textbf{$\varepsilon_0$ upgrade.} 가정 $\varepsilon_0$을 고확률 상계로: conformal
-보정(\cref{rem:conformal}) 또는 brake-영역 직접 측정(\cref{rem:comparator}).
-\item \textbf{Band tightness --- resolved with outcome.} 전건($\varepsilon_0$ 소)이 위반되었고
-계측기가 이를 검출했다 --- falsifier의 작동 검증이지 bound의 검증이 아니며 bound 자체는 조건부로
-남는다.
-\item \textbf{Lipschitz--measurable gap} in \cref{thm:perf}(a).
-\item \textbf{Mollification bandwidth.} \cref{rem:mollify}의 정량화: $\sigma$-conditioning이
-공급하는 gradient band의 폭과 authority 하한의 정리화.
-\item \textbf{Library coverage gap.} decel-turn family는 기각되었고 stall의 지배 성분은 onset 기준
-narrow-gap/local-min으로 재귀속되었으며, reach-plan 실험은 binding constraint가 \emph{착지
-정밀도}임을 보였다. $\calS_{\calM}$ 대 $\calS^{\cup}$의 형식 정량화는 열려 있다.
-\item \textbf{Learned-maneuver admission.} \cref{prop:mcmono}의 feedback maneuver 허입
-조건(유한 정지 certificate)의 검증 절차 설계.
-\item \textbf{Multi-seed confirmation.} 인용된 단일-seed 수치는 그렇게 표기되어 있으며 교차-seed
-확증이 남는다.
-\item \textbf{Continuous reach-time surrogate.} \cref{rem:reachterm}(i)의 양자화를 푸는 미분 가능
-surrogate와, 그것이 인증 하한 성질을 보존하기 위한 조건.
-\item \textbf{Margin above the excursion cap.} \cref{rem:gridlaw}의 미시험 예측 ---
-$\gamma_m\ge\delta_{\mathrm{grid}}$가 grid-허용 연속 excursion을 제거 --- 의 검정과 그
-stuck/liveness 비용의 측정.
-\item \textbf{Global degeneracy measure (Part~I).} \cref{rem:global-open}: attainment set 밖에서
-$\operatorname{meas}\mathcal Z(V^{h_\star,\pi})=0$인지, 그리고 \cref{prop:attain-exists}의 tail
-가정을 유한 horizon 정식화로 대체할 수 있는지.
+\begin{enumerate}[label=(O\arabic*),leftmargin=2.6em]
+  \item \textbf{Global degeneracy measure.} Is $\operatorname{meas}\mathcal Z(V^{h_\star,\pi})=0$
+  on all of $\calX_0$ for the deployed augmented hazard? \cref{prop:lead} settles it on
+  attainment sets only (\cref{rem:global-open}).
+  \item \textbf{Coupled labeling recursion.} \cref{sec:labeling} fixes $(\pi_f,\Vhat^-)$ within
+  a pass. Well-posedness of the fully coupled certificate--policy recursion, and the undiscounted
+  exactness of $\{V^{\calU}\le0\}$ against the true viability kernel, are open
+  (\cref{rem:label-trap}).
+  \item \textbf{Commitment horizons.} Does an explicit commitment scheme restore monotonicity in
+  the planning horizon under receding-horizon replanning (\cref{rem:kstep-commit})?
+  \item \textbf{The vertical subproblem's reachable set.} Narrowing the undetermined band of
+  \cref{prop:floor-bracket} requires a reachability computation in
+  $(z,v_z,\theta,\dot\theta)$; until then recoverability is controller-family dependent
+  (\cref{rem:floor-bracket}).
+  \item \textbf{What governs $\grad_\omega V$.} The channel split measured in
+  \cref{rem:hstar-resolved} is unexplained (\cref{rem:omega-open}).
+  \item \textbf{Hazard geometry under the observation ceiling.} \cref{cor:reach-per-inflation}
+  shows the exponential form reaches further per unit of gain-switch inflation, and
+  \cref{rem:exp-matched} measures the trade at frozen policy. What that trade becomes under
+  training --- whether the policy's learned standoff realizes less conservatism than the frozen
+  recomputation bounds --- is not settled by any statement here. The binding constraint is the
+  Top-$K$ truncation of \cref{rem:topk-measured}, which no hazard form can relax.
+  \item \textbf{The horizontal stopping distance as a design constant.}
+  \cref{prop:hstop}(c) derives $d_{\mathrm{stop}}$ from the plant, and \cref{rem:dmax-measured}
+  reports it. Whether a hazard geometry keyed to it --- rather than to an unscreened constant ---
+  changes the obstacle class is open, and its answer is bounded above by (O6)'s ceiling.
+  \item \textbf{The direction defect.} \cref{rem:gate-fail} measures that half the recovery
+  term's signal points against the realized hazard decrease on the failure class, and
+  \cref{cor:label-dir} proves that no label-side scalar constant can change a direction. What
+  can is unidentified.
 \end{enumerate}
 
-\begin{thebibliography}{10}\small
-\bibitem{so2024pncbf} O.~So, Z.~Serlin, M.~Mann, J.~Gonzales, K.~Rutledge, N.~Roy, C.~Fan,
-``How to train your neural control barrier function: Learning safety filters for complex input-constrained systems,'' \emph{IEEE ICRA}, 2024.
-\bibitem{knoedler2025rpcbf} L.~Knoedler, O.~So, J.~Yin, M.~Black, Z.~Serlin, P.~Tsiotras, J.~Alonso-Mora, C.~Fan,
-``Safety on the fly: Constructing robust safety filters via policy control barrier functions at runtime,'' \emph{IEEE RA-L}, 2025.
-\bibitem{min2024hardnet} Y.~Min, N.~Azizan,
-``HardNet: Hard-constrained neural networks with universal approximation guarantees,'' arXiv:2410.10807, 2024.
-\bibitem{fisac2019bridging} J.~F.~Fisac, N.~F.~Lugovoy, V.~Rubies-Royo, S.~Ghosh, C.~J.~Tomlin,
-``Bridging Hamilton--Jacobi safety analysis and reinforcement learning,'' \emph{IEEE ICRA}, 2019.
-\bibitem{ames2017cbf} A.~D.~Ames, X.~Xu, J.~W.~Grizzle, P.~Tabuada,
-``Control barrier function based quadratic programs for safety critical systems,'' \emph{IEEE Trans.\ Autom.\ Control}, 62(8), 2017.
-\bibitem{blanchini1999set} F.~Blanchini, ``Set invariance in control,'' \emph{Automatica}, 35(11), 1999.
-\bibitem{koenker1978} R.~Koenker, G.~Bassett, ``Regression quantiles,'' \emph{Econometrica}, 46(1), 1978.
-\bibitem{angelopoulos2023} A.~N.~Angelopoulos, S.~Bates,
-``Conformal prediction: A gentle introduction,'' \emph{Found.\ Trends Mach.\ Learn.}, 16(4), 2023.
-\bibitem{danskin1966} J.~M.~Danskin, \emph{The Theory of Max-Min and its Application to Weapons Allocation Problems}, Springer, 1967.
-\bibitem{borkar1997two} V.~S.~Borkar, ``Stochastic approximation with two time scales,'' \emph{Syst.\ Control Lett.}, 29(5), 1997.
-\end{thebibliography}
+\bigskip
+\noindent\textbf{Standing scope note.} 이 문서의 모든 경험적 진술은 그것이 나온 seed, pool,
+checkpoint, cell을 함께 명시한다. 단일 seed 결과는 그렇게 표시되며 다중 seed 주장으로 승격되지
+않는다. 반증된 가설은 삭제되지 않고 철회로 보존된다 --- 무엇이 시도되어 실패했는지가 무엇이
+성공했는지만큼 이 lineage의 기록이다.
 
 \end{document}

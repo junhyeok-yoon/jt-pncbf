@@ -29,6 +29,17 @@ env:
       a_max: 2.0
       omega_max: 3.0
 
+hazard:
+  # v2.8.5 — the geometric term of the HORIZONTAL (cylinder) branch of h_star. DEFAULT OFF: `clip` is the
+  # deployed v2.8.4 ramp `1 - 2*clamp(clearance/env.h_scale, 0, 1)` and every number is bit-identical to
+  # v2.8.4 while this key reads `clip`. `exp` selects `clamp(2*exp(-clearance/ell) - 1, max=+1)`, whose
+  # alpha switch surface sits at clearance ell*ln2 (the clip's is h_scale/2) and which never reaches -1.
+  # This is a NEW key, not a replacement: env.h_scale remains and continues to drive the clip path.
+  # `ell` is read ONLY by the exp path and ONLY by the horizontal branch; the vertical band branches
+  # (quadrotor_barrier.py:117-126) read neither h_scale nor ell and are untouched by either form.
+  geom_form: clip                   # clip | exp
+  ell: null                         # metres; required and positive when geom_form == exp
+
 obstacle:
   n_min: 1
   n_max: 12

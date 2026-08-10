@@ -18,6 +18,11 @@ document fixes the structure and the canonical problem-defining constants.
 
 ## 1. Common task definition
 
+**Provenance of constants.** A constant introduced into a system, or carried across from
+another, records how it was fixed: derived from the plant, screened from a distribution, or
+transferred. A transfer states whether it was verified on the receiving system, and an
+unverified transfer stands as unscreened until it is screened there.
+
 ### 1.1 Navigation task
 
 The agent drives a single point-mass-like system from a start state to a goal region while

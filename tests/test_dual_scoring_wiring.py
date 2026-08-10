@@ -4,6 +4,7 @@ Guards the invariant that quadrotor_3d in-loop evaluation resolves to the MIXED 
 system keeps its legacy in-loop pool, and that the resolution is opt-out-able via config."""
 from __future__ import annotations
 import copy
+from pathlib import Path
 
 from src.frameworks.jt_pncbf.train import _pool_stem_for, load_effective_config
 
@@ -15,8 +16,34 @@ def _cfg(system):
 
 
 def test_inloop_pool_resolves_to_mixed_for_quadrotor_3d():
+    """The mixed-pool branch is asserted STRUCTURALLY, not against a duplicated stem literal.
+
+    The previous form hard-coded `eval_inloop_..._seed45678` and went red when the v2.8.3 S2 pool
+    succession moved the resolver to `eval_inloopv2_..._seed145678` (train.py:2191) — the test was
+    guarding a spelling, not a wiring. It is not repaired by comparing `_pool_stem_for` to itself:
+    that asserts nothing. Instead the three properties the branch actually guarantees are checked,
+    each independently able to fail:
+
+      (a) the mixed branch is TAKEN     -> "mixed" in the resolved stem, and it is an in-loop stem;
+      (b) the branch is LOAD-BEARING    -> it differs from the same call with eval.in_loop.mixed off,
+                                           so deleting or short-circuiting the branch turns this red;
+      (c) the pool it names EXISTS      -> a succession that points the resolver at an absent pool
+                                           turns this red.
+
+    What this no longer catches: a change from one EXISTING mixed in-loop pool to another (a different
+    n or seed). That identity is deliberately not re-duplicated here; it lives in the resolver and in
+    each run's own `pool_manifest.json`.
+    """
     stem = _pool_stem_for("inloop", _cfg("quadrotor_3d"), "quadrotor_3d")
-    assert stem == "eval_inloop_quadrotor-3d-d2r-mixed_n2000_seed45678", stem
+    assert stem.startswith("eval_inloop"), stem
+    assert "mixed" in stem, stem
+
+    opted_out = copy.deepcopy(_cfg("quadrotor_3d"))
+    opted_out["eval"]["in_loop"]["mixed"] = False
+    assert stem != _pool_stem_for("inloop", opted_out, "quadrotor_3d"), (stem, "branch is inert")
+
+    pools = Path(__file__).resolve().parents[1] / "data" / "secured_data" / "pools"
+    assert (pools / f"{stem}.pkl").exists(), f"resolver names a pool that is not on disk: {stem}.pkl"
 
 
 def test_inloop_pool_unchanged_for_non_3d_system():

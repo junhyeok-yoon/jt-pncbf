@@ -14,7 +14,7 @@ from src.common.outcomes import (
     resolve_outcome,
     step_outcomes,
 )
-from src.common.signed_h import signed_h
+from src.common.signed_h import hazard_geom, signed_h
 from src.common.system import System
 from src.envs.scene_batch import (
     batch_scenes as make_batched_scene,
@@ -468,7 +468,12 @@ def _episode_row(
     )
     projection = torch.linalg.norm(result.u_safe - result.u_nom, dim=-1)
     positions = system.position(result.states)
-    h_values = signed_h(positions, scene, float(config["env"]["h_scale"]))
+    # v2.8.5: the reported per-step h series / max_h is a DIAGNOSTIC (it enters no score); it follows
+    # the configured geometric term so the diagnostic and the label agree. hazard.geom_form absent or
+    # 'clip' -> bit-identical to v2.8.4.
+    _geom_form, _ell = hazard_geom(config)
+    h_values = signed_h(positions, scene, float(config["env"]["h_scale"]),
+                        geom_form=_geom_form, ell=_ell)
     path_delta = positions[1:] - positions[:-1]
     # v2.8.0: angular rate at the reach instant (first goal step); nan otherwise.
     if outcome == "goal" and 0 <= event_step < result.states.shape[0]:

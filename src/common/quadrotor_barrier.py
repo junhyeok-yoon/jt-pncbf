@@ -18,7 +18,7 @@ from typing import Any, Callable
 import torch
 
 from src.common.rk4 import rk4_step
-from src.common.signed_h import signed_h
+from src.common.signed_h import hazard_geom, signed_h
 
 Tensor = torch.Tensor
 
@@ -35,22 +35,26 @@ def approach_speed(x: Tensor) -> Tensor:
     return torch.sum(v * thrust_axis(x), dim=-1)
 
 
-def phi_value(x: Tensor, scene: Any, h_scale: float) -> Tensor:
-    """Position-only avoid generator phi(p,o) (the existing OC signed-distance ramp)."""
-    return signed_h(x[..., :2], scene, h_scale)
+def phi_value(x: Tensor, scene: Any, h_scale: float, *,
+              geom_form: str = "clip", ell: float | None = None) -> Tensor:
+    """Position-only avoid generator phi(p,o) (the existing OC signed-distance ramp).
+    v2.8.5: geom_form defaults to 'clip' -> bit-identical to v2.8.4."""
+    return signed_h(x[..., :2], scene, h_scale, geom_form=geom_form, ell=ell)
 
 
-def h_star_value(x: Tensor, scene: Any, c: float, h_scale: float) -> Tensor:
+def h_star_value(x: Tensor, scene: Any, c: float, h_scale: float, *,
+                 geom_form: str = "clip", ell: float | None = None) -> Tensor:
     """h_star = phi(p,o) + c (v^T Re)."""
-    return phi_value(x, scene, h_scale) + c * approach_speed(x)
+    return phi_value(x, scene, h_scale, geom_form=geom_form, ell=ell) + c * approach_speed(x)
 
 
-def make_barrier_fn(c: float, h_scale: float, *, position_only: bool = False) -> Callable[[Tensor, Any], Tensor]:
+def make_barrier_fn(c: float, h_scale: float, *, position_only: bool = False,
+                    geom_form: str = "clip", ell: float | None = None) -> Callable[[Tensor, Any], Tensor]:
     """Return h_fn(x, scene). position_only=True -> phi(p,o) (theory note baseline, Thm 5.2);
     else h_star (Thm 5.3). Suitable as the h_fn argument to _cbf_terms."""
     if position_only:
-        return lambda x, scene: phi_value(x, scene, h_scale)
-    return lambda x, scene: h_star_value(x, scene, c, h_scale)
+        return lambda x, scene: phi_value(x, scene, h_scale, geom_form=geom_form, ell=ell)
+    return lambda x, scene: h_star_value(x, scene, c, h_scale, geom_form=geom_form, ell=ell)
 
 
 def make_exact_value_fn(
@@ -101,7 +105,11 @@ def value_target_barrier(system: Any, x: Tensor, scene: Any, config: Any) -> Ten
     taken on the xy footprint (`position(x)[..., :2]`); for the 2D systems position() is already xy so this
     is a no-op and their labels are unchanged."""
     h_scale = float(config["env"]["h_scale"])
-    phi = signed_h(system.position(x)[..., :2], scene, h_scale)
+    # v2.8.5: the HORIZONTAL geometric term is selectable (hazard.geom_form, DEFAULT 'clip' =>
+    # bit-identical to v2.8.4). Only phi changes; the lead c*approach and the vertical band branches
+    # below read neither h_scale nor ell.
+    geom_form, ell = hazard_geom(config)
+    phi = signed_h(system.position(x)[..., :2], scene, h_scale, geom_form=geom_form, ell=ell)
     approach_fn = getattr(system, "approach_barrier", None)
     if approach_fn is not None:
         c = float(config["env"][system.name]["c_gain"])

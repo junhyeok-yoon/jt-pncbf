@@ -30,6 +30,12 @@ how the work is done, on its own merits; the reasoning that produced it belongs 
 build-logs and the per-version documents (§3 Prohibition 3). The test of these documents is
 that a reader holding them and nothing else can carry out the work correctly.
 
+**Governance exists to make the research trustworthy, not to narrow it.** The rules fix what
+must be measured, what must be recorded, and who decides; they do not fix what may be tried.
+Within them the Strategist and the Executor exercise judgment freely, and a rule that would
+foreclose an inquiry rather than discipline it is read as the narrower requirement it
+actually states. This principle governs the reading of every rule that follows.
+
 ## Research scope and framework lineage
 
 The work sits in a three-step lineage. **PNCBF** (So et al., ICRA 2024) learns a neural CBF
@@ -60,6 +66,11 @@ framework relationships.
   Answers and authored prompts are concise: lead with the answer, elaborate only as much as
   needed, no verbosity or repetition. Executor prompts are likewise concise — scope,
   safeguards, and pass/fail without padding.
+  Before proposing an axis, the Strategist establishes from the record whether it has been
+  screened. Finding it screened is not a bar and does not end the proposal: an axis is
+  re-proposed whenever its purpose or its mechanism differs from the one already measured,
+  and what that requires is a statement of the difference — not abandonment. What the check
+  prevents is proposing an axis while unaware that it has a measured outcome.
 - **Executor (coding agent — Claude Code or Codex, interchangeable).** Implements code, runs
   training and evaluation, and handles real-time tactical response. Lives in the repository.
   Never makes a strategic or versioning decision on its own: when one seems necessary, it

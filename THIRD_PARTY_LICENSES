@@ -1,0 +1,125 @@
+THIRD-PARTY LICENSES
+====================
+
+This file records the licenses of third-party software this project depends on
+where that dependency carries an attribution obligation. It is additive: entries
+are appended, never rewritten, and each entry states WHAT the dependency is used
+for so the obligation and its scope stay attached to the same text.
+
+Adding a dependency here does not vendor it. Every package below is installed
+from its published distribution into the project's Python environment
+(/home/junhyeok/miniconda3/envs/pncbf); no source from any of them is copied,
+transcribed or adapted into this repository.
+
+
+--------------------------------------------------------------------------------
+1. pytorch_mppi  (version 0.9.1)
+--------------------------------------------------------------------------------
+
+Upstream:   https://github.com/LemonPi/pytorch_mppi
+Maintainer: UM-ARM-Lab (University of Michigan Autonomous Robotic Manipulation Lab)
+Author:     Sheng Zhong <zhsh@umich.edu>
+License:    MIT
+Added:      v2.8.4, for the MPPI optimizer-correctness parity check
+            (docs/versions/v2.8.4/mppi_parity.md).
+
+USED AS: a published reference implementation of information-theoretic MPPI.
+Our cascaded (T, omega) dynamics, running cost and terminal cost are passed to it
+as callbacks so that our own batched implementation can be checked against it at
+matched hyperparameters. It is a REFERENCE ONLY -- it is not part of any scored
+arm, no result is produced by it, and nothing in `src/frameworks/mppi/` other than
+the parity module imports it.
+
+Copyright (c) 2023 University of Michigan ARM Lab
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+--------------------------------------------------------------------------------
+2. arm_pytorch_utilities  (version 0.5.0)
+--------------------------------------------------------------------------------
+
+Upstream:   https://github.com/UM-ARM-Lab/arm_pytorch_utilities
+Maintainer: UM-ARM-Lab (University of Michigan Autonomous Robotic Manipulation Lab)
+Author:     Sheng Zhong <zhsh@umich.edu>
+License:    MIT
+Added:      v2.8.4, as a REQUIRED DEPENDENCY of pytorch_mppi 0.9.1
+            (pytorch-mppi declares arm-pytorch-utilities>=0.4). Not used directly.
+
+Copyright (c) 2023 University of Michigan ARM Lab
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+--------------------------------------------------------------------------------
+3. pytorch_seed  (version 0.2.0)
+--------------------------------------------------------------------------------
+
+Upstream:   https://github.com/UM-ARM-Lab/pytorch_seed
+Maintainer: UM-ARM-Lab (University of Michigan Autonomous Robotic Manipulation Lab)
+Author:     Sheng Zhong <zhsh@umich.edu>
+License:    MIT
+Added:      v2.8.4, as a TRANSITIVE DEPENDENCY of arm_pytorch_utilities 0.5.0,
+            pulled in by the pytorch-mppi install. Not used directly.
+
+Copyright (c) 2023 University of Michigan ARM Lab
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+--------------------------------------------------------------------------------
+NOT USED, RECORDED SO THE EXCLUSION IS EXPLICIT
+--------------------------------------------------------------------------------
+
+ctu-mrs/gmppi is CC BY 4.0 and ROS/C++. NO code from it is vendored, copied,
+transcribed or adapted anywhere in this repository, and it is not installed. If
+any algorithmic element of that work is adopted in future, it is taken from the
+paper (arXiv:2510.12924) and cited there, not from the implementation.

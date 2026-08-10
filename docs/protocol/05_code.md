@@ -249,6 +249,8 @@ The harness lives in `tests/` and must pass before any training. The Executor re
 
 **Verification independence.** A check never shares the code path, row filter, or parser of what produced its subject: table checks use an independent parser, not the editing script's split; liveness checks pin the launched PID and read `/proc` plus artifact freshness, never self-matchable name greps. A pass report states what makes the verifier independent.
 
+**Constant columns are unverified.** Before a logged column is cited as a measurement, its distribution over the run is inspected. A column that holds one value at every logged step is unverified until the code path writing it has been read; a hard-coded return is a defect, not a datum, and any statement resting on one is withdrawn until the column is repaired and re-collected.
+
 ### 5.1 QP correctness (CBF-QP)
 
 For a battery of $(h, L_f h, L_g h, u^{\text{nom}}, \text{bounds})$ cases:

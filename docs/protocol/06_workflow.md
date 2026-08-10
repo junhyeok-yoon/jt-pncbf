@@ -34,6 +34,13 @@ A "session" is a chat conversation. Continuity across sessions is provided by th
 
 ## 2. Version lifecycle — the spine of the workflow
 
+**The lifecycle is a sequence of states, not of idle periods.** Closing a version and opening
+the next may proceed while a run is training or scoring: the run stays registered to the open
+version, the close documents carry its result as an explicit placeholder rather than a guess,
+and its ledger row is appended once it is scored. What does not run concurrently is what the
+Researcher decides — promotion, bold classification, and git — and a version is not declared
+closed while a placeholder it opened is still empty.
+
 Every increment of `vX.Y.Z` follows the same six steps. The Researcher initiates; the Strategist drafts; the Executor implements and runs.
 
 ### 2.1 Open
@@ -135,6 +142,19 @@ an arm that did not exist for a given run is recorded `n/a`, which is not a regr
 warm-started row. The ledger is a docs file the Executor may edit; protocol files are never
 edited by the Executor.
 
+**Reproduction is the gate for work standing on a registered row.** A recomputation, a
+re-measurement, or an instrumented replay that reports on a row already in the ledger takes
+reproduction of that row's every outcome field as its pass condition. Failing that gate, the
+work stands on a different population than the row it cites and reports nothing.
+
+**`cps` and `cps_v2` are different infeasibility conventions.** Which one a system is scored
+under is read from that system's own scoring path (`04_eval` §1), and values carried under the
+two conventions never enter one comparison. A row states which convention produced it.
+
+**Diagnostics take no row.** A diagnosis, an audit, a capture, or an offline recomputation
+scores no checkpoint on a pool and therefore has no ledger row. Its permanent record is the
+version's `results.md` (§2.5), not an entry with blank outcome columns.
+
 **A run trained under a defective configuration is not ledger material.** When a model was
 trained with a plant or observation configuration since found to be wrong — a missing state
 component, a mis-specified action space — its numbers describe a system that is not the one
@@ -233,6 +253,14 @@ The Researcher authors the results document `docs/versions/v<X>_results.md` (at 
 2. **Versus motivation.** Did the change do what §2.1 hypothesized? Cite the numbers.
 3. **Improvement verdict.** Improved / no improvement detected / regressed. For multi-seed versions, by the `04_eval` §5 rule (non-overlapping CIs over the previous secured version); for single-seed, by the headline comparison against the previous secured baseline, flagged as single-seed.
 4. **Next axis.** What the data suggests for the next version. A suggestion, not a commitment.
+
+**The results document is the version's whole record.** It carries every diagnosis, analysis,
+experiment and training run of that version, with the data, the findings and the verdicts each
+produced — including the axes that closed without improvement and the measurements that
+returned an explicit null. The version's build-logs are untracked, so this document is the only
+part of the version that survives in the repository, and a reader holding it alone must be able
+to say what was done and what was learned. A pointer to a build-log does not stand in for its
+content.
 
 The Executor copies the chosen final run(s) from `data/runs/vX.Y.Z/` into the secured layout (`04_eval` §7.5), excluding the bulky per-step `metrics.csv`, and writes the `ADOPTED.md` identity record with pinned SHA-256 hashes. The originals are not moved.
 
@@ -382,6 +410,25 @@ once: the prompt specifies something already in place, and it forecloses the bet
 the Executor would have found. When a prompt is about to say *how*, it should be saying *what must
 be true* and *what must be reported*.
 
+**A dispatch that would vary a deployed constant opens with a screening gate.** Its first item
+quotes the constant at path:line with its config key, lists every occurrence of it in the record
+with that occurrence's cell and verdict, censuses the run configurations on disk for any second
+value, and returns an explicit open-or-closed decision. Where the gate returns closed, the
+remaining items describe the existing record and add nothing to it. The gate is a read, not an
+argument: it establishes what is already known so the dispatch measures what is not.
+
+**A diagnostic dispatch names quantities, not classes.** It specifies what to measure and leaves
+to the measurement whether a set separates, on which quantity, and where — an imposed taxonomy
+returns itself. Where a set may or may not separate, the dispatch states that an explicit null is
+a complete deliverable. Within that, the method is the Executor's: a dispatch that constrains how
+a quantity is obtained, rather than what it must be and what must be reported about it, is
+over-specified.
+
+**A contrast between arms that may terminate at different times states its window.** Either the
+matched window is fixed in the dispatch, or both the raw and the matched-window statistic are
+required with the window lengths reported beside them. A statistic accumulated over unequal
+windows is not a comparison.
+
 **Cost is part of the design.** Before a prompt is sent, its cells are multiplied out and the known
 per-cell cost applied. A battery that a prior version measured at a large wall-clock multiple does
 not become cheaper by being requested in more cells. Cells that are genuinely optional are marked
@@ -447,6 +494,8 @@ When a decision is required, the Strategist delivers a four-part brief, never lo
 4. **Recommendation.** One option, with a one-sentence justification.
 
 The Strategist's `00_constitution` §4 problem-analysis discipline (problem / mechanism / fix / trade-off) applies inside §1 and §3. Long prose analyses without this structure are not decision briefs — they are background documents.
+
+**Proposed protocol amendments follow the same brief, with three additions.** Each proposed change carries a number, so that an item can be approved, declined, or questioned on its own. The discussion is in Korean and the text that would be installed is given in English, as the protocol is. And the installed text keeps the receiving section's register — normative present tense, rules and not the events that motivated them, compressed to the surrounding prose density — so that an amended section reads as one document and not as a sequence of accretions.
 
 ---
 

@@ -115,6 +115,12 @@ def value_loss(
                            aux=dict(aux))
 
 
+def _value_ceiling(config) -> float:
+    """v2.8.4 ceiling axis — the SINGLE config key, shared with the read-out (value_net.py).
+    Default 1.0 reproduces the shipped label bit for bit. The lower bound stays at -1.0."""
+    return float((config.get("network", {}) or {}).get("value", {}).get("ceiling", 1.0))
+
+
 def value_targets(
     *,
     system: System,
@@ -177,6 +183,7 @@ def value_targets(
             dt,
             target_rhs,
             bootstrap_tail,
+            ceiling=_value_ceiling(config),
         ).detach()[0]
     if conditioning == "learned_recovery":
         # v2.4.0 Step 2: condition the value target on the LEARNED recovery policy (Polyak copy
@@ -208,6 +215,7 @@ def value_targets(
             float(config["env"]["dt"]),
             target_rhs,
             bootstrap_tail,
+            ceiling=_value_ceiling(config),
         ).detach()[0]
     if conditioning == "brake":
         # v2.4.0: decouple the conditioning policy. Roll a fixed analytic brake from each
@@ -237,6 +245,7 @@ def value_targets(
             float(config["env"]["dt"]),
             target_rhs,
             bootstrap_tail,
+            ceiling=_value_ceiling(config),
         ).detach()[0]
     with torch.no_grad():
         tail_obs = system.observation(batch.tail_states, batch.tail_scene)
@@ -266,6 +275,7 @@ def value_targets(
         float(config["env"]["dt"]),
         target_rhs,
         bootstrap_tail,
+        ceiling=_value_ceiling(config),
     ).detach()
     return targets.gather(0, batch.step_indices.unsqueeze(0)).squeeze(0)
 
@@ -314,7 +324,7 @@ def _sigma_hazard_sequence(*, system, target_value_net, batch, config, sh_cfg, a
     if s_scale <= 0.0:
         raise ValueError(f"sigma_hazard.s_scale must be positive, got {s_scale}.")
     params = _hardnet_params(config)
-    costs = torch.clamp(batch.h_sequence, min=-1.0, max=1.0)          # [T+1, B]
+    costs = torch.clamp(batch.h_sequence, min=-1.0, max=_value_ceiling(config))   # [T+1, B]
     Tp1, B = costs.shape
     sdim = xs.shape[2]
     u_hi = system.u_bounds.to(device=xs.device, dtype=xs.dtype)[:, 1]
@@ -386,7 +396,7 @@ def _candidate_set_target(*, system, target_value_net, batch, lambda_disc, targe
         raise ValueError("candidate_set requires batch.state_sequence (buffer store_state_seq=True).")
     include_grid = bool(cs_cfg.get("include_grid", True))
     with torch.no_grad():
-        costs = torch.clamp(batch.h_sequence, min=-1.0, max=1.0)          # [T+1, B]
+        costs = torch.clamp(batch.h_sequence, min=-1.0, max=_value_ceiling(config))   # [T+1, B]
         Tp1, B = costs.shape
         dev, dty = costs.device, costs.dtype
         gamma = torch.exp(-torch.as_tensor(lambda_disc, dtype=dty, device=dev) * dt)
@@ -421,7 +431,7 @@ def _candidate_set_target(*, system, target_value_net, batch, lambda_disc, targe
         _, int_rhs, disc_rhs = compute_disc_avoid_terms(costs, lambda_disc, dt)
         rhs_full = int_rhs + disc_rhs * bootstrap_tail.unsqueeze(0)
         mixed = lhs + torch.as_tensor(target_rhs, dtype=dty, device=dev) * torch.relu(rhs_full - lhs)
-        out = torch.clamp(mixed, min=-1.0, max=1.0)
+        out = torch.clamp(mixed, min=-1.0, max=_value_ceiling(config))
         if aux is not None and gmin is not None and n_tot > 0:
             aux["cs_argmin_not_pif_frac"] = float((n_disp / n_tot).item())
             gp = torch.cat(gaps)

@@ -44,8 +44,12 @@ class _HardNetParams:
     # SAME minimizing corner the emptiness test uses, so the empty branch vanishes by construction.
     box_klamp_enabled: bool = False
     box_klamp_kappa: float = 0.8
-    box_klamp_mode: str = "hard"            # hard = exact min; soft = softplus-min at box_klamp_beta
+    box_klamp_mode: str = "hard"            # hard = exact min; soft = softplus-min at box_klamp_beta;
+                                            # v2.8.4: additive = min(demand, s - eps)
     box_klamp_beta: float = 20.0            # soft-mode sharpness; ln2/beta is the worst-case extra retreat
+    box_klamp_eps: float = 0.0              # v2.8.4 additive-mode decay budget, in row units (same as s)
+    box_klamp_skip_degenerate: bool = False # v2.8.4: leave the row (hence the fallback) UNTOUCHED where
+                                            # L_g h is identically zero, i.e. where no u moves the row at all
     gamma_margin: float = 0.0               # v2.8.2: ROW-ONLY safety retreat (02_control §6.1). b = -L_f h - alpha*(h+gamma).
                                             # DEFAULT 0.0 => byte-identical to the pre-v2.8.2 row (guarded in _row_upper).
                                             # Deliberately NOT installed at h_fn level: h+gamma would move _base_alpha's
@@ -127,6 +131,12 @@ class HardNetFilter:
             _g = float(self.params.gamma_margin)
             _demand = alpha * h if _g == 0.0 else alpha * (h + _g)
             _cap = torch.where(_supply >= 0.0, float(self.params.box_klamp_kappa) * _supply, _supply)
+            # v2.8.4 FLAG DEFINITION. The flag that is RETURNED (and so enters `infeasibility`) is the
+            # SHIPPED test, computed in closed form from (A, L_f h, h) whatever row is deployed:
+            #     infeasible  <=>  alpha(h)*h > s        [ plus `singular`, OR-ed in by the caller ]
+            # The flag read off the MODIFIED row is kept separately as `last_row_empty` and never
+            # enters cps or `infeasibility`.
+            self.last_shipped_infeasible = (_demand > _supply).detach()
             self.last_clamp_bound = (_demand > _cap).detach()
 
         projected = _base_projection(u_nom, lg_h, row_upper, bounds, self.params)
@@ -190,8 +200,9 @@ class HardNetFilter:
             box_projected[m] = u1_star.to(box_projected.dtype)
         self.last_empty = empty_intersection.detach()          # split logging (S1d); additive, not the flag
         self.last_singular = singular.detach()
-        _flag_second = (self.last_clamp_bound if self.params.box_klamp_enabled
-                        else empty_intersection)                # v2.8.4 flag invariance (see row site)
+        self.last_row_empty = empty_intersection.detach()      # v2.8.4: flag off the MODIFIED row
+        _flag_second = (self.last_shipped_infeasible if self.params.box_klamp_enabled
+                        else empty_intersection)                # v2.8.4: the SHIPPED test is returned
         if return_deficit_aux:
             return box_projected, singular | _flag_second, u_cbf_raw, singular
         return box_projected, singular | _flag_second
@@ -563,6 +574,8 @@ def _hardnet_params(config: Mapping[str, Any]) -> _HardNetParams:
         box_klamp_kappa=float(_bk.get("kappa", 0.8)),
         box_klamp_mode=str(_bk.get("mode", "hard")),
         box_klamp_beta=float(_bk.get("beta", 20.0)),
+        box_klamp_eps=float(_bk.get("eps", 0.0)),
+        box_klamp_skip_degenerate=bool(_bk.get("skip_degenerate", False)),
     )
 
 
@@ -617,13 +630,24 @@ def _row_upper(
     cap = torch.where(supply >= 0.0, kappa * supply, supply)
     if params.box_klamp_mode == "hard":
         demand_new = torch.minimum(demand, cap)
+    elif params.box_klamp_mode == "additive":
+        # v2.8.4: an ADDITIVE decay budget. eps is subtracted from the supply, so the retreat is a
+        # fixed margin in row units rather than a fraction of s. Unlike the multiplicative form this
+        # keeps a non-degenerate slice where s is small, and unlike kappa it does not shrink toward
+        # zero as s -> 0.
+        demand_new = torch.minimum(demand, supply - float(params.box_klamp_eps))
     elif params.box_klamp_mode == "soft":
         # softplus-min: -(1/beta) log(exp(-beta a) + exp(-beta b)) <= min(a,b) - ln2/beta, so the soft
         # mode is strictly MORE conservative than hard and cannot re-open the empty branch.
         beta = float(params.box_klamp_beta)
         demand_new = -torch.logaddexp(-beta * demand, -beta * cap) / beta
     else:
-        raise ValueError(f"filter.box_klamp.mode must be hard|soft, got {params.box_klamp_mode!r}.")
+        raise ValueError(f"filter.box_klamp.mode must be hard|soft|additive, got {params.box_klamp_mode!r}.")
+    if params.box_klamp_skip_degenerate:
+        # where L_g h == 0 in every component the row is u-independent; clamping it changes the
+        # feasibility test without changing any achievable action, so the shipped row is kept there.
+        degen = (lg_h.abs() <= 0.0).all(dim=1)
+        demand_new = torch.where(degen, demand, demand_new)
     return -lf_h - demand_new
 
 
