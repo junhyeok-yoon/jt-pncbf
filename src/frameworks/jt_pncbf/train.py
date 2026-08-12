@@ -855,6 +855,7 @@ def run_training(
                     system,
                     value_net,
                 )
+                timers.t_eval += time.time() - _t
             # v2.8.3 AMENDMENT-4 §3: STRUCTURAL halt on sigma-label runaway. Distinct in kind from the
             # OUTCOME readings (REALLOCATION, v2.2.2 signature), which score and close an axis but never
             # kill mid-run. This one halts, because a label recursion whose uniform-inflation gain exceeds
@@ -864,7 +865,6 @@ def run_training(
             if _sh_halt is not None:
                 halt_reason = _sh_halt
                 break
-                timers.t_eval += time.time() - _t
             # v2.7.3 M5 amendment: durable guard — the CBF contour must be written at every in-loop eval.
             # In smoke, fail hard if the first in-loop contour is missing/empty (a swallowed render error must
             # never let a 50k run start without the figure path proven).

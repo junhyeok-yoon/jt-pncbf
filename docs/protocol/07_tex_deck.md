@@ -122,9 +122,10 @@ Read this document before writing or modifying a `.tex` or a `.pptx`. Rule IDs
   기재하고, 불일치를 발견하면 즉시 보고·교정한다.
 - **I2. scope를 정확히 라벨한다.** exact vs limit, iff vs sufficient-only, 조건이 걸리는 영역을
   슬라이드에서도 표기한다. 과대·과소 주장 모두 금지한다. seed 수·pool·device를 밝힌다.
-- **I3. 내부 식별자 격리.** checkpoint sha, pool id, run-id, ledger 행 번호, device 태그, 내부
-  scoring 이름을 슬라이드 대면 텍스트와 그림에 굽지 않는다. provenance는 manifest와 `results.md`에
-  둔다. 이미지에 구워진 캡션도 같은 규약의 대상이라 위반 시 그림을 재생성한다.
+- **I3. 내부 식별자 격리.** checkpoint digest, pool id, run-id, ledger 행 번호, device 태그, 내부
+  scoring 이름을 슬라이드 대면 텍스트와 그림에 굽지 않는다. provenance는 manifest와 `ADOPTED.md`에
+  두며, digest는 `06_workflow` §6.1에 따라 추적되는 prose 문서 어디에도 쓰지 않는다. 이미지에 구워진
+  캡션도 같은 규약의 대상이라 위반 시 그림을 재생성한다.
 - **I4. 인용하는 이론 결과에는 증명이 있어야 한다.** 슬라이드가 인용하는 theorem·proposition·
   corollary는 `docs/tex/`의 이론 문서에 증명과 함께 존재해야 한다(§11 T2). 증명이 없으면 인용하지
   않는다.

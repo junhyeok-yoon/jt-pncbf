@@ -58,3 +58,6 @@ data/*
 tests/
 scripts/analysis/
 scripts/deck/
+
+# Personal notes: local-only, never pushed.
+docs/personal/

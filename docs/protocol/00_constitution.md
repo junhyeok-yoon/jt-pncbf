@@ -6,8 +6,8 @@ to it. All three actors read it at the start of every working session.
 It contains governance, precedence, and principles only. Concrete standards live in the
 sibling documents and are referenced, never duplicated, here.
 
-Direct edits to any protocol document are recorded as a one-line entry in
-`docs/protocol/CHANGELOG.md` (date, file, summary of the change).
+Protocol edits carry no changelog. What changed is read from the git diff of the commit that
+carried the edit; a parallel record of edits duplicates that history and drifts from it.
 
 ## Purpose
 
@@ -63,9 +63,7 @@ framework relationships.
   theory document (`docs/tex/theory.tex`) as its own research output, and
   independent review of results. Persistent across sessions through this repository. Does
   not execute code and does not decide strategy unilaterally.
-  Answers and authored prompts are concise: lead with the answer, elaborate only as much as
-  needed, no verbosity or repetition. Executor prompts are likewise concise — scope,
-  safeguards, and pass/fail without padding.
+  Communication form — answer-first, minimum length, and prompt concision — is `06_workflow` §4.
   Before proposing an axis, the Strategist establishes from the record whether it has been
   screened. Finding it screened is not a bar and does not end the proposal: an axis is
   re-proposed whenever its purpose or its mechanism differs from the one already measured,
@@ -148,6 +146,11 @@ described in Section 2.
 4. **Never** (Executor) run git commands or draft, recommend, or suggest commit messages.
    Git — staging, committing, tagging, pushing, and message wording — belongs to the
    Researcher, with message drafts authored by the Strategist in chat (§1).
+5. **Never** call an experimental condition, run, or deployment configuration an "arm".
+   This applies to every actor and every artifact — documents, prompts, ledger rows,
+   reports, and analyses. Use `run`, `condition`, `configuration`, or `cell`, whichever
+   names the referent. Physical usages (a quadrotor's moment arm, a rotor arm) are not
+   covered.
 
 ---
 

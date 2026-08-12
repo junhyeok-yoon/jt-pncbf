@@ -67,7 +67,7 @@ To separate "genuinely stuck" from "moved barely above the threshold", each epis
 
 Episodes with $\min_t \mathrm{disp}_t > 0.30$ m are not bucketed (free-moving). Per-bin counts and fractions are recorded on every eval. This is a pure diagnostic — it is not part of `cps` and does not affect outcome resolution.
 
-Reference on a boundary case: an episode that comes to rest just outside the goal-reach tolerance is resolved as `stuck` even though it is near-success (a "parked" trajectory rather than an obstacle-blocked one). A v2.4.0 study observed a policy-collapse mode dominated by this near-goal parking. When stuck is elevated, reading the stuck-displacement histogram together with the terminal goal-distance separates genuine obstacle-blocked stalls from near-goal parking; the reach tolerance vs parking interaction is noted here so it is considered when interpreting stuck rather than left implicit.
+An episode that comes to rest just outside the goal-reach tolerance is resolved as `stuck` even though it is near-success — a "parked" trajectory rather than an obstacle-blocked one, and a policy-collapse mode can consist almost entirely of it. When stuck is elevated, the stuck-displacement histogram read together with the terminal goal-distance separates obstacle-blocked stalls from near-goal parking.
 
 ---
 
@@ -138,14 +138,12 @@ The overlay of $u^{\text{nom}}$ is kept unless it makes a panel unreadable, in w
 
 **Files.** Final eval: `data/<run_id>/figures/trajectory_grid_A.png` and `trajectory_grid_B.png`. In-loop eval: `data/<run_id>/figures/inloop/step_<NNNNNN>_grid_{A,B}.png` (§7.1). PNG only.
 
-**No PDF.** PNG is the universal format for both the MkDocs site and external use.
+**Projections.** A 3-D system's trajectory panel is drawn as three orthogonal projections — xy, xz, yz —
+because a cylinder-avoiding path with altitude change reads correctly in no single plane. Infinite
+vertical cylinders appear as filled circles in xy and as vertical bands in xz and yz; start is a circle
+and goal a star, as in the planar format.
 
-**PROTOCOL FOLLOW-UP (v2.7.2, quadrotor_3d).** For 3-D systems the single-plane trajectory panel is
-insufficient — a cylinder-avoiding path with altitude change reads correctly only across **three orthogonal
-projections (xy / xz / yz)**. v2.7.2 M6 produced these ad hoc via `scripts/analysis/quadrotor_3d_xyz_plots.py`
-(infinite vertical cylinders = filled circles in xy, vertical bands in xz/yz; start = circle, goal = star). 3-D systems are drawn as three orthogonal projections: xy, xz, yz.
-The fixed-format 3-D trajectory figure (folding these three projections into the §3 grid, or a dedicated
-3-panel figure) is to be specified here at the v2.7.2 close.
+**No PDF.** PNG is the universal format for both the MkDocs site and external use.
 
 ---
 
@@ -220,13 +218,13 @@ final eval, alongside the trajectory+control grids (§3). PNG only.
 A stress test for the filter's reactivity to a scene change mid-episode. An obstacle is inserted on the filtered run only.
 
 - **`t_insert`** — step at which the new obstacle becomes active. Default 50, in `base_config.eval.insertion.t_insert`.
-- **Position** — midpoint of the trajectory segment between $t = 0$ and $t = t_{\text{insert}}$ on the filtered run (so it is plausibly in the path).
+- **Position** — midpoint of the trajectory segment between $t = 0$ and $t = t_{\text{insert}}$ on the filtered run (so it is plausibly in the path). The location is a function of that trajectory and no random draw enters it, so the inserted scene depends on the policy under test. An insertion row is comparable only to another row scored on the same policy's own inserted scenes, and a baseline variant is recomputed per policy rather than carried across them.
 - **Radius** — $r = 0.45$ (`base_config.eval.insertion.radius`).
-- **Three variants:**
-  1. `lqr_baseline` — the same insertion applied to the LQR-only path (no filter); records how a non-CBF baseline reacts.
-  2. `frozen_obstacle` — the inserted obstacle's geometric properties are known to the filter (it sees the new $h$), but the observation passed to the value network still reflects the original obstacle set.
-  3. `live_obstacle` — the observation is also updated so the value network sees the new obstacle.
-- **Same pool.** All three variants run on the full pool (§6). The seed used to pick the insertion location is `eval.full.seed + insertion.seed_offset` (default offset 77), held constant.
+- **Three variants, of which one is a rollout and two are re-scorings:**
+  1. `lqr_baseline` — the episode's stored LQR states are re-scored against the inserted scene. No rollout; the LQR path never sees the obstacle. Its infeasibility is zero by construction, the path being unfiltered.
+  2. `frozen_obstacle` — the episode's already-computed filtered trajectory is re-scored against the inserted scene. No rollout; the controller never sees the obstacle.
+  3. `live_obstacle` — the controller is stepped with the obstacle present. This is the only closed-loop measurement of the three, and `live_obstacle` minus `frozen_obstacle` is the only difference among them that measures reactivity.
+- **Same pool.** All three variants run on the full pool (§6).
 
 Each variant appends one row to `eval_metrics.csv` and per-episode rows to `eval_episodes.csv`, with `mode` $\in$ {`final_insertion_lqr`, `final_insertion_frozen`, `final_insertion_live`}.
 
@@ -260,6 +258,13 @@ This option exists so that a clearly-marked single-seed result is not categorica
 The aggregated multi-seed table lives in `data/secured_data/<version>/aggregate/multi_seed_metrics.json` and is summarized in `multi_seed_report.md`.
 
 **Seed economy.** New configurations screen on a single seed (42). Escalation to the
+canonical multi-seed set `{42, 99, 12345}` occurs only for verdict-grade results — a
+CI-separated improvement claim, or a registered multi-seed commitment — and the seed count
+is decided at registration time, never after seeing the data. Eval-only measurements
+costing minutes run all three seeds. Ad-hoc seed sets are prohibited. Multi-seed
+escalation is initiated by the Researcher alone: unless the Researcher has directed it
+first, neither the Strategist nor the Executor proposes, suggests, or raises it.
+
 **A gating metric is qualified before it gates.** Before an in-loop or deployed reading is
 registered as the falsifier for an axis, three properties are confirmed with existing data,
 not assumed: (i) the metric responds to the axis — if the axis targets one collision class,
@@ -273,11 +278,6 @@ registered, recorded as uninformative with the failing check named, and its info
 form is registered before the next data. Qualification is a check against measurements in
 hand — it is not a license to delay registration until results look favourable, and it
 never re-fits a threshold after data.
-
-canonical multi-seed set `{42, 99, 12345}` occurs only for verdict-grade results — a
-CI-separated improvement claim, or a registered multi-seed commitment — and the seed count
-is decided at registration time, never after seeing the data. Eval-only measurements
-costing minutes run all three seeds. Ad-hoc seed sets are prohibited.
 
 ---
 
@@ -335,6 +335,7 @@ config, **`eval_batch_size`**), and every gate CSV, build-log and results table 
 batch size it was scored under. Per-episode joins across artifacts are valid only within
 one cell. The measured cross-batch-size spread at a fixed checkpoint is 0.0083 in `cps`;
 **no `cps` claim below 0.0083 is admissible regardless of its confidence interval.**
+A verdict-grade evaluation therefore pins its `eval_batch_size` and records it beside the score.
 
 **Reproducibility is a lineage property.** Bit-reproduction of an n≥2000 GPU eval is demanded only within a lineage (same first-eval order, same algorithm selection). Across processes or lineages, single values carry a ±0.005 equivalence band; a difference inside the band is not an effect, and claims below it require a paired or same-process design. Every reproduction gate names its target's lineage; per-episode claims are lineage-dependent and stated as such.
 
@@ -372,11 +373,7 @@ data/<run_id>/
 
 Checkpoint contents follow `03_train` §5 (step, pi_state, v_s_state, v_s_target_state, args).
 
-**Run-id formats.**
-
-- **Training runs:** `vX.Y.Z__YYYYMMDD-HHMMSS__seed<N>`. This is the canonical form.
-- **Eval-only diagnostic runs** (a run that does no training, only re-evaluates an existing checkpoint under an ablation): may use a descriptive suffix
-  `vX.Y.Z__YYYYMMDD-HHMMSS__<descriptive>_seed<N>`, where `<descriptive>` is a short snake_case tag (e.g. `hardnet_oc`, `cbfqp_oc`, `slowmpc`) that identifies the ablation. The descriptive form must never collide with a training run id; a training run is always identified by the canonical form.
+**Run-id formats** are defined once, in `05_code` §3; this document uses them and does not restate them.
 
 ### 7.2 CSV schemas
 
@@ -400,12 +397,7 @@ abs_action_mean, abs_action_max, satfrac_a_phi
 
 The anchor columns `L_A`, `L_C` are written only when the optional anchor mechanism
 (`03_train` §4.3) is active (nonzero $\lambda_A$ or $\lambda_C$); otherwise they are
-omitted. Columns that earlier drafts named differently — `n_sched`, `gamma_disc`,
-`target_rhs`, `proj_mag_ema`, `sigma_pin_counter` — have been replaced by the columns
-above to match the active trainer; their semantics are no longer part of the schema.
-Run artifacts written before the v2.1.0 column rename retain the old names (e.g. the
-v2.0.1 SOTA artifact still carries `target_rhs`); downstream analysis tooling should
-accept both as an alias of `target_rhs_active` when reading historical runs.
+omitted.
 
 **`eval_metrics.csv`** — one row per evaluation. Columns:
 
@@ -474,7 +466,7 @@ The user runs `tensorboard --logdir data/` (which surfaces every active `<run_id
 
 ### 7.5 Secured snapshot
 
-When a version is closed (`06_workflow` §2.5), the chosen runs are copied into `data/secured_data/<version>/seed<N>/`. The secured snapshot excludes TensorBoard event files (large, redundant with CSVs) and the per-step training `metrics.csv` (per-step telemetry is low value per byte to retain); the summary `eval_metrics.csv` is kept:
+When a version is closed (`06_workflow` §2.6), the chosen runs are copied into `data/secured_data/<version>/seed<N>/`. The secured snapshot excludes TensorBoard event files (large, redundant with CSVs) and the per-step training `metrics.csv` (per-step telemetry is low value per byte to retain); the summary `eval_metrics.csv` is kept:
 
 ```text
 data/secured_data/<version>/seed<N>/
@@ -483,10 +475,17 @@ data/secured_data/<version>/seed<N>/
 ├── eval_metrics.csv
 ├── eval_episodes.csv
 ├── pool_manifest.json
+├── status.json
 ├── checkpoints/{best.pt, final.pt}
 ├── figures/{trajectory_grid_A.png, trajectory_grid_B.png, cbf_contour.png}
-└── report.md
+├── report.md
+└── ADOPTED.md
 ```
+
+The bulky per-step `metrics.csv` is excluded; the full training curve stays in the gitignored original
+run directory. `ADOPTED.md` is the identity record and the only file in the set that carries digests
+(`06_workflow` §6.1). This file set is the definition; `06_workflow` §6.3 governs when a snapshot is
+created and does not restate its contents.
 
 Per-version aggregate lives at `data/secured_data/<version>/aggregate/` (only when multi-seed aggregation is performed):
 
@@ -498,7 +497,7 @@ data/secured_data/<version>/aggregate/
 
 This directory **is committed to git** so cloning the repository gives anyone the exact numbers that anchor each version.
 
-A version may additionally carry an optional `data/secured_data/<version>/experiments/<name>/` sub-tree — a secured diagnostic kept for the record that is not the version's SOTA snapshot. Its layout, required `README.md`, and Researcher-gated promotion are defined in `06_workflow` §6.3; it is never SOTA-bolded in the ledger (§2.4).
+A version may additionally carry an optional `data/secured_data/<version>/experiments/<name>/` sub-tree — a secured diagnostic kept for the record that is not the version's SOTA snapshot. Its layout, required `README.md`, and Researcher-gated promotion are defined in `06_workflow` §6.3; it is never SOTA-bolded in the ledger (`06_workflow` §2.5).
 
 ---
 

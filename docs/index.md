@@ -9,48 +9,66 @@ the Strategist, and the Executor.
 ## Current state (dashboard)
 
 !!! note "STATUS — keep this section short and always current"
-    - **v2.8.4 CLOSED (2026-08-10), tag `v2.8.4` = commit `30afc59c`.** Diagnostic version, single
-      seed (42), no CI-separated improvement: two registered label-side axes (ceiling `C = 1.3`,
-      gamma `horizon_final` 33), both |Δcps| below the 0.0083 admissibility floor. The gamma
-      falsifier is scored and does **not** fire. Verdict, whole record, and what the tag holds and
-      omits: `docs/versions/v2.8.4_results.md` (§0.1). **Active version: v2.8.5 — OPEN**,
-      `docs/versions/v2.8.5/changes.md` installed.
-    - **In flight: four v2.8.5 runs, seed 42, 50000 steps, concurrent on one GPU.** Arms A / B / C
-      are the exponential hazard at `ell` 0.175 / 0.25 / 0.35 (PIDs 1335693 / 1336567 / 1337512);
-      CLIP50 is the budget-matched clip control the v2.8.4 comparators lacked, its PID recorded in
-      `docs/versions/v2.8.5/build_log.md` at launch. Parity and sanity gates green before launch.
-      Matched-step tables go to the Researcher; nothing is registered, ranked or bolded from them.
-    - **Pool of record: `fullcb`** — `eval_fullcb_quadrotor-3d-d2r_n2000_seed823456`, sha256
-      `3682a4e3…`, unchanged. `scripts/check_ledger.py` exit 0, 261 rows, 3 bolds, 0 violations.
+    - **v2.8.5 close PREPARED — the version is NOT yet declared closed.** Active version:
+      **v2.8.5**. Record: `docs/versions/v2.8.5_results.md`. **Every arm of this version is a single
+      run at seed 42; no result below is a multi-seed aggregate.**
+    - **Seven conditions, and where each stopped** (all seed 42, all under `data/runs/v2.8.5/`; the
+      terminal is each run's own `status.json`, the `best.pt` step its `best_step`):
+      `ell` 0.10 **done @50000**, best 43500 · `ell` 0.125 **done @50000**, best 50000 ·
+      `ell` 0.175 **DEAD @37199 (CUDA OOM)**, best 28500, **no `final.pt` and no `report.md`** ·
+      `ell` 0.25 **done @50000**, best 40500 · `ell` 0.35 **done @50000**, best 42000 ·
+      CLIP50 (budget-matched clip control) **done @50000**, best 42000 ·
+      COMPRESS500 **SIGTERM @4779 = round 477.9**, best 4350, 22 rounds of its budget unrun,
+      **no `final.pt` and no `report.md`**. The two truncated runs' maxima are maxima of truncated
+      series and are not comparable to one taken over 500 rounds.
+    - **The axis returned no separation except an upper-side penalty.** On the registered cell the
+      ten pairs among `ell` 0.10 / 0.125 / 0.175 / 0.25 and the clip control separate at **zero**
+      rounds ≥ 300 against the 0.0083 admissibility floor; only `ell = 0.35` separates, and it is
+      worse in every pair. The two frontier conditions (`ell` 0.125, 0.10) both completed 500 rounds
+      and their placeholders are **closed** — the axis is **not** bracketed from below.
+    - **The compressed-update condition is registered to v2.8.5, not delegated to v2.9.0** — the
+      earlier delegation is withdrawn. Its verdict is **NOT RESOLVED**: it does not separate from its
+      clip control at any round ≥ 300, and the matched terminal comparison the axis was designed
+      around does not exist because it was signalled at round 477.9.
+    - **Pool of record: `fullcb`** — `eval_fullcb_quadrotor-3d-d2r_n2000_seed823456`, n 2000,
+      unchanged; its digest lives in the pool manifest, not here. `scripts/check_ledger.py` exit 0,
+      **277 rows, 3 bolds, 0 violations**. **Sixteen v2.8.5 rows registered at L281–L296**: seven
+      registered-cell `best.pt` rows (one per condition), the bold `ell` 0.125 @45000 row, five
+      runs' own `final` rows on pool `full` seed 23456, two `B1` budget rows at step 30000, and the
+      superseded `ell` 0.175 @33000 row, which stays registered but **not bold**.
     - **Bold state:** double_integrator v2.3.0 (flagged — `cps_v2` reads `-`, and the row names no
-      checkpoint); quadrotor_planar v2.7.1 0.9036; **quadrotor_3d v2.8.4 0.8308** (ledger L271,
-      secured and committed). **Basis question open:** two box_klamp K0 rows score higher on other
-      pools (L268 0.8557 `inloopv2`, L267 0.8424 `fullscr41`) on the v2.8.2 CTRL checkpoint, which
-      is now also secured and committed — so either basis is backed.
-    - **Presence check (§6.3), every system:** quadrotor_3d PASS; quadrotor_planar PARTIAL — the
-      checkpoint resolves to `v2.7.0/seed42_iter5` by exact digest, but no
-      `data/secured_data/v2.7.1/` records the cell that produced its headline; double_integrator
-      resolves by version+seed inference only.
-    - **What the `v2.8.4` tag omits**, recorded in results §0.1 and repaired forward on the same
-      branch rather than by moving the tag: `src/frameworks/oc_pncbf/value_target.py` (one of the
-      ceiling axis's four source files, present on disk but unstaged), this dashboard, and
-      `tests/test_dual_scoring_wiring.py` (which repairs the version's one known-red test; the
-      harness reads 244 passed / 2 skipped / 0 failed after it). The tag also carries `v2.8.5` in
-      `src/_version.py` and four default-off v2.8.5 source files, whose flag-off bit-identity
-      against the stored v2.8.4 artifact is proved on 37 fields (results §1.6).
+      checkpoint); quadrotor_planar v2.7.1 0.9036; **quadrotor_3d v2.8.5 `ell` 0.125 @45000 =
+      0.8701** [0.8472, 0.8919] (ledger **L294**, adopted checkpoint `step_045000.pt`, secured at
+      `data/secured_data/v2.8.5/seed42/`, digest pinned in that snapshot's `ADOPTED.md`). **The
+      adopted checkpoint is a FIXED-STEP checkpoint, not that run's `best.pt`**, which is at step
+      50000 and scores 0.8614 on the same cell. This is a **basis** classification under
+      `06_workflow` §2.5 — single seed 42, and its CI overlaps `ell` 0.25, `ell` 0.10 and CLIP50 at
+      every round — and is **not** a `04_eval` §5 CI-separated beat. Both the v2.8.4 ARM row (L271)
+      and the v2.8.5 `ell` 0.175 row (L288) are un-bolded and carry standing supersession lines.
+    - **Presence check (§6.3), every system:** 3 of 3 bold rows PRESENT **by digest**, 5 of 5
+      checkpoint entries (the double_integrator bold is a 3-seed aggregate), each digest matched
+      against the snapshot's own `ADOPTED.md`. `unicycle` carries 5 rows and no bold row, so §6.3 is
+      vacuous for it. **"Committed" is unverified here** — staging is the Researcher's action.
     - Baselines: `data/baselines/{ppo, backup_cbf}/` and `data/secured_data/baselines/` populated.
       backup_cbf has **no checkpoint of its own** — two filter cells over the CTRL checkpoint; every
       citation carries *"hand-designed policy + online rollout certificate (implicit/backup CBF);
       NOT an analytic closed-form CBF."* **PPO ledger placement (PF-3) still awaits the Researcher.**
-    - Open, carried into v2.8.5: **`cps_v2` applicability on `quadrotor_3d`** — an axis, not
-      bookkeeping, since resolving it re-scores every registered row; whether `scripts/verify.sh`
-      was green after v2.8.5's `src/` edits and **before** its arms launched; the two literal
-      `max=1.0` clamps inside `rpcbf_target` against `pncbf_target`'s resolved ceiling; sigma C2
-      switching share (no such column exists in the evaluator); 1915/45/40; PF-2, PF-4, PF-5; the
-      training-time empty rate, unmeasurable while `collection.py:204` returns a hard-coded 0.0;
-      `eval_batch_size` still not a column of `eval_metrics.csv`; the two secured v2.7.0
-      `report.md` sentences citing that hard-coded zero; `docs/protocol.zip` tracked alongside the
-      authoritative `docs/protocol/`.
+    - **Open items.** **C0** — `cps_v2` applicability on `quadrotor_3d`, an axis and not
+      bookkeeping, since resolving it re-scores every registered row; it must not be silently
+      dropped. **PF-5** — `train.py:693` gates the zero-value step on the safety-channel type rather
+      than on `k_v`; tagged, not applied. **C21** — the two secured v2.7.0 `report.md` sentences
+      citing `collection.py:204`'s hard-coded 0.0, disposition undecided, and the training-time
+      empty rate unmeasurable while it stands. **C22** — the two literal `max=1.0` clamps inside
+      `rpcbf_target`, the box_klamp basis question, and `docs/protocol.zip` alongside the
+      authoritative `docs/protocol/`. **C23** — the automatic ledger-registration rule did not
+      fire once across the version; all sixteen rows above were registered at the close, not as
+      part of completing each eval. **C24** — the
+      shell `grep` shim honours `.gitignore` and silently omits `tests/`, `scripts/analysis/` and
+      `scripts/deck/`, so any earlier repo-wide sweep should be re-run and every count must name the
+      binary that produced it. Also open: `verify.sh`'s state before launch (C6, unestablishable
+      from disk); `eval_batch_size` still neither a config key nor a column of `eval_metrics.csv`;
+      the 31 unselectored `signed_h` sites, none repaired. **v2.8.5's own protocol follow-ups are
+      tagged PF-6 … PF-16** in `docs/versions/v2.8.5/build_log.md` §11; nine of the eleven are open.
 
 
 ## Map

@@ -123,4 +123,3 @@ eval:
   insertion:
     t_insert: 50
     radius: 0.45
-    seed_offset: 77

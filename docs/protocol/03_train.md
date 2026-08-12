@@ -153,11 +153,10 @@ data distribution and the policy involvement differ between the frameworks.
 
 The regression target form is selected per experiment by
 `exp_config.value_target.type`, one of `pncbf` (one-step discounted avoid) or `rpcbf`
-(multi-step softmax). Reference on current wiring: in the JT trainer the active target is
-`pncbf`; the `rpcbf` form and the dispatch helper are defined but not wired into the JT
-value loss, so selecting `rpcbf` does not currently change the JT target. Wiring the
-dispatch (or narrowing this section to the active `pncbf` form) is a pending
-documentation/plumbing decision; treat any change to the JT target form as its own axis.
+(multi-step softmax). The JT trainer's active target is `pncbf`. The `rpcbf` form and the
+dispatch helper are defined but are not wired into the JT value loss, so selecting `rpcbf`
+does not change the JT target; a change to the JT target form is its own axis and carries
+the wiring with it.
 
 #### 2.1.1 PNCBF — one-step discounted avoid
 
@@ -487,12 +486,15 @@ The policy $\pi_\theta$ is trained by BPTT of a task return through the HardNet 
 and the RK4 dynamics, with $V_S$ **detached** so no gradient reaches its parameters
 (`02_control` §7; gradient-leak threshold $10^{-9}$).
 
-**Detach mechanism (required).** Detaching the scalar value of $h$ is insufficient —
+#### 4.4.1 Detach mechanism (required)
+ Detaching the scalar value of $h$ is insufficient —
 HardNet still needs $\partial h / \partial x$ to project. The correct mechanism is to set
 `requires_grad_(False)` on all $V_S$ parameters for the duration of the policy backward
 pass (or an equivalent frozen-parameter context), then restore it. This lets $\partial h /
 \partial x$ flow through the projection while blocking any gradient from reaching $V_S$'s
 weights. The gradient-leak halt (§4.7) verifies this held.
+
+#### 4.4.2 Rollout and task cost
 
 Over horizon $T = \texttt{training.jt.bptt\_T}$, the initial states $x_0$ are sampled
 uniformly from the transition view of $\mathcal{D}_\pi$; goals and obstacles are taken
@@ -519,15 +521,12 @@ plain cost — DI/Unicycle parity):
   $s_k = \mathrm{relu}(-v^\top n_k)$ the inward closure speed toward obstacle $k$ and $d_k$ its
   **surface** distance, the per-obstacle deficit is
   $m_k \cdot \mathrm{relu}(s_k \tau_b - d_k)$, where $m_k$ is the **active-obstacle mask**
-  (obstacles present and enabled in the scene; padded or inactive slots carry $m_k = 0$). The
-  mask is part of the term's definition, not an implementation detail: an unmasked sum over
-  padded slots contributes phantom deficit several times the real signal. The deficit
-  $s_k \tau_b - d_k$ is the distance the current inward speed covers in $\tau_b$ beyond what
-  remains — a soft stopping-distance constraint, exactly $0$ when receding or outside the
-  envelope, engaging **earlier the faster the approach** (a fixed-distance gate cannot do
-  this). It shapes the demand side of filter feasibility (the required correction grows with
-  the approach rate) so the policy keeps the filter feasible rather than entering states no
-  admissible action can save.
+  (padded or inactive slots carry $m_k = 0$); the mask is part of the term's definition, since
+  an unmasked sum over padded slots contributes phantom deficit. The deficit is a soft
+  stopping-distance constraint — exactly $0$ when receding or outside the envelope, engaging
+  earlier the faster the approach — and it shapes the demand side of filter feasibility.
+
+#### 4.4.3 Return and terminal
 
 The discounted return is
 
@@ -544,10 +543,9 @@ distance to the goal beyond the BPTT window, which the windowed sum alone cannot
 the analytic goal distance (not the learned $V_S$, which is a hazard value), and is
 differentiable through $x_T$. Setting $w_{\text{term}} = 0$ recovers the plain windowed return;
 it is $0$ by default and used only where the fixed window $T$ is short relative to the time to
-reach the goal. The velocity part $w_{\text{term},v}$ is a **sparse** settling signal (once per
-window, position-blind about where it fires); its default is $0$ — the dense goal-gated settling
-term above supersedes it, and a per-window $\|v_T\|$ penalty at mostly mid-field window ends
-acts as an unintended global damper. Per-system standard: quadrotor
+reach the goal. The velocity part $w_{\text{term},v}$ is a **sparse** settling signal, fired once per window and
+blind to where; its default is $0$, the dense goal-gated term above superseding it.
+Per-system standard: quadrotor
 $w_s = 1.0$, $\rho_s = 0.30$, $w_a = 30$, $\tau_b = 0.6$, $w_{\text{term}} = 30$,
 $w_{\text{term},v} = 0$; DI/Unicycle: all four situational keys $0$.
 
@@ -555,12 +553,11 @@ The rollout integrates the cost over the full fixed horizon $T$ and does not ter
 mid-window when a trajectory reaches the goal, penetrates an obstacle, or leaves the arena;
 $\text{wrap\_state}$ bounds velocity but not position. It applies the single end-of-horizon
 terminal above but **no in-window terminal or termination**.
-Reference (known limitation, not currently handled): a v2.4.0 measurement found a
-substantial fraction of the discounted return accruing after the first such
-physically-terminal event; horizon-lengthening experiments in that version were also found
-to interact poorly with this, which motivates the reserved cps-floor / early-stop halts
-(§4.7-3..5) and is noted here so any future in-window termination or terminal-value change
-is treated as its own axis.
+The window therefore carries return accrued after a physically-terminal event, and that
+interacts with horizon length; the reserved cps-floor and early-stop halts (§4.7-3..5) exist
+against it. A change to in-window termination or to the terminal value is its own axis.
+
+#### 4.4.4 Region gating and the policy loss
 
 The objective is **region-wise**, gated by the current $V_S$ via soft indicators (with
 $V_S$ detached for the gates):
@@ -586,7 +583,9 @@ $$
 
 with $w_{\text{out}} = \texttt{loss.policy.w\_outside}$.
 
-**Regularizers.** All four are evaluated on the *pre-projection* policy outputs along the
+#### 4.4.5 Regularizers and optimizer
+
+All four regularizers are evaluated on the *pre-projection* policy outputs along the
 BPTT rollout. Let $a^{\text{nom}}_t = u^{\text{nom}}_t = \pi_\theta(\text{obs}_t)$ at step
 $t$, and let $z_t$ denote the policy's pre-activation output (pre-tanh or pre-softsign).
 
@@ -621,7 +620,7 @@ active iff `loss.policy.vs_gated_pretanh = true`; otherwise $g_{\text{vs}} \equi
 Total: $\mathcal{L}_{\text{reg}} = \mathcal{L}_{\text{a}} + \mathcal{L}_{\text{s}}
 + \mathcal{L}_{\text{sat}} + \mathcal{L}_{\text{pre}}$.
 
-**Optimizer.** AdamW with `optim.lr_pi`, same `weight_decay` and `grad_clip` as the value
+Optimizer: AdamW with `optim.lr_pi`, same `weight_decay` and `grad_clip` as the value
 optimizer (§2.2).
 
 ### 4.5 $V_S$ warmup and schedule clock
@@ -930,11 +929,10 @@ hypothesis and a clean ablation against the baseline:
   pass, so the policy gradient reaches $\pi_\theta$ only through the $u^{\text{nom}}$
   pathway and the state chain, not through the coefficients' state dependence. Forward
   numerics are unchanged (detach alters no values); flag-off is bit-identical to the
-  standard path. Reference: this was introduced because differentiating through those
-  coefficients (the $h$-Hessian, the $\alpha$ jump at $h=0$, and the box-argmin geometry)
-  at filter-active steps can compound multiplicatively over a long BPTT window; a v2.4.0
-  study measured per-sample policy-gradient tails growing sharply with horizon and this
-  flag removing that tail while leaving the median/p90 gradient unchanged. Default **off** for
+  standard path. Differentiating through those coefficients — the $h$-Hessian, the $\alpha$
+  jump at $h=0$, the box-argmin geometry — compounds multiplicatively over a long BPTT window
+  and produces a heavy per-sample policy-gradient tail; the flag removes that tail and leaves
+  the bulk of the gradient distribution unchanged. Default **off** for
   the Double Integrator and Unicycle; **on** for the planar quadrotor, where the long-horizon
   coefficient-gradient tail otherwise dominates the BPTT update and clips the task-credit away
   (forward is byte-identical either way, so this changes only the backward path).

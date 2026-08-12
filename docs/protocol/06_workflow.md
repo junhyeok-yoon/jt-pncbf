@@ -24,6 +24,8 @@ Implements code, runs training, runs evaluation, handles tactical decisions duri
 
 The Executor's deliverables are: code commits, run outputs (`data/<run_id>/`), per-version build-logs (`docs/versions/vX.Y.Z/<task>.md` — design decisions, conflicts and their resolution, factual task/training results; facts not verdicts), and concise status updates in chat.
 
+**What is launched is managed to its end.** The Executor that launches a training or diagnostic run is that run's owner and does not leave it unattended. The owner watches the run on a bounded polling loop over the mtimes of its `status.json` and `eval_metrics.csv` and acts the moment either moves: a new eval row is reported as it lands, and a halt, a death, or a stall is disk-verified and reported the moment it is seen. A stall is never judged from one mtime alone — the step counter freezes during in-loop eval, so the process's CPU time and the step counter are read together to separate slow from dead. If the owner's context will run out before the run ends, writing a handoff into the run's directory and requesting a successor takes precedence over silence: an instrumented run that nobody is watching is worse than a clean non-start.
+
 **Subagents.** A subagent holds only the authority of the prompt that delegates to it, never more. Its scope is additive: creating new files, run directories, and analyses, and reading anything. Modifying or removing what another run or record depends on is outside it — the test is whether the prior state can be reconstructed exactly afterwards. Launching training, registering a condition, lifting a guard, and restarting a run stay with the Executor. A subagent's output enters a report only after the Executor confirms it on disk. A launch must be stoppable by a single `kill` of a PID recorded in the build-log at launch time; under that condition a session-detached launch form is permitted. A launch whose stop procedure is not recorded is not permitted in any form.
 
 ### 1.4 Session boundary
@@ -48,7 +50,7 @@ Every increment of `vX.Y.Z` follows the same six steps. The Researcher initiates
 The Researcher decides to start a new version (`vX.Y.Z`). The Strategist drafts `docs/versions/vX.Y.Z/changes.md` (creating the version folder) with six headings:
 
 1. **Motivation.** The specific problem(s) in the previous version that motivate this change. Cite data: which numbers, from which run, suggest the problem.
-2. **Hypothesis.** What this change is expected to do, and what observable in `eval_metrics.csv` or TensorBoard should move and in which direction.
+2. **Hypothesis.** What this change is expected to do, and what observable in `eval_metrics.csv` or TensorBoard should move and in which direction. A run does not launch while its hypothesis names no column and no direction: the observable and its sign are a precondition of the run, not a field completed after the data exists.
 3. **One-axis check.** Per the `00_constitution` §4 recommendation: is this a single new mechanism? If multiple substantive axes change, flag explicitly and request Researcher re-confirmation before proceeding.
 4. **Config delta.** Exactly which keys in `exp_config.yaml` (and, rarely, `base_config.yaml`) change. A change to `base_config.yaml` requires Researcher re-confirmation.
 5. **Eval plan.** Number of seeds (≥ 3, recommend ≥ 5). Comparison target: the previous secured version. Comparison rule: non-overlapping 95% CIs on pooled `cps` (`04_eval` §5).
@@ -121,6 +123,8 @@ CIs instead; the single-seed status is stated explicitly so it is not mistaken f
 cross-seed result, and multi-seed remains the recommended target (`00_constitution`,
 `04_eval` §5).
 
+### 2.5 Ledger
+
 **Ledger registration (automatic after every eval).** Whenever a run produces a usable
 evaluation — a full-pool final, an in-loop best, or an eval-only re-evaluation of an
 existing checkpoint under a changed deploy axis — the Executor appends one row to
@@ -135,12 +139,21 @@ scope (e.g. CBF-QP slack rows), `-` = artifact unrecoverable),
 filled from the run's real eval artifacts (never approximated; blank any field the eval did
 not record). `eval_source` states provenance: `full_n2000`, `inloop_n500@<step>`, or
 `eval_only(<note>)` for a re-evaluation that is not a new training run (e.g. a filter swap on
-an adopted checkpoint). When one checkpoint is reported under more than one deployment arm,
-each arm gets its own row and the arm is carried in `eval_source` (e.g. `full_n2000 (arm A)`);
-an arm that did not exist for a given run is recorded `n/a`, which is not a regression.
+an adopted checkpoint). When one checkpoint is reported under more than one deployment configuration,
+each configuration gets its own row and the configuration is carried in `eval_source`
+(e.g. `full_n2000 (config A)`); a configuration that did not exist for a given run is
+recorded `n/a`, which is not a regression.
 `parent` records the source checkpoint for an eval-only or
 warm-started row. The ledger is a docs file the Executor may edit; protocol files are never
 edited by the Executor.
+
+**The row is the eval task's termination condition.** An evaluation is not complete, and is
+not reported as complete, until its row exists on disk; a completion report states the row's
+line number, so completion is evidenced by the artifact rather than asserted (§8). A
+training run is likewise not closed out — by completion, by halt, or by external interrupt —
+until every usable evaluation it produced carries a row. Registration is never deferred to
+the version close, and a close that finds an unregistered evaluation records the omission
+against the eval task that produced it rather than absorbing it as close work.
 
 **Reproduction is the gate for work standing on a registered row.** A recomputation, a
 re-measurement, or an instrumented replay that reports on a row already in the ledger takes
@@ -153,7 +166,7 @@ two conventions never enter one comparison. A row states which convention produc
 
 **Diagnostics take no row.** A diagnosis, an audit, a capture, or an offline recomputation
 scores no checkpoint on a pool and therefore has no ledger row. Its permanent record is the
-version's `results.md` (§2.5), not an entry with blank outcome columns.
+version's `results.md` (§2.6), not an entry with blank outcome columns.
 
 **A run trained under a defective configuration is not ledger material.** When a model was
 trained with a plant or observation configuration since found to be wrong — a missing state
@@ -194,7 +207,7 @@ full-pool final on 500 is not. Ranking is on `cps_v2`, the `04_eval` §1 current
 whose `cps_v2` reads `-` is not rankable and is flagged for Researcher classification rather than
 ranked on the legacy `cps` column. A standing bold row that predates the current definition is
 flagged, not un-bolded, until it is re-scored. Rows from a **different deployment or training
-class** than the standing comparison basis — e.g. training-free analytic-barrier arms, or
+class** than the standing comparison basis — e.g. training-free analytic-barrier runs, or
 evaluations at non-default deploy rates ($dt_{\text{ctrl}}$, $dt_{V_{\mathcal M}}$) — are
 likewise never SOTA-bolded on `cps` alone; the
 Executor flags such rows for Researcher classification instead. When a new full-pool result
@@ -245,7 +258,7 @@ distribution, the comparator is re-measured under the new conditions rather than
 prior report: two numbers that were not produced under the same predicates and deploy settings do
 not belong in one column, whatever their names.
 
-### 2.5 Close
+### 2.6 Close
 
 The Researcher authors the results document `docs/versions/v<X>_results.md` (at the `docs/versions/` main level, alongside `v2.0.1_results.md` etc.; the Strategist may draft) — the document that renders the version verdict. Unlike the Executor's build-logs (`docs/versions/vX.Y.Z/<task>.md`), the results document interprets. Both live under the gitignored `docs/versions/` as the local SSOT. It covers at least:
 
@@ -262,7 +275,7 @@ part of the version that survives in the repository, and a reader holding it alo
 to say what was done and what was learned. A pointer to a build-log does not stand in for its
 content.
 
-The Executor copies the chosen final run(s) from `data/runs/vX.Y.Z/` into the secured layout (`04_eval` §7.5), excluding the bulky per-step `metrics.csv`, and writes the `ADOPTED.md` identity record with pinned SHA-256 hashes. The originals are not moved.
+The Executor copies the chosen final run(s) from `data/runs/vX.Y.Z/` into the secured layout (`04_eval` §7.5), excluding the bulky per-step `metrics.csv`, and writes the `ADOPTED.md` identity record with pinned digests — the only place they appear (§6.1). The originals are not moved.
 
 **Close checklist (run at every version close).**
 
@@ -282,7 +295,7 @@ The Executor copies the chosen final run(s) from `data/runs/vX.Y.Z/` into the se
 4. Confirmed changes reflected in `docs/protocol/`; all `PROTOCOL FOLLOW-UP` items from
    build-logs resolved.
 5. Close preparation complete (items 1-4 done and reported). The Researcher then performs
-   `git add` / `commit` / `push` directly (§2.6); the Executor does NOT run git.
+   `git add` / `commit` / `push` directly (§2.7); the Executor does NOT run git.
 
 **Close trigger — the Strategist close sequence (automated on "close").** When the Researcher
 directs a close (says "close" or equivalent), the Strategist runs the following STRICTLY IN
@@ -299,15 +312,16 @@ a paused step suspends only its dependents, not the other steps.
    rewritten, and existing content is never overwritten. Write exception (a) is therefore
    performed only when `v<X>_results.md` is absent or empty. The
    report must cover: headline metrics recomputed from artifacts with CIs; provenance (run
-   dirs, checkpoint SHA-256 prefixes); gate/test outcomes; ledger rows verbatim with bold
-   state; version strings; git status; open `PROTOCOL FOLLOW-UP` items; and an explicit
-   discrepancy list. No results content is drafted before this report exists.
+   dirs, checkpoint identities by path); gate/test outcomes; ledger rows verbatim with bold
+   state; version strings; open `PROTOCOL FOLLOW-UP` items; and an explicit discrepancy
+   list. The fact-gather neither collects nor requests anything about git. No results
+   content is drafted before this report exists.
 2. **`results.md`** (Strategist authors). Drafted EXCLUSIVELY from the step-1 report — every
    number beside its artifact path; the four parts above; the seed basis stated explicitly
    (single-seed vs pooled). [PAUSE] only if a multi-seed escalation decision is open.
 3. **Close execute** (Strategist authors, Executor runs). Fills the placeholder with the
    final results text verbatim, then checklist items 2–3: ledger row(s); no run is moved
-   (§2.5 item 3); [PAUSE] secured snapshot(s) + `ADOPTED.md` (the promotion scope is
+   (§2.6 item 3); [PAUSE] secured snapshot(s) + `ADOPTED.md` (the promotion scope is
    an explicit Researcher approval carried in the transmittal, never assumed);
    `docs/index.md` dashboard update; tagging of any untagged `PROTOCOL FOLLOW-UP`. **No git.**
    The STATUS update is the last write of the close, performed after the secured promotion so
@@ -317,7 +331,7 @@ a paused step suspends only its dependents, not the other steps.
    system or method (not a future axis), author the before→after edit as a diff (Prohibition
    3: state the rule on its own merits, no version narrative), then apply approved edits to
    `docs/protocol/` directly (the Strategist edits protocol; §1).
-5. **Git commands.** Present the step-by-step `git` sequence (§2.6) for the Researcher to
+5. **Git commands.** Present the step-by-step `git` sequence (§2.7) for the Researcher to
    run, only after steps 3–4 are complete, so the close commit includes the protocol edits.
 
 **Decision points (the sequence pauses and asks; nothing else is re-asked):** (a) **multi-seed
@@ -329,7 +343,7 @@ other steps and surfaces the pending decision, rather than blocking the whole cl
 
 Version string bumps are done AFTER push, not during close.
 
-### 2.6 Push
+### 2.7 Push
 
 The Strategist presents the git command sequence, including the commit message; the Executor
 prepares the close (checklist items 2–3) but does NOT run git and does NOT draft or recommend
@@ -342,15 +356,16 @@ the code/config change, the updated dashboard and ledger, the results document, 
 snapshot:
 
 ```bash
-git add src/ tests/ \
-        docs/protocol/ docs/index.md docs/ledger.md \
-        docs/versions/*_results.md docs/tex/ \
-        src/configs/exp_config.yaml \
-        data/secured_data/
+git add .
 git commit -m "vX.Y.Z: <one-line summary>"
 git tag vX.Y.Z
 git push && git push --tags
 ```
+
+`git add .` is the standard staging command. What must not enter a commit is kept out by
+`.gitignore`, never by selective staging: the per-version working documents and `data/runs/`
+are already ignored, and any later private directory is handled by adding an ignore line,
+not by narrowing the add.
 
 `docs/index.md` (the state dashboard) and `docs/ledger.md` (one row per run, with lineage and `cps`) are updated as part of the same commit. Protocol edits, if any, are committed in the same step. The commit message is **one line, prose, no metrics or data** (`vX.Y.Z: <one-line summary>`) — the version's *what*, not its numbers; results, deltas, and CIs live in `results.md` and the ledger, never in the commit message. The tag `vX.Y.Z` is the authoritative reference to this version's code state; secured artifacts in `data/secured_data/` are the authoritative reference to its results. The version's working documents — `changes.md` and the build-logs — remain in the local-only `docs/versions/vX.Y.Z/` and are not part of the tagged commit; the results document is.
 
@@ -424,7 +439,7 @@ a complete deliverable. Within that, the method is the Executor's: a dispatch th
 a quantity is obtained, rather than what it must be and what must be reported about it, is
 over-specified.
 
-**A contrast between arms that may terminate at different times states its window.** Either the
+**A contrast between runs that may terminate at different times states its window.** Either the
 matched window is fixed in the dispatch, or both the raw and the matched-window statistic are
 required with the window lengths reported beside them. A statistic accumulated over unequal
 windows is not a comparison.
@@ -501,6 +516,8 @@ The Strategist's `00_constitution` §4 problem-analysis discipline (problem / me
 
 **Answer-first (all Strategist → Researcher communication).** A yes/no question is answered yes/no first, unconditionally; then the direct answer as asked; then only as needed: result (numbers, CIs) → cause → solution → interpretation, under explicit headings. Chronological narration is banned from Researcher-facing reports (it belongs in build-logs); key numbers appear first; implications are stated outright; multi-aspect versions are reported per aspect.
 
+**The default length is the minimum.** Every answer opens with the core result or conclusion and carries only what the Researcher must know to decide or to act; everything else is withheld, not summarized. Elaboration comes when the Researcher asks, or when an error or a conflict makes it necessary — it is never volunteered up front. This applies with full force to relaying the Executor: the Strategist exists between the Executor's voluminous reports and the Researcher precisely so the Researcher does not read them; a relay that reproduces the Executor's length has not performed its function. What is cut from the reply stays available on request, so brevity loses nothing.
+
 ## 5. Conflict resolution
 
 When sources disagree, follow `00_constitution` §2. Specifically:
@@ -531,6 +548,21 @@ When sources disagree, follow `00_constitution` §2. Specifically:
 - `data/secured_data/` — both the pools (`data/secured_data/pools/`) and every closed
   version's snapshot.
 
+**No changelog files, anywhere.** The repository keeps no `CHANGELOG.md` for the protocol, for
+`src/`, or for any other subtree, and no document carries a change-history section. What changed,
+when, and in which file is read from the git history; a hand-maintained record of the same thing
+duplicates it, drifts from it, and adds a step to every edit. Where a change needs explanation
+rather than identification, that explanation belongs to the version's `changes.md`, its build-logs,
+or its results document.
+
+**Hash values stay out of tracked prose.** No tracked prose document — the results
+documents, `ledger.md`, `index.md`, `report.md`, the theory document, and commit messages —
+states, quotes, or abbreviates a hash value, whether in full or as a prefix. An artifact is
+named in prose by its path and, where useful, its byte size; the digest that identifies it
+lives only in the machine identity records — `ADOPTED.md` and the `*.manifest.json` files
+under `data/secured_data/`, and result JSONs under `data/runs/` — and a verification against
+a digest cites the record that holds it, never the value.
+
 ### 6.2 What is local-only
 
 - **`docs/versions/`** — the per-version working directory (`changes.md`, build-logs,
@@ -539,8 +571,8 @@ When sources disagree, follow `00_constitution` §2. Specifically:
   site (built locally) renders them; the git history does not carry them.
 - The whole `data/runs/` subtree, in-flight and closed alike; only what is copied into
   `data/secured_data/` is committed. The `.gitignore` pattern ignores `data/*`, so a new
-  file under `data/secured_data/` must be force-added and the staging confirmed
-  (`05_code` §4).
+  file under `data/secured_data/` is picked up by `git add .` through the carve-outs of
+  `05_code` §4.
 - TensorBoard event files inside `data/<run_id>/tensorboard/` — large and redundant with
   the CSVs that are secured at close.
 
@@ -556,7 +588,7 @@ second is the one that is checked:
   snapshot.
 - **Every current bold row's adopted checkpoint is present in `secured_data/` and committed.**
   This direction admits no exception: a bold row whose checkpoint is not in the repository is a
-  claim the repository cannot back. The presence check runs at every close (§2.5 item 3) and
+  claim the repository cannot back. The presence check runs at every close (§2.6 item 3) and
   covers every system's bold row, not only the closing version's.
 
 - **Pools.** Generated once via `src/eval/build_pools.py` and committed; they are
@@ -565,12 +597,9 @@ second is the one that is checked:
   measured on it is reported**: the pool is what makes two numbers comparable, so an
   uncommitted pool makes every comparison drawn on it unverifiable. Pools are small; the
   size argument that gates checkpoints does not apply to them.
-- **Version snapshots.** Copied at §2.5 close into `data/secured_data/<version>/seed<N>/`,
-  containing the adopted checkpoint, config, eval metrics/episodes, pinned SHA-256 hashes,
-  and figures, with an `ADOPTED.md` identity record. Bulky per-step training logs
-  (`metrics.csv`) are excluded from the secured set; the full curve stays in the
-  gitignored original run directory. Checkpoint files are committed plain (no LFS) while
-  they remain small.
+- **Version snapshots.** Copied at §2.6 close into `data/secured_data/<version>/seed<N>/`.
+  The file set is defined in `04_eval` §7.5 and is not restated here. Checkpoint files are
+  committed plain (no LFS) while they remain small.
 - **Aggregate.** When a version is evaluated across multiple seeds,
   `data/secured_data/<version>/aggregate/` carries the cross-seed bootstrap and the
   one-page summary. A single-seed version has no aggregate; its secured snapshot and
@@ -583,9 +612,9 @@ second is the one that is checked:
   run produced) plus a `README.md` stating the base version, the exact change from that
   base, the verdict, and a pointer to the results-doc section that interprets it. It never
   carries a SOTA claim: the version's SOTA remains its `seed<N>/` snapshot, and an
-  experiments entry is never eligible for ledger SOTA bolding (§2.4). **Promotion is
+  experiments entry is never eligible for ledger SOTA bolding (§2.5). **Promotion is
   Researcher-gated.** Copying anything into `data/secured_data/<version>/experiments/` is,
-  like every other secured promotion (§2.5), an explicit Researcher decision; the Executor
+  like every other secured promotion (§2.6), an explicit Researcher decision; the Executor
   proposes and waits and never moves a diagnostic into `secured_data/` on its own.
 
 ### 6.4 MkDocs and TensorBoard
@@ -612,7 +641,7 @@ Confirm: it was requested — its intent is stated — unanswered items are carr
 
 ### 7.3 Before closing a version
 
-Confirm: §2.5 `results.md` drafted — multi-seed aggregate written (or single-seed status stated) — secured snapshot copied with `ADOPTED.md` — `index.md` and `ledger.md` updated (including SOTA bold per §2.4) — git status reviewed. Then §2.6 push.
+Confirm: §2.6 `results.md` drafted — multi-seed aggregate written (or single-seed status stated) — secured snapshot copied with `ADOPTED.md` — `index.md` and `ledger.md` updated (including SOTA bold per §2.5). Then §2.7 push.
 
 ### 7.4 Ending a session
 

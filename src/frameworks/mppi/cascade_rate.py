@@ -171,6 +171,38 @@ _V = slice(7, 10)
 _W = slice(10, 13)
 
 
+def cascade_sigma_channel(config: Any) -> list[float] | None:
+    """v2.8.4 STAGE 3 — read a PER-CHANNEL sampling std off the config. DEFAULT OFF.
+
+    `mppi_cascade.sigma_channel`, when present, is a 4-vector in the plan's OWN units,
+    `[T (N), w_x, w_y, w_z (rad/s)]`, and REPLACES the plant-derived `sigma_channel` built in
+    `__init__` from `sigma * [||mixer_row_0||, ||mixer_rows_1:4|| / J * dt]`. The scalar `sigma`
+    (`MPPIParams.sigma`) then has no effect on the sampler, and that is stated in the per-cell record.
+
+    ABSENT — the shipped case, and every configuration that predates this key — returns None and the
+    plant-derived construction runs unchanged and byte-identical. That absent case is the parity gate,
+    exactly as `hazard.geom_form`'s 'clip' default is (`src/common/signed_h.py:hazard_geom`).
+    """
+    block: Mapping[str, Any] = {}
+    if config is not None:
+        try:
+            block = config.get("mppi_cascade") or {}          # type: ignore[union-attr]
+        except AttributeError:
+            block = {}
+    raw = block.get("sigma_channel", None)
+    if raw is None:
+        return None
+    values = [float(v) for v in raw]
+    if len(values) != 4:
+        raise ValueError(
+            "mppi_cascade.sigma_channel must have 4 entries [T, w_x, w_y, w_z], got "
+            f"{len(values)}."
+        )
+    if any(v <= 0.0 for v in values):
+        raise ValueError(f"mppi_cascade.sigma_channel entries must be positive, got {values}.")
+    return values
+
+
 class _RatePlannerModel:
     """The PLANNER's prediction model: translational dynamics + attitude kinematics, input (T, omega).
 
@@ -299,6 +331,17 @@ class RateCascadeController(MPPIController):
             [torch.full((1,), sigma * self.collective_row_norm, device=device, dtype=dtype),
              sigma * rate_scale.to(device=device, dtype=dtype)]
         )                                                                  # [4]
+
+        # ---- v2.8.4 STAGE 3, DEFAULT OFF: the per-channel override ------------------------------------
+        # `mppi_cascade.sigma_channel` ABSENT (every configuration that predates this key, and every
+        # cell of sections 1-9) leaves `self.sigma_channel` exactly as constructed above, byte for byte.
+        # PRESENT, it replaces the four entries with the configured 4-vector in the plan's own units and
+        # the scalar `sigma` no longer reaches the sampler. Recorded per cell, never inferred.
+        self.sigma_channel_override = cascade_sigma_channel(config)
+        if self.sigma_channel_override is not None:
+            self.sigma_channel = torch.tensor(
+                self.sigma_channel_override, device=device, dtype=dtype
+            )                                                              # [4]
 
         # ---- the asymmetry evidence, accumulated over the whole cell ----------------------------------
         # Counts of EXECUTED commands whose pre-clip rotor allocation left the per-rotor box. Not reset by
@@ -486,6 +529,12 @@ class RateCascadeController(MPPIController):
                 "of that channel produces in one control step). A recorded CHOICE."
             ),
             "collective_row_norm": self.collective_row_norm,
+            "sigma_channel_override": self.sigma_channel_override,
+            "sigma_channel_override_note": (
+                "null = ABSENT, the shipped plant-derived construction above, byte-identical. A "
+                "4-vector = `mppi_cascade.sigma_channel` was set and REPLACED it; the scalar sigma "
+                "then does not reach the sampler."
+            ),
             "hover_centering": {
                 "anchor": [float(v) for v in self.anchor.tolist()],
                 "T_hover": self.t_hover,
@@ -534,6 +583,7 @@ class RateCascadeController(MPPIController):
             "sigma_per_channel": [float(v) for v in self.sigma_channel.tolist()],
             "channel_names": ["T", "w_x", "w_y", "w_z"],
             "channel_units": ["N", "rad/s", "rad/s", "rad/s"],
+            "sigma_channel_override": self.sigma_channel_override,
             "ou": {
                 "correlation_steps": float(self.params.ou_correlation_steps),
                 "alpha": float(self.params.ou_alpha),

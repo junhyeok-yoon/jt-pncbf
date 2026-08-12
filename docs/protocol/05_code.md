@@ -187,7 +187,7 @@ baseline is trained or evaluated once, cited by many versions, and is never file
 `data/runs/vX.Y.Z/`. Each `<name>/` carries the run dir(s) in the standard `<run_id>/`
 layout plus a `README.md` naming provenance (original path if copied, config, checkpoint
 hash, scoring artifact and its cell). Secured promotion mirrors the layout:
-`secured_data/baselines/<name>/` (copy-only, Researcher-approved, as `06_workflow` §2.2).
+`secured_data/baselines/<name>/` (copy-only, Researcher-approved, as `06_workflow` §2.6).
 A baseline row in the ledger carries `parent = baselines/<name>/<run_id>`; the SOTA bold
 rule is unchanged — baselines are a different deployment/training class and are never
 bolded against JT rows (the existing classification clause governs).
@@ -206,6 +206,8 @@ bolded against JT rows (the existing classification clause governs).
 - **`<group>/` — a named artifact collection** that is not an execution: analysis outputs, derived tables, figure sets. snake_case, unique within the version, no timestamp — the parent path scopes it to a version and the name distinguishes it within that version.
 
 **No loose files.** Nothing sits directly under `data/`, `data/runs/`, or `data/runs/vX.Y.Z/`. Every produced file lives inside one of the three entry kinds; a registry or manifest spanning several runs gets its own `<run_id>/`.
+
+**A non-conforming path is recorded, not relocated.** Naming conformance is checked at creation, the only point at which it can still be corrected, because artifacts are never moved afterwards. A directory created outside the three entry kinds therefore stays where it is; the version that owns it is read from the `run.version` of the `config.yaml` files it contains rather than from its name; and both facts are stated wherever it is cited.
 
 **Abbreviation.** Where the rest of the protocol writes `data/<run_id>/`, it means `data/runs/vX.Y.Z/<run_id>/`, or `data/runs/vX.Y.Z/set__…/<run_id>/` for a phase of a multi-phase execution.
 
@@ -237,7 +239,7 @@ This pattern:
 - keeps `docs/versions/vX.Y.Z/` local-only while tracking `docs/versions/*_results.md`;
 - requires no manual exception per file.
 
-**Why the two `secured_data` negations are kept.** `data/*` matches `data/secured_data` itself but not paths below it, and because that subtree holds tracked files git descends into it anyway; without the negations a newly promoted snapshot therefore still surfaces as untracked rather than ignored. That outcome rests on an interaction between the pattern's single `*` and the contents of the index, not on anything stated. The negations say the intent directly, so the tracking of `secured_data/` does not depend on that interaction continuing to hold. Changing these two lines is a Researcher decision. Separately and independently of the pattern, a secured promotion confirms with `git status --short` that the new files are staged before the commit; a promotion is not complete until they are committed (`06_workflow` §6.3).
+**Why the two `secured_data` negations are kept.** `data/*` matches `data/secured_data` itself but not paths below it, and because that subtree holds tracked files git descends into it anyway; without the negations a newly promoted snapshot therefore still surfaces as untracked rather than ignored. That outcome rests on an interaction between the pattern's single `*` and the contents of the index, not on anything stated. The negations say the intent directly, so the tracking of `secured_data/` does not depend on that interaction continuing to hold. Changing these two lines is a Researcher decision. A promotion is complete when the files exist under the secured path; there is no staging-confirmation step. The Researcher's `git add .` picks them up through the `secured_data` carve-outs above, and they enter the repository with the close commit (`06_workflow` §6.3).
 
 Large secured artifacts (checkpoint `.pt` files) are committed plain (no LFS). If the secured tree later grows beyond a few hundred megabytes, switching to git-LFS is a one-line `.gitattributes` change and is reserved as a one-axis future task.
 
@@ -247,7 +249,12 @@ Large secured artifacts (checkpoint `.pt` files) are committed plain (no LFS). I
 
 The harness lives in `tests/` and must pass before any training. The Executor refuses to start training if any test in §5.1–§5.6 fails. This is a lightweight pre-commit gate implemented as a pytest invocation in `scripts/verify.sh`, which runs `pytest -q -rs` so that the identity of any skipped test is captured and not only its count.
 
-**Verification independence.** A check never shares the code path, row filter, or parser of what produced its subject: table checks use an independent parser, not the editing script's split; liveness checks pin the launched PID and read `/proc` plus artifact freshness, never self-matchable name greps. A pass report states what makes the verifier independent.
+**Verification independence.** A check never shares the code path, row filter, or parser of what produced its subject: table checks use an independent parser, not the editing script's split; liveness checks pin the launched PID and read `/proc` plus artifact freshness, never self-matchable name greps. A pass report states what makes the verifier independent. **A search tool is identified
+before its result is cited.** A shell's `grep` may be an alias or a shim whose defaults
+exclude paths the search claims to cover — ignore-file honouring among them — so any count
+offered as repository-wide names the binary that produced it and the exclusions that binary
+applies. A count whose tool is unstated is not evidence of absence, and a count of matching
+lines is not a count of call sites.
 
 **Constant columns are unverified.** Before a logged column is cited as a measurement, its distribution over the run is inspected. A column that holds one value at every logged step is unverified until the code path writing it has been read; a hard-coded return is a defect, not a datum, and any statement resting on one is withdrawn until the column is repaired and re-collected.
 
@@ -320,7 +327,7 @@ Concrete requirements:
 - **One device transfer per macro step.** Collection and the V minibatch live on the GPU; the only host transfer per macro step is the logging payload.
 - **`torch.compile` — channel-scoped.** The analytic maneuver barrier ships a compiled fast path as the production default (`VM_FAST=1`), adopted under the `02_control` §8 equivalence standard (function parity $|V| \le 10^{-6}$ / $|\nabla V| \le 10^{-5}$ plus safety equivalence; trajectory bit-parity is unattainable for the branch-discrete projection and is not a gate). The uncompiled reference path is retained for tests/audit (`VM_FAST=0`), and the function-parity suite (`tests/test_vm_fastpath.py`) must be re-run and reported at every PyTorch/compiler version change (current pin: `torch 2.12.0.dev20260404+cu128`). Outside this channel `torch.compile` remains an opt-in, one-axis future addition.
 - **Throughput is judged against the class baseline, not raw GPU %.** Kernel-launch-bound certificate rollouts leave the GPU partially idle by construction (compiled $V_{\mathcal M}$ runs ≈ 55% utilization at full speed), so the binding metric is steps/s against the class baseline: learned-filter JT ≈ 4.6 steps/s (v2.4.x class); maneuver-$V_{\mathcal M}$ JT reference ≈ 1.0 s/step; maneuver-$V_{\mathcal M}$ JT compiled ≈ 0.204 s/step (≈ 4.9×; one $V_{\mathcal M}$ update ≈ 5.1× a learned-filter update). A run regressing > 15% below its class baseline triggers the throughput-incident diagnosis (environment snapshot → code inspection → offline cost ratio), as exercised in v2.5.0 Stage B-2. The historical "> 80% sustained GPU" figure remains the aspiration for non-launch-bound workloads.
-- **Verdict-grade evaluations pin the eval batch size.** The branch-discrete projection makes aggregate scores sensitive to floating-point reduction order; a batch-size change alone has flipped a re-score by 0.010 (v2.5.0 ARM-C gate, batch 200 vs 250). Re-scores and comparators state and reuse the eval batch size as part of the eval conditions.
+- **Verdict-grade evaluations pin the eval batch size**, because the branch-discrete projection makes aggregate scores sensitive to floating-point reduction order. The batch size is part of the evaluation cell; the cell and its admissibility floor are defined in `04_eval` §6.
 
 The smoke stage (`03_train` §6) implicitly exercises the batched code paths at small batch size; it does not measure utilization.
 
