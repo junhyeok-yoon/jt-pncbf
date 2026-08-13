@@ -72,7 +72,7 @@ that is an in-loop number on a different pool and is **not** the number the bold
 2. This run's own `pool_manifest.json` pins the canonical `full` pool `pool_sha256 0ef3751b…`
    (n 2000, seed 23456). The bold row was scored on the **`fullcb` pool `3682a4e3…`** in a separate
    re-score session whose artifact is
-   `data/runs/v2.8.5_rescore/row__1D__exp0.175__step33000.json`. The `eval_metrics.csv` /
+   `data/runs/v2.8.5/rescore/row__1D__exp0.175__step33000.json`. The `eval_metrics.csv` /
    `eval_episodes.csv` secured here are this run's own in-loop evaluations, not the number the ledger
    row carries.
 

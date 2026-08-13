@@ -1,0 +1,558 @@
+{
+  "argv": [
+    "scripts/analysis/v290_build_clr10cb_pool.py",
+    "--n",
+    "2000",
+    "--seed",
+    "923456",
+    "--name",
+    "clr10cb"
+  ],
+  "command_line": "PYTHONPATH=. CUDA_VISIBLE_DEVICES= nice -n 19 /home/junhyeok/miniconda3/envs/pncbf/bin/python scripts/analysis/v290_build_clr10cb_pool.py --n 2000 --seed 923456 --name clr10cb",
+  "config": {
+    "effective_config": {
+      "collection": {
+        "collector": "legacy",
+        "continuing": {
+          "episode_timeout": 200,
+          "k_hover": 20,
+          "stationary_thresh": 0.05,
+          "stationary_window": 20
+        },
+        "inject_frac": 0.0,
+        "jt": {
+          "buffer_cap": 1000000,
+          "collect_every": 100,
+          "episodes_per_collect": 100,
+          "policy_buffer_cap": 2000,
+          "v_label_episodes": 32
+        },
+        "oc_pncbf": {
+          "buffer_capacity": 32768,
+          "collect_size": 4096
+        }
+      },
+      "cpi": {
+        "calib": {
+          "alpha": [
+            0.1,
+            0.05,
+            0.01
+          ],
+          "band": 0.125,
+          "band_sensitivity": [
+            0.0625,
+            0.25
+          ],
+          "report_both_tails": true
+        },
+        "labels": {
+          "boundary_band": 0.15,
+          "dt_vm": 0.05,
+          "jitter_pos_sigma": 0.1,
+          "jitter_vel_sigma": 0.2,
+          "label_batch": 65536,
+          "master_seed": 42,
+          "n_scenes": 20000,
+          "oracle_subset": {
+            "n_boundary": 200000,
+            "n_uniform": 200000
+          },
+          "speed_dist": "uniform_0_vmax",
+          "states_per_scene_boundary": 40,
+          "states_per_scene_uniform": 60,
+          "system": "di"
+        },
+        "split": {
+          "by": "scene",
+          "fractions": [
+            0.72,
+            0.08,
+            0.1,
+            0.1
+          ]
+        },
+        "train": {
+          "batch_size": 16384,
+          "early_stop_patience": 8,
+          "grad_clip": 1.0,
+          "lr": 0.001,
+          "max_epochs": 60,
+          "seeds": [
+            42,
+            99,
+            12345
+          ],
+          "tau_quantile": 0.9,
+          "weight_decay": 0.0001
+        },
+        "value": {
+          "n_vs": 1
+        }
+      },
+      "env": {
+        "band_collision_limit": 4.0,
+        "band_hazard": {
+          "enabled": false,
+          "limit": 4.0
+        },
+        "bounds": {
+          "double_integrator": {
+            "u_max": 2.0,
+            "v_max": 2.5
+          },
+          "quadrotor_3d": {
+            "f_rotor_max": 4.905,
+            "f_rotor_min": 0.0,
+            "omega_max": 4.0,
+            "v_max": 2.5
+          },
+          "quadrotor_planar": {
+            "f_max": 19.62,
+            "f_min": 0.0,
+            "omega_max": 4.0,
+            "tau_max": 1.0,
+            "v_max": 2.5
+          },
+          "unicycle": {
+            "a_max": 2.0,
+            "omega_max": 3.0,
+            "v_max": 2.5
+          }
+        },
+        "dt": 0.05,
+        "goal_angrate_radius": 0.3,
+        "goal_radius": 0.15,
+        "goal_speed_radius": 0.3,
+        "h_scale": 0.35,
+        "k_obs": 5,
+        "obs_band_z": true,
+        "obstacle_distribution": "random",
+        "oob_limit": 8.0,
+        "quadrotor_3d": {
+          "Jx": 0.01,
+          "Jy": 0.01,
+          "Jz": 0.02,
+          "arm_L": 0.17,
+          "c_gain": 0.3,
+          "c_moment": 0.016,
+          "gravity": 9.81,
+          "ic_omega_max": 5.0,
+          "ic_so3": true,
+          "ic_v_max": 1.5,
+          "mass": 1.0,
+          "omega_init_max": 1.0,
+          "v_init_max": 1.5
+        },
+        "quadrotor_planar": {
+          "c_gain": 0.3,
+          "gravity": 9.81,
+          "inertia": 0.01,
+          "mass": 1.0,
+          "omega_init_max": 1.0,
+          "v_init_max": 1.5
+        },
+        "stuck_radius": 0.1,
+        "stuck_window_steps": 60,
+        "v_init_max": 0.5,
+        "world_lim": 4.0
+      },
+      "eval": {
+        "bootstrap": {
+          "n_resample": 1000,
+          "seed": 20260508
+        },
+        "cadence": 1500,
+        "full": {
+          "n": 2000,
+          "seed": 23456
+        },
+        "gate": {
+          "enabled": true,
+          "timeout_s": 300.0
+        },
+        "in_loop": {
+          "n": 500,
+          "seed": 12345
+        },
+        "insertion": {
+          "radius": 0.45,
+          "t_insert": 50
+        },
+        "max_steps": 200,
+        "multi_seed": {
+          "min": 3,
+          "recommend": 5
+        },
+        "scene": {
+          "min_start_goal_dist": 1.5,
+          "start_goal_clearance": 0.15
+        }
+      },
+      "filter": {
+        "alpha_safe": 2.0,
+        "alpha_unsafe": 100.0,
+        "cbf_qp": {
+          "eps_abs": 1e-09,
+          "max_iter": 500,
+          "max_iter_in": 100,
+          "max_workers": 32,
+          "penalty": 10.0,
+          "relax_eps1": 0.5,
+          "v_shift": 0.001
+        },
+        "empty_fallback": {
+          "k": 10,
+          "mode": "none",
+          "quadrotor_3d": {
+            "k": 3,
+            "mode": "kstep",
+            "phases": 1
+          }
+        },
+        "empty_mode": "argmin",
+        "empty_prox_temp": null,
+        "gamma_margin": 0.0,
+        "hardnet": {
+          "box_aware": true,
+          "epsilon": 0.0005
+        },
+        "lg_reg_eps": 0.0,
+        "lookahead": {
+          "N": 0,
+          "beta": 0.0,
+          "delta": 0.1,
+          "enabled": false
+        },
+        "projection": "dual_solve"
+      },
+      "halt": {
+        "cps_floor": -0.5,
+        "early_stop_min_delta": 0.002,
+        "early_stop_patience": 0,
+        "sigma_max_cycles": 5,
+        "vs_grad_leak_threshold": 1e-09
+      },
+      "hazard": {
+        "ell": null,
+        "geom_form": "clip"
+      },
+      "labeling": {
+        "delta_C": 0.1,
+        "k_A": 5,
+        "k_safe": 5,
+        "m_phys": 0.1
+      },
+      "loss": {
+        "policy": {
+          "deficit_cap": 4.0,
+          "deficit_form": "sq_cap",
+          "detach_filter_coeffs": true,
+          "gamma_T": 0.99,
+          "infeas_delta": null,
+          "input_rate": {
+            "delta": 0.3,
+            "enabled": false,
+            "ramp_steps": 10000,
+            "weight": 4
+          },
+          "lambda_a": 0.05,
+          "lambda_pretanh": 1.0,
+          "lambda_s": 0.1,
+          "lambda_sat": 1.0,
+          "lambda_v": 0.01,
+          "mu_u": 0.001,
+          "obs_deficit_feedback": false,
+          "sat_excess_threshold": [
+            19.62,
+            1.0
+          ],
+          "settle_rho": 0.3,
+          "tau_brake": 0.6,
+          "tau_gate": 0.05,
+          "u_reg": {
+            "enabled": false,
+            "weight": 0.5
+          },
+          "vs_gate_tau": 0.05,
+          "vs_gated_pretanh": true,
+          "w_appr": 30.0,
+          "w_deficit": 0.0,
+          "w_du": 0.0,
+          "w_friction": 0.0,
+          "w_infeas": 0.0,
+          "w_outside": 0.3,
+          "w_settle": 1.0,
+          "w_settle_ang": 1.0,
+          "w_terminal": 30.0,
+          "w_terminal_v": 0.0,
+          "z_target": 1.0
+        },
+        "value": {
+          "cbf_deriv": {
+            "d_gate": 0.25,
+            "d_lo": 0.02,
+            "exclude_doomed": true,
+            "gamma_strict": 0.3,
+            "h_band_hi": 0.1,
+            "h_band_lo": -0.3,
+            "lateral_frac": 0.5,
+            "s_hi": 2.5,
+            "s_lo": 0.6,
+            "states_per_step": null,
+            "weight": 0.0
+          },
+          "lambda_A": 0.0,
+          "lambda_C": 0.0,
+          "lambda_R": 1.0,
+          "lg_authority": {
+            "eps_g": 0.05,
+            "n_samples": 256,
+            "weight": 5.0
+          },
+          "precursor_injection": {
+            "d_hi": 0.3,
+            "d_lo": 0.1,
+            "enabled": false,
+            "fraction": 0.1,
+            "lateral_frac": 0.5,
+            "s_hi": 1.0,
+            "s_lo": 0.3
+          },
+          "sobolev": {
+            "H": 25,
+            "enabled": false,
+            "gate": {
+              "c0": 0.3,
+              "enabled": true,
+              "s0": 1.0,
+              "tau_c": 0.15,
+              "tau_s": 0.5,
+              "velocity_only": true
+            },
+            "rollout_policy": "lqr",
+            "weight": 2.2
+          }
+        }
+      },
+      "lqr": {
+        "double_integrator": {
+          "Q": [
+            1.0,
+            1.0,
+            0.1,
+            0.1
+          ],
+          "R": [
+            1.0,
+            1.0
+          ]
+        },
+        "quadrotor_3d": {
+          "kd_att": 8.0,
+          "kd_pos": 2.0,
+          "kp_att": 40.0,
+          "kp_pos": 1.0
+        },
+        "quadrotor_planar": {
+          "kd_att": 8.0,
+          "kd_pos": 2.0,
+          "kp_att": 40.0,
+          "kp_pos": 1.0
+        },
+        "unicycle": {
+          "Q": [
+            0.5,
+            0.5,
+            0.1,
+            0.1
+          ],
+          "R": [
+            0.5,
+            0.5
+          ],
+          "v_min": 0.1
+        }
+      },
+      "network": {
+        "control": {
+          "activation": "leaky_relu",
+          "hidden": 256,
+          "n_layers": 2,
+          "output": "clamp_tanh",
+          "output_gain": 1.4286
+        },
+        "value": {
+          "head": "linear_clipped",
+          "hidden": 256,
+          "n_layers": 3,
+          "n_vs": 2,
+          "softplus_beta": 20.0
+        }
+      },
+      "obs": {
+        "encoder": "hard_topk",
+        "quadrotor_3d": {
+          "encoder": "hard_topk"
+        }
+      },
+      "obstacle": {
+        "corridor_along_factor": 1.5,
+        "corridor_perp_factor": 1.0,
+        "n_max": 12,
+        "n_min": 1,
+        "p_corridor": 0.6,
+        "per_system": {
+          "quadrotor_3d": {
+            "n_max": 18,
+            "n_min": 2,
+            "r_max": 0.8,
+            "r_min": 0.15,
+            "variant": "d2r"
+          }
+        },
+        "r_max": 0.8,
+        "r_min": 0.15
+      },
+      "optim": {
+        "batch_size_jt": 4096,
+        "batch_size_oc": 65536,
+        "grad_clip": 2.0,
+        "lr_VS": 0.0003,
+        "lr_pi": 0.0001,
+        "metrics_log_every": 200,
+        "polyak_per_v_step": true,
+        "tau_polyak": 0.005,
+        "tb_histogram_every": 200,
+        "weight_decay": 0.1
+      },
+      "run": {
+        "framework": "jt_pncbf",
+        "seed": 42,
+        "system": "quadrotor_3d",
+        "version": "v2.9.0"
+      },
+      "safety_channel": {
+        "checkpoint": "data/secured_data/v2.5.1/certificate_chain/V_hat_2p/best.pt",
+        "gamma_margin": 0.0,
+        "maneuver": {
+          "J": 8,
+          "both_dirs": true,
+          "gamma_m": 0.02
+        },
+        "type": "value"
+      },
+      "scene_train": {
+        "init_feasibility_margin": 0.05,
+        "min_start_goal_dist": 1.0,
+        "start_goal_clearance": 0.1
+      },
+      "schedules": {
+        "gamma_disc": {
+          "f_phase1": 0.8,
+          "f_warm": 0.1,
+          "horizon_final": 100.0,
+          "horizon_init": 20.0,
+          "lambda_floor": 0.05,
+          "total_epochs": 1000
+        },
+        "sigma": {
+          "alpha_dom": 1.0,
+          "beta_proj": 0.05,
+          "beta_sigma": 0.05,
+          "init": 0.5,
+          "rho_target": 0.1,
+          "sigma_max": 2.0,
+          "sigma_min": 0.3
+        },
+        "sigma_pi": {
+          "decay_steps": 5000,
+          "init": 0.0
+        },
+        "target_rhs": {
+          "f_phase1": 0.8,
+          "f_warm": 0.1,
+          "final": 0.9,
+          "init": 0.0
+        }
+      },
+      "training": {
+        "jt": {
+          "K_V": 3,
+          "K_pi": 1,
+          "bptt_T": 30,
+          "horizon_critic": {
+            "enabled": false,
+            "gamma": 0.99,
+            "lr": 0.001,
+            "n_step": 30,
+            "weight": 1.0
+          },
+          "n_steps": 30000,
+          "pi_init_ckpt": null,
+          "schedule_n_steps": 30000,
+          "vs_warmup_steps": 2000
+        },
+        "oc_pncbf": {
+          "epochs": 1000,
+          "grad_steps_per_epoch": 500,
+          "horizon": 100
+        }
+      },
+      "value_target": {
+        "brake": {
+          "T_b": 30,
+          "eps_v": 0.05
+        },
+        "conditioning": "task_stored",
+        "raw_lagged": {
+          "T_b": 30,
+          "tau_b": 0.005
+        },
+        "recovery": {
+          "K_b": 1,
+          "T_b": 30,
+          "beta": 20.0,
+          "tau_b": 0.005
+        },
+        "rpcbf_H": 7,
+        "rpcbf_beta": 20.0,
+        "type": "pncbf"
+      }
+    },
+    "loader": "src.frameworks.jt_pncbf.train.load_effective_config()  (base_config.yaml deep-merged with exp_config.yaml)",
+    "overrides_applied_in_memory": {
+      "env.band_collision_limit": 4.0,
+      "run.system": "quadrotor_3d"
+    },
+    "sources": {
+      "src/configs/base_config.yaml": "ed0656b3381cc58f0eecb39cba3f734d7f24c13a135581501ff0cfe79b5786df",
+      "src/configs/exp_config.yaml": "3bdca5cdd9968058043cc5fbe1904ae11d745214d712d782cee13e0aed32d1a8"
+    }
+  },
+  "cwd": "/home/junhyeok/MIT/jt-pncbf",
+  "env": {
+    "CUDA_VISIBLE_DEVICES": "",
+    "PYTHONPATH": "."
+  },
+  "executable": "/home/junhyeok/miniconda3/envs/pncbf/bin/python",
+  "finished_at": "2026-08-13T05:18:18+00:00",
+  "git": "NO git command of any kind was run by this build; write_pool was given git_commit explicitly so git_head_or_unknown() was never reached.",
+  "module_sha256": {
+    "scripts/analysis/v283_attitude_bound.py": "d201b613ec9b8bbbff8f08fa5eadff78aae1c74e62e3b90eb9c3c29601280407",
+    "scripts/analysis/v283_build_fullcb.py": "0e98d173868eb58a047c0990ffcb218531b5a28024a8ead6428886794110bb4a",
+    "scripts/analysis/v283_coupled_bound.py": "07571e4d83f1ce3eaa2d577996d7f9f575c52e694cbcf32bd5a4d2cc87db4266",
+    "src/envs/quadrotor_3d.py": "a7ae7ae6ec70bd6c6c86af561c09c75e664419d357639539ceab4cb2ec912207",
+    "src/envs/scene_init.py": "7296f4e2cdadd3f45ba4750efeb4be32dbf829693de2865b119248ddb6dfdbf2",
+    "src/envs/scene_init_eval.py": "bc5d239c970b286a8570e672b8fd6e4cd1c899c1cd36b933adf72b39e369a57b",
+    "src/eval/build_pools.py": "09616e52c30c733ba7f5c7db16eba1466a22b481620cbf0515985df5c23f59a6"
+  },
+  "pool": {
+    "manifest": "eval_clr10cb_quadrotor-3d-d2r_n2000_seed923456.manifest.json",
+    "pool_sha256": "6691aad97f283fb6705fcd8228e1969fee8282c2e0335b2502d5fb4f56f492f8",
+    "stem": "eval_clr10cb_quadrotor-3d-d2r_n2000_seed923456"
+  },
+  "script_sha256": "9762e9efab8d1f5726ddb95c44097b80acc7c70fcdea093b2414a4536164c367",
+  "started_at": "2026-08-13T05:14:01+00:00",
+  "what": "exact invocation and loaded config for eval_clr10cb_quadrotor-3d-d2r_n2000_seed923456.pkl"
+}

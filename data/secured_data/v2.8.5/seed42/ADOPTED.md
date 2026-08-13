@@ -45,7 +45,7 @@ is adopted.
 
 - **Ledger line backed:** `docs/ledger.md` **L294** — the bold `quadrotor_3d` row of v2.8.5, alias
   `exp0.125 @45000 ADOPTED`, `cps_v2` 0.8701.
-- **Backing artifact:** `data/runs/v2.8.5_rescore/row__exp0.125__step45000.json` (`cell_id`
+- **Backing artifact:** `data/runs/v2.8.5/rescore/row__exp0.125__step45000.json` (`cell_id`
   `exp0.125__step45000`). Every field of the ledger row was read from that JSON at write time
   (`v2.8.5_results.md` §13.4 D).
 

@@ -186,6 +186,22 @@ def evaluate(
         band_step_cpu = chunk_band_step.detach().cpu()
         causes_all = chunk_resolved.collision_cause
 
+        # v2.9.0: the LQR-baseline outcome resolution, hoisted out of the per-scene loop exactly as
+        # the policy path above already is. resolve_outcome walks the time axis ONCE for the whole
+        # [T,B,.] chunk instead of once per scene, and the loop slices the result; the per-scene
+        # calls performed ~360 blocking device->host synchronizations each. `lqr_outcome` and
+        # `lqr_event_step` keep their present meaning and type for every consumer.
+        lqr_resolved = None
+        lqr_event_step_cpu = None
+        if lqr_batch is not None:
+            lqr_resolved = _resolve_states(
+                lqr_batch,
+                batched_scene,
+                framework.system,
+                config,
+            )
+            lqr_event_step_cpu = lqr_resolved.event_step.detach().cpu()
+
         for local_idx, scene in enumerate(batch_scenes):
             episode_idx = batch_start + local_idx
             filtered_i = _slice_rollout(filtered, local_idx)
@@ -216,14 +232,8 @@ def evaluate(
             lqr_event_step = None
             if lqr_batch is not None:
                 lqr_states = lqr_batch[:, local_idx : local_idx + 1, :]
-                lqr_resolved = _resolve_states(
-                    lqr_states,
-                    scene,
-                    framework.system,
-                    config,
-                )
-                lqr_outcome = lqr_resolved.outcome[0]
-                lqr_event_step = int(lqr_resolved.event_step[0].item())
+                lqr_outcome = lqr_resolved.outcome[local_idx]
+                lqr_event_step = int(lqr_event_step_cpu[local_idx].item())
 
             episode_rows.append(
                 _episode_row(

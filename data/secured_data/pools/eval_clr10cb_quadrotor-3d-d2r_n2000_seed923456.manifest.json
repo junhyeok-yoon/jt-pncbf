@@ -1,0 +1,233 @@
+{
+  "acceptance_rules": [
+    "R1 min_start_goal_dist >= 1.5 (inner xy redraw)",
+    "R2 _has_start_goal_clearance >= 0.15 (xy, start AND goal)",
+    "R3 _passes_unavoidable_collision_filter (shipped, verbatim)",
+    "R4 coupled bound (v283_coupled_bound.run_pool via v283_build_fullcb.coupled_flags): REJECT iff certified impossible. ic_eval_z / D_down OFF.",
+    "ALL FOUR are applied to every candidate inside ONE loop; a candidate is kept only if it passes all of them. There is NO post-hoc removal and NO top-up stage."
+  ],
+  "altitude_law": {
+    "arena_margin_m_this_pool": 0.1,
+    "goal_z": "U(-3.9, +3.9)",
+    "note": "xy and z both carry this pool's own 0.1 m margin; the shared constant (0.3) is unmodified and still governs every other sampler caller. ic_eval_z is ABSENT, so no D_down restriction was applied.",
+    "shared_START_GOAL_ARENA_MARGIN_on_disk": 0.3,
+    "start_z": "U(-3.9, +3.9)"
+  },
+  "build": {
+    "candidates_drawn": 4162,
+    "final_bound_over_finished_pool": {
+      "n": 2000,
+      "n_flagged": 0
+    },
+    "rejections_by_rule": {
+      "R1_min_start_goal_dist": 471,
+      "R2_start_goal_clearance": 2149,
+      "R3_unavoidable_collision_filter": 0,
+      "R4_coupled_bound": 13,
+      "omega_redraws": 279
+    },
+    "script": "scripts/analysis/v290_build_clr10cb_pool.py",
+    "wall_s": 257.5
+  },
+  "created_at": "2026-08-13T05:14:01+00:00",
+  "git_commit": "not_recorded (no git command was run by this build)",
+  "n_scenes": 2000,
+  "obstacle_distribution": "random",
+  "omega_law": {
+    "ic_omega_max": 5.0,
+    "law": "|omega| ~ U[0, ic_omega_max] x direction-uniform on S^2, CONDITIONED ON max_i |omega_i| <= env.bounds.quadrotor_3d.omega_max (a draw outside the box is redrawn, never clipped)",
+    "n_redraws_during_build": 279,
+    "omega_max_clamp": 4.0,
+    "round_trip_through_wrap_state": {
+      "float32": {
+        "max_abs_delta_omega": 0.0,
+        "max_abs_delta_position": 0.0,
+        "max_abs_delta_quat": 5.960464477539063e-08,
+        "max_abs_delta_velocity": 0.0,
+        "n_rows_omega_changed": 0
+      },
+      "float64": {
+        "max_abs_delta_omega": 0.0,
+        "max_abs_delta_position": 0.0,
+        "max_abs_delta_quat": 2.220446049250313e-16,
+        "max_abs_delta_velocity": 0.0,
+        "n_rows_omega_changed": 0
+      }
+    }
+  },
+  "pinned_dict_check": {
+    "expected_prefix": [
+      "pool_format_version",
+      "system",
+      "seed",
+      "n_scenes",
+      "obstacle_centers",
+      "obstacle_radii",
+      "obstacle_active",
+      "start",
+      "goal",
+      "init_velocity"
+    ],
+    "is_dict": true,
+    "keys_in_order": [
+      "pool_format_version",
+      "system",
+      "seed",
+      "n_scenes",
+      "obstacle_centers",
+      "obstacle_radii",
+      "obstacle_active",
+      "start",
+      "goal",
+      "init_velocity",
+      "init_attitude_quat",
+      "init_omega_vec"
+    ],
+    "prefix_matches": true,
+    "top_level_type": "dict"
+  },
+  "pool_format_version": 1,
+  "pool_role": "NOT REGISTERED \u2014 this pool is not a pool of record and no ledger row exists for it",
+  "pool_sha256": "6691aad97f283fb6705fcd8228e1969fee8282c2e0335b2502d5fb4f56f492f8",
+  "reference_omega_readings_other_pools": {
+    "eval_full_quadrotor-3d-d2r_n2000_seed23456": {
+      "max_per_component_abs": 4.882001768138827,
+      "n_scenes": 2000,
+      "n_with_component_over_clamp": 109
+    },
+    "eval_fullcb_quadrotor-3d-d2r_n2000_seed823456": {
+      "max_per_component_abs": 4.882001768138827,
+      "n_scenes": 2000,
+      "n_with_component_over_clamp": 109
+    }
+  },
+  "sampler_params": {
+    "env": {
+      "band_collision_limit_at_build": 4.0,
+      "band_hazard": {
+        "enabled": false,
+        "limit": 4.0
+      },
+      "bounds": {
+        "f_rotor_max": 4.905,
+        "f_rotor_min": 0.0,
+        "omega_max": 4.0,
+        "v_max": 2.5
+      },
+      "dt": 0.05,
+      "quadrotor_3d": {
+        "Jx": 0.01,
+        "Jy": 0.01,
+        "Jz": 0.02,
+        "arm_L": 0.17,
+        "c_gain": 0.3,
+        "c_moment": 0.016,
+        "gravity": 9.81,
+        "ic_omega_max": 5.0,
+        "ic_so3": true,
+        "ic_v_max": 1.5,
+        "mass": 1.0,
+        "omega_init_max": 1.0,
+        "v_init_max": 1.5
+      },
+      "v_init_max": 0.5,
+      "world_lim": 4.0
+    },
+    "eval_max_steps": 200,
+    "eval_scene": {
+      "min_start_goal_dist": 1.5,
+      "start_goal_clearance": 0.15
+    },
+    "fixed_obstacle": {
+      "active_count": 1,
+      "center": [
+        0.0,
+        0.0
+      ],
+      "radius": 0.8
+    },
+    "obstacle": {
+      "corridor_along_factor": 1.5,
+      "corridor_perp_factor": 1.0,
+      "n_max": 12,
+      "n_min": 1,
+      "p_corridor": 0.6,
+      "per_system": {
+        "quadrotor_3d": {
+          "n_max": 18,
+          "n_min": 2,
+          "r_max": 0.8,
+          "r_min": 0.15,
+          "variant": "d2r"
+        }
+      },
+      "r_max": 0.8,
+      "r_min": 0.15
+    },
+    "obstacle_distribution": "random",
+    "scene_train": {
+      "init_feasibility_margin": 0.05
+    }
+  },
+  "seed": 923456,
+  "statistics": {
+    "band_margin_goal": {
+      "max": 3.9982564752544025,
+      "min": 0.1002342083261829,
+      "n_below_0.1": 0,
+      "p1": 0.14822463079094308,
+      "p50": 1.9887419941895974
+    },
+    "band_margin_start": {
+      "max": 3.9955206866959365,
+      "min": 0.10487872361904449,
+      "n_below_0.1": 0,
+      "p1": 0.14996024821636367,
+      "p50": 2.056346132713138
+    },
+    "cos_tilt_mean": 0.015052147494648555,
+    "coupled_margin_over_pool": {
+      "min": 0.003914420371799121,
+      "p50": 0.709251335034569
+    },
+    "max_abs_xy": {
+      "goal": 3.8999828358658344,
+      "start": 3.8996553558599003
+    },
+    "max_abs_z": {
+      "goal": 3.899765791673817,
+      "start": 3.8951212763809555
+    },
+    "n_active_obstacles": {
+      "max": 18,
+      "min": 2
+    },
+    "n_scenes": 2000,
+    "omega": {
+      "clamp_per_component": 4.0,
+      "ic_omega_max": 5.0,
+      "max_per_component_abs": 3.9967766360471177,
+      "n_scenes_over_clamp": 0,
+      "norm_max": 4.996402477325707,
+      "norm_p50": 2.3085316428073805,
+      "per_component_abs_p50": 1.8856088502899833,
+      "per_component_abs_p95": 3.7075566432985547
+    },
+    "speed": {
+      "max": 1.499545550979193
+    },
+    "start_goal_dist_xy": {
+      "min": 1.5031865196227097
+    },
+    "xy_clearance_goal": {
+      "min": 0.15126478934216758,
+      "p50": 0.893441677652722
+    },
+    "xy_clearance_start": {
+      "min": 0.15009982143035627,
+      "p50": 0.9100962600148648
+    },
+    "z_std_start": 2.24005796571229
+  },
+  "system": "quadrotor_3d"
+}
