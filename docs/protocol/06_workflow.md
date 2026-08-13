@@ -16,13 +16,13 @@ Sets strategy. Makes every decision: version increments, scope changes, hyperpar
 
 Analyzes, proposes, and writes prompts. Does **not** execute code. Does **not** decide unilaterally. Persistent across sessions only through this repository — a new Strategist instance is brought up to speed by reading `docs/index.md`, `docs/ledger.md`, the current version's `docs/versions/vX.Y.Z/changes.md` and its build-logs, and the protocol documents.
 
-The Strategist's deliverables are: framework proposals (`docs/proposals/`), retrieve and execute prompts (transient, not committed), decision briefs (delivered in chat), version `changes.md` / `results.md` drafts, and the theory document (`docs/tex/theory.tex`) — the Strategist's own research: it derives, states, and proves the mathematics and delivers the compiled `.tex` and PDF; the Executor installs verbatim and reports build errors without repairing the mathematics. Falsified statements and the version's measured results are reflected in `theory.tex` before that version's close. **Protocol edits** (`docs/protocol/`) are also the Strategist's responsibility under Researcher direction; the Executor never edits protocol files (`00_constitution` §1).
+The Strategist's deliverables are: framework proposals (`docs/proposals/`), retrieve and execute prompts (transient, not committed), decision briefs (delivered in chat), the version's `changes.md`, the review of the version's results document, and the theory document (`docs/tex/theory.tex`) — the Strategist's own research: it derives, states, and proves the mathematics and delivers the compiled `.tex` and PDF; the Executor installs verbatim and reports build errors without repairing the mathematics. Falsified statements and the version's measured results are reflected in `theory.tex` before that version's close. **Protocol edits** (`docs/protocol/`) are also the Strategist's responsibility under Researcher direction; the Executor never edits protocol files (`00_constitution` §1).
 
 ### 1.3 Executor (Claude Code or Codex — interchangeable)
 
 Implements code, runs training, runs evaluation, handles tactical decisions during a run (e.g. retry on transient OOM). Refuses to make a strategic decision on its own: if the prompt is ambiguous in a way that affects results, it stops and asks. Refuses to silently extend scope: if a task requires changes beyond the prompt's stated scope, it stops and asks.
 
-The Executor's deliverables are: code commits, run outputs (`data/<run_id>/`), per-version build-logs (`docs/versions/vX.Y.Z/<task>.md` — design decisions, conflicts and their resolution, factual task/training results; facts not verdicts), and concise status updates in chat.
+The Executor's deliverables are: code commits, run outputs (`data/<run_id>/`), per-version build-logs (`docs/versions/vX.Y.Z/<task>.md` — design decisions, conflicts and their resolution, factual task/training results; facts not verdicts), the version's results document, and concise status updates in chat. The build-log carries facts and not verdicts; the results document is different — it interprets, it scores the registered falsifiers against the artifacts, and it says what the version did and what was learned. The Executor writes it because the numbers must come from the artifacts and the Executor is the actor that reads them; the Strategist reviews it and the Researcher approves it.
 
 **What is launched is managed to its end.** The Executor that launches a training or diagnostic run is that run's owner and does not leave it unattended. The owner watches the run on a bounded polling loop over the mtimes of its `status.json` and `eval_metrics.csv` and acts the moment either moves: a new eval row is reported as it lands, and a halt, a death, or a stall is disk-verified and reported the moment it is seen. A stall is never judged from one mtime alone — the step counter freezes during in-loop eval, so the process's CPU time and the step counter are read together to separate slow from dead. If the owner's context will run out before the run ends, writing a handoff into the run's directory and requesting a successor takes precedence over silence: an instrumented run that nobody is watching is worse than a clean non-start.
 
@@ -260,7 +260,7 @@ not belong in one column, whatever their names.
 
 ### 2.6 Close
 
-The Researcher authors the results document `docs/versions/v<X>_results.md` (at the `docs/versions/` main level, alongside `v2.0.1_results.md` etc.; the Strategist may draft) — the document that renders the version verdict. Unlike the Executor's build-logs (`docs/versions/vX.Y.Z/<task>.md`), the results document interprets. Both live under the gitignored `docs/versions/` as the local SSOT. It covers at least:
+The Executor writes the results document `docs/versions/v<X>_results.md` (at the `docs/versions/` main level, alongside `v2.0.1_results.md` etc.) directly from the artifacts; the Strategist reviews it and the Researcher approves it. Unlike the Executor's build-logs (`docs/versions/vX.Y.Z/<task>.md`), the results document interprets, which is why it is reviewed. Every number is read from the artifact that holds it and is not carried over from a build-log — a build-log has already transcribed that number once, and a number transcribed twice is where an error lives. Both live under the gitignored `docs/versions/` as the local SSOT. It covers at least:
 
 1. **Result.** `cps` and the component breakdown with 95% CIs — pooled across seeds for a multi-seed version, or single-run scene-bootstrap CIs for a single-seed version (stated as such).
 2. **Versus motivation.** Did the change do what §2.1 hypothesized? Cite the numbers.
@@ -303,22 +303,21 @@ ORDER, **without re-requesting permission at each step**; each step begins only 
 previous step's artifact exists on disk. Steps marked [PAUSE] require a Researcher decision;
 a paused step suspends only its dependents, not the other steps.
 
-1. **Fact-gather retrieve** (Strategist authors, Executor runs). Read-only, with exactly two
-   write exceptions: (a) create the EMPTY results placeholder
-   `docs/versions/v<X>_results.md` containing only the single line
-   `# v<X> results — CLOSE IN PROGRESS (<date>)`, and (b) the retrieve report itself.
-   **Work that is already done is not done again.** Before each step of this sequence begins,
-   its artifact is checked for existence; where the artifact already exists it is updated, not
-   rewritten, and existing content is never overwritten. Write exception (a) is therefore
-   performed only when `v<X>_results.md` is absent or empty. The
-   report must cover: headline metrics recomputed from artifacts with CIs; provenance (run
-   dirs, checkpoint identities by path); gate/test outcomes; ledger rows verbatim with bold
-   state; version strings; open `PROTOCOL FOLLOW-UP` items; and an explicit discrepancy
-   list. The fact-gather neither collects nor requests anything about git. No results
-   content is drafted before this report exists.
-2. **`results.md`** (Strategist authors). Drafted EXCLUSIVELY from the step-1 report — every
-   number beside its artifact path; the four parts above; the seed basis stated explicitly
-   (single-seed vs pooled). [PAUSE] only if a multi-seed escalation decision is open.
+1. **`results.md`** (Strategist dispatches, Executor writes). The Executor writes it from the
+   artifacts. Beyond the four parts above it covers: headline metrics recomputed from the
+   artifacts with CIs; provenance, with run directories and checkpoints named by path; gate
+   and test outcomes; ledger rows verbatim with their bold state; version strings; open
+   `PROTOCOL FOLLOW-UP` items; and an explicit discrepancy list, stated as pairs, where the
+   version's own records disagree with one another or with an artifact. The seed basis is
+   stated explicitly. Nothing about git is collected. What cannot be determined is written as
+   undetermined and is never guessed. **Work that is already done is not done again**: where
+   the document already exists it is updated rather than rewritten, and existing content is
+   not overwritten.
+2. **Strategist review** [PAUSE]. The Strategist reads the document against the version's
+   registered hypotheses and falsifiers and reports what is unscored or mis-scored, what is
+   asserted without an artifact behind it, and where this version's result conflicts with an
+   earlier version's record. The review does not rewrite: it says what is wrong and what is
+   missing, and the Executor makes the correction.
 3. **Close execute** (Strategist authors, Executor runs). Fills the placeholder with the
    final results text verbatim, then checklist items 2–3: ledger row(s); no run is moved
    (§2.6 item 3); [PAUSE] secured snapshot(s) + `ADOPTED.md` (the promotion scope is
@@ -501,16 +500,11 @@ The Strategist authors every prompt. The Researcher reviews and approves before 
 
 ## 4. Decision brief format — Strategist → Researcher
 
-When a decision is required, the Strategist delivers a four-part brief, never longer than one screen:
+**Decisions.** The Strategist states what must be decided and the evidence for it. Alternatives appear only where more than one is live, a recommendation only where the Strategist has one, and the length is the minimum that lets the Researcher decide.
 
-1. **Problem.** What the decision is about, with the evidence (data / quote / observation).
-2. **Options.** Two or three concrete alternatives. Each option is fully specified — config keys, file changes, expected effect.
-3. **Trade-offs.** For each option, what is gained and what is lost. Side effects, risks, computational cost.
-4. **Recommendation.** One option, with a one-sentence justification.
+**Proposed protocol amendments carry a number each**, so that an item can be approved, declined, or questioned on its own. The discussion is in Korean, and where an amendment changes existing text that text is rendered in Korean first.
 
-The Strategist's `00_constitution` §4 problem-analysis discipline (problem / mechanism / fix / trade-off) applies inside §1 and §3. Long prose analyses without this structure are not decision briefs — they are background documents.
-
-**Proposed protocol amendments follow the same brief, with three additions.** Each proposed change carries a number, so that an item can be approved, declined, or questioned on its own. The discussion is in Korean and the text that would be installed is given in English, as the protocol is. And the installed text keeps the receiving section's register — normative present tense, rules and not the events that motivated them, compressed to the surrounding prose density — so that an amended section reads as one document and not as a sequence of accretions.
+**The installed text is English and keeps the receiving section's register** — normative present tense, rules and not the events that motivated them, compressed to the surrounding prose density — so that an amended section reads as one document and not as a sequence of accretions.
 
 ---
 
@@ -561,7 +555,9 @@ states, quotes, or abbreviates a hash value, whether in full or as a prefix. An 
 named in prose by its path and, where useful, its byte size; the digest that identifies it
 lives only in the machine identity records — `ADOPTED.md` and the `*.manifest.json` files
 under `data/secured_data/`, and result JSONs under `data/runs/` — and a verification against
-a digest cites the record that holds it, never the value.
+a digest cites the record that holds it, never the value. The rule reaches every tracked prose
+document including the ledger and the results documents, and applies to lines written after it;
+lines written before it stay as they are.
 
 ### 6.2 What is local-only
 

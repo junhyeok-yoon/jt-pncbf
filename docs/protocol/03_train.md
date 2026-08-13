@@ -56,11 +56,9 @@ bit-reproducible. Inactive slots beyond $n$ are zero-padded per `01_env` §1.3.
   `base_config.obstacle.*`.
 - **Start and goal:** drawn uniformly in
   $[-(\text{world\_lim} - 0.3),\ \text{world\_lim} - 0.3]^2$. For systems whose scene region is 3-D,
-  the vertical coordinate follows the same rule: start and goal $z$ drawn independently uniform in
-  $[-(\text{world\_lim} - \delta),\ \text{world\_lim} - \delta]$, with $\delta$ the same clearance the
-  horizontal coordinates carry. The floor and ceiling are physical surfaces (`01_env` §1.6), so a
-  start or goal placed on one is a start or goal inside an obstacle; the clearance that already
-  applies to every other hazard surface applies here for the same reason.
+  the vertical coordinate is drawn uniformly over the full arena band for both start and goal, with
+  no clearance from the band surfaces. Training must experience the region the value is meant to
+  score, and a start adjacent to a hazard surface is such a region.
 - **Attitude and body rates (3-D systems):** attitude Haar-uniform on $SO(3)$, per-axis $\omega_0$
   from the configured range (`01_env` §3.4). The vertical span is **not** narrowed for tilted draws.
   Evaluation restricts it — a start that no admissible control can hold is a measurement artefact
@@ -221,8 +219,8 @@ it can fall below $\max_k h$, so the regressed $V_S$ is a smooth under-estimate 
 true max-over-time value and is therefore slightly **optimistic on the unsafe side**.
 The default value loss accepts this trade-off for horizon-invariance and to avoid
 output-head saturation within $[-1, 1]$; conservativeness on the unsafe region can be
-restored either by the optional unsafe anchor (§4.3, inactive by default) or by switching
-the value target to the un-normalized log-sum-exp form as a one-axis alternative (§7).
+restored by switching the value target to the un-normalized log-sum-exp form as a one-axis
+alternative (§7); the unsafe anchor is prohibited (§4.3).
 
 ### 2.2 Value loss, optimizer, target network
 
@@ -432,14 +430,13 @@ episode segments; the trajectory view labels each segment to its own bootstrap-c
 uniformly over transitions exactly as before. Buffer contents are states; observations are
 recomputed at consumption (§2.4 item 6).
 
-### 4.3 Weak value supervision and minibatch composition (optional, inactive by default)
+### 4.3 Weak value supervision and minibatch composition (PROHIBITED)
 
-*This section defines an optional anchor mechanism for $V_S$. In the default value-loss
-configuration the anchor weights $\lambda_A = \lambda_C = 0$ and per-iteration anchor
-minibatches are not built; the value step uses only the transition minibatch with
-$\mathcal{L}_R$ (§2.2). The mechanism is retained here so it can be reactivated by setting
-nonzero anchor weights in a future variant. When inactive, references to anchor labels in
-§5 are skipped.*
+*The anchor mechanism is prohibited. $\lambda_A$ and $\lambda_C$ are an arbitrary loss with no
+grounding in the theory; the anchor weights are zero and per-iteration anchor minibatches are
+not built, and the value step uses only the transition minibatch with $\mathcal{L}_R$ (§2.2).
+The section remains so that what is prohibited can be read; references to anchor labels in §5
+are skipped.*
 
 In addition to the avoid target, $V_S$ may be anchored by two weak label sets re-extracted
 from collected trajectories at every value-step iteration. With per-trajectory step index

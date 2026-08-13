@@ -35,6 +35,40 @@ class _SceneModeParams:
     mode: str
     min_start_goal_dist: float
     start_goal_clearance: float
+    # v2.9.1 (changes.md 4.1): `start_goal_clearance` drove THREE distinct quantities jointly -- the start's
+    # horizontal obstacle clearance, the goal's, and the vertical band margin -- and the arena box came from
+    # the module constant `_START_GOAL_ARENA_MARGIN`, which the EVAL sampler reads too. These four fields
+    # SPLIT them. Every one defaults to None, and None means "inherit exactly what drove this quantity
+    # before", so a caller that does not set them (every eval caller, and any training config without the
+    # new `scene_train` keys) is byte-identical to the pre-v2.9.1 sampler. Default-off is the acceptance
+    # property (4.3), tested by scripts/analysis/v291_scene_parity.py.
+    start_obstacle_clearance: float | None = None   # None -> start_goal_clearance
+    goal_obstacle_clearance: float | None = None    # None -> start_goal_clearance
+    band_margin: float | None = None                # None -> start_goal_clearance (vertical, train band branch)
+    arena_margin: float | None = None               # None -> _START_GOAL_ARENA_MARGIN (0.3), unchanged for eval
+
+    @property
+    def start_clearance(self) -> float:
+        """Horizontal obstacle clearance demanded of the START."""
+        if self.start_obstacle_clearance is None:
+            return self.start_goal_clearance
+        return float(self.start_obstacle_clearance)
+
+    @property
+    def goal_clearance(self) -> float:
+        """Horizontal obstacle clearance demanded of the GOAL."""
+        if self.goal_obstacle_clearance is None:
+            return self.start_goal_clearance
+        return float(self.goal_obstacle_clearance)
+
+    @property
+    def arena_margin_eff(self) -> float:
+        """Arena inset for the start/goal xy box. Parameterised, NOT rebound: `_START_GOAL_ARENA_MARGIN`
+        keeps its 0.3 and every caller that leaves `arena_margin` None -- which is every eval caller --
+        still sees exactly 0.3."""
+        if self.arena_margin is None:
+            return _START_GOAL_ARENA_MARGIN
+        return float(self.arena_margin)
 
 
 _MAX_RETRIES = 1000
@@ -55,6 +89,34 @@ def reset_band_stats() -> None:
         _BAND_STATS[_k] = 0
 
 
+def _opt_float(block: Mapping[str, Any], key: str) -> float | None:
+    """Read an OPTIONAL scene-law key. Absent (or explicitly null) returns None, which every consumer
+    resolves back to the pre-v2.9.1 quantity -- the default-off half of changes.md v2.9.1 4.3."""
+    value = block.get(key, None)
+    return None if value is None else float(value)
+
+
+def train_scene_law(config: Mapping[str, Any]) -> dict[str, float | None]:
+    """v2.9.1: the four SPLIT training scene-law floors, read from `scene_train`. TRAINING ONLY -- no eval
+    caller reads this block for these quantities, so `eval.scene.*` and `_START_GOAL_ARENA_MARGIN` are
+    untouched by anything here."""
+    block = config["scene_train"]
+    return {
+        "start_obstacle_clearance": _opt_float(block, "start_obstacle_clearance"),
+        "goal_obstacle_clearance": _opt_float(block, "goal_obstacle_clearance"),
+        "band_margin": _opt_float(block, "band_margin"),
+        "arena_margin": _opt_float(block, "arena_margin"),
+    }
+
+
+def _train_band_margin(config: Mapping[str, Any]) -> float:
+    """Vertical band margin for the TRAINING altitude draw. Absent `scene_train.band_margin` inherits
+    `scene_train.start_goal_clearance`, exactly as scene_init.py did before v2.9.1."""
+    block = config["scene_train"]
+    value = _opt_float(block, "band_margin")
+    return float(block["start_goal_clearance"]) if value is None else value
+
+
 def sample_train_scene(
     rng: np.random.Generator,
     config: Mapping[str, Any],
@@ -64,6 +126,7 @@ def sample_train_scene(
         mode="train",
         min_start_goal_dist=float(config["scene_train"]["min_start_goal_dist"]),
         start_goal_clearance=float(config["scene_train"]["start_goal_clearance"]),
+        **train_scene_law(config),
     )
     return _sample_scene(rng, config, system, params)
 
@@ -92,7 +155,7 @@ def _sample_scene(
             goal,
         )
 
-        if not _has_start_goal_clearance(scene, params.start_goal_clearance):
+        if not _has_start_goal_clearance(scene, params.start_clearance, params.goal_clearance):
             continue
         if not _passes_unavoidable_collision_filter(scene, config, params):
             continue
@@ -115,7 +178,7 @@ def _sample_start_goal(
     params: _SceneModeParams,
 ) -> tuple[Array, Array]:
     world_lim = float(config["env"]["world_lim"])
-    coord_lim = world_lim - _START_GOAL_ARENA_MARGIN
+    coord_lim = world_lim - params.arena_margin_eff        # v2.9.1: parameterised; eval still gets 0.3
 
     for _ in range(_MAX_RETRIES):
         start = rng.uniform(-coord_lim, coord_lim, size=2).astype(np.float64)
@@ -372,7 +435,9 @@ def _make_scene(
                     # v2.7.6 Stage-2: training clears the band surfaces |z|=4 by delta_train — the same
                     # start-goal clearance every other hazard gets. Rollouts still continue through the surface
                     # (M0a), so this only removes born-on-surface starts, not doomed descents (valid V_hat data).
-                    d_tr = float(config["scene_train"]["start_goal_clearance"])
+                    # v2.9.1: the vertical margin is its OWN key now (`scene_train.band_margin`); absent, it
+                    # inherits `start_goal_clearance` and this draw is byte-identical to v2.9.0.
+                    d_tr = _train_band_margin(config)
                     start_z = float(rng.uniform(-world_lim + d_tr, world_lim - d_tr))
                     goal_z = float(rng.uniform(-world_lim + d_tr, world_lim - d_tr))
                 else:                                                        # eval default / band off -> unchanged
@@ -527,7 +592,16 @@ def _passes_band_obstacle_screen(scene: Scene, config: Mapping[str, Any], params
                                    scene.obstacle_radii, scene.obstacle_active, accel_a)
 
 
-def _has_start_goal_clearance(scene: Scene, clearance: float) -> bool:
+def _has_start_goal_clearance(
+    scene: Scene,
+    clearance: float,
+    goal_clearance_floor: float | None = None,
+) -> bool:
+    """v2.9.1: `clearance` is the START's floor; `goal_clearance_floor` is the GOAL's. Omitting the second
+    argument applies the single floor to both, which is what every pre-v2.9.1 caller (and every eval
+    caller) does -- byte-identical behaviour."""
+    if goal_clearance_floor is None:
+        goal_clearance_floor = clearance
     active_centers = scene.obstacle_centers[scene.obstacle_active]
     active_radii = scene.obstacle_radii[scene.obstacle_active]
     d = active_centers.shape[-1]                                 # obstacle coord dim (xy for cylinders)
@@ -537,7 +611,7 @@ def _has_start_goal_clearance(scene: Scene, clearance: float) -> bool:
     goal_clearance = np.min(
         np.linalg.norm(active_centers - scene.goal[:d], axis=1) - active_radii
     )
-    return bool(start_clearance >= clearance and goal_clearance >= clearance)
+    return bool(start_clearance >= clearance and goal_clearance >= goal_clearance_floor)
 
 
 def _passes_unavoidable_collision_filter(
@@ -568,7 +642,7 @@ def _passes_unavoidable_collision_filter(
             stopping_distance = inward_speed**2 / (2.0 * acceleration_bound)
 
         required_clearance = max(
-            params.start_goal_clearance,
+            params.start_clearance,        # v2.9.1: this filter is about the START, so it reads the START's floor
             stopping_distance + feasibility_margin,
         )
         if distance < float(radius) + required_clearance:

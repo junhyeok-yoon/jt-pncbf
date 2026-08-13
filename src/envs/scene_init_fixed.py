@@ -14,6 +14,7 @@ from src.envs.scene_init import (
     _sample_start_goal,
     _MAX_RETRIES,
     _SceneModeParams,
+    train_scene_law,
 )
 
 
@@ -26,6 +27,7 @@ def sample_train_fixed_scene(
         mode="train",
         min_start_goal_dist=float(config["scene_train"]["min_start_goal_dist"]),
         start_goal_clearance=float(config["scene_train"]["start_goal_clearance"]),
+        **train_scene_law(config),                    # v2.9.1 split floors (absent -> pre-v2.9.1 behaviour)
     )
     return _sample_fixed_scene(rng, config, system, params)
 
@@ -66,7 +68,7 @@ def _sample_fixed_scene(
             start,
             goal,
         )
-        if not _has_start_goal_clearance(scene, params.start_goal_clearance):
+        if not _has_start_goal_clearance(scene, params.start_clearance, params.goal_clearance):
             continue
         if not _passes_unavoidable_collision_filter(scene, config, params):
             continue

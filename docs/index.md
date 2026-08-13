@@ -9,33 +9,51 @@ the Strategist, and the Executor.
 ## Current state (dashboard)
 
 !!! note "STATUS — keep this section short and always current"
-    - **v2.8.5 close PREPARED — the version is NOT yet declared closed.** Active version:
-      **v2.8.5**. Record: `docs/versions/v2.8.5_results.md`. **Every arm of this version is a single
-      run at seed 42; no result below is a multi-seed aggregate.**
-    - **Seven conditions, and where each stopped** (all seed 42, all under `data/runs/v2.8.5/`; the
-      terminal is each run's own `status.json`, the `best.pt` step its `best_step`):
-      `ell` 0.10 **done @50000**, best 43500 · `ell` 0.125 **done @50000**, best 50000 ·
-      `ell` 0.175 **DEAD @37199 (CUDA OOM)**, best 28500, **no `final.pt` and no `report.md`** ·
-      `ell` 0.25 **done @50000**, best 40500 · `ell` 0.35 **done @50000**, best 42000 ·
-      CLIP50 (budget-matched clip control) **done @50000**, best 42000 ·
-      COMPRESS500 **SIGTERM @4779 = round 477.9**, best 4350, 22 rounds of its budget unrun,
-      **no `final.pt` and no `report.md`**. The two truncated runs' maxima are maxima of truncated
-      series and are not comparable to one taken over 500 rounds.
-    - **The axis returned no separation except an upper-side penalty.** On the registered cell the
-      ten pairs among `ell` 0.10 / 0.125 / 0.175 / 0.25 and the clip control separate at **zero**
-      rounds ≥ 300 against the 0.0083 admissibility floor; only `ell = 0.35` separates, and it is
-      worse in every pair. The two frontier conditions (`ell` 0.125, 0.10) both completed 500 rounds
-      and their placeholders are **closed** — the axis is **not** bracketed from below.
-    - **The compressed-update condition is registered to v2.8.5, not delegated to v2.9.0** — the
-      earlier delegation is withdrawn. Its verdict is **NOT RESOLVED**: it does not separate from its
-      clip control at any round ≥ 300, and the matched terminal comparison the axis was designed
-      around does not exist because it was signalled at round 477.9.
+    - **v2.8.5 CLOSED** (record `docs/versions/v2.8.5_results.md`) and **v2.9.0 CLOSED** (record
+      `docs/versions/v2.9.0_results.md`). Active version: **v2.9.1**, open, three conditions
+      training. `src/_version.py`, `pyproject.toml` and `src/configs/exp_config.yaml` all read
+      **v2.9.1** and agree. **Every run in every version below is a single run at seed 42; no result
+      here is a multi-seed aggregate.**
+    - **v2.9.0 — both registered hypotheses scored; the performance one failed.**
+      **A1 (`cps` on the registered cell) is FALSIFIED**: the compressed condition is **below its
+      control at 13 of 14 matched rounds ≥ 300**, mean paired difference **−0.034378**. Per-round
+      CIs overlap at **13 of the 14**; they are **disjoint at round 300** alone
+      ([0.717244, 0.780145] against [0.808011, 0.861132]). **No separation is claimed in either
+      direction** — one round's separation carries nothing, and the verdict rests on the sign count,
+      which is what A1 registered. **A2 (eval share of end-to-end wall) is
+      NOT falsified**: **7.26 %** whole-run and **8.32 %** worst residency segment against the
+      59.11 % `COMPRESS500` recorded, clearing it by 7.11× at the worst segment.
+    - **v2.9.0 conditions, and where each stopped** (all seed 42, under `data/runs/v2.9.0/`):
+      COMPRESS1000 **done @10000 = round 1000** · BUFCAP10K **done @10000** · BUFCAP5K
+      **done @10000** · BUFCAP2K **STOPPED @5721 = round 572.1** by Researcher instruction under a
+      free-VRAM trigger, **no `final.pt` and no `report.md`**; its series is truncated and its
+      maximum is not comparable to one taken over 1000 rounds. `halt_reason` is `null` on all four.
+      The `buffer_cap` series (1e6 → 10k / 5k / 2k) is **reported with no verdict** — it was not a
+      registered axis of the version.
+    - **v2.9.0 changed no bold row and secured nothing.** `data/secured_data/v2.9.0/` does not
+      exist, which is consistent with no v2.9.0 row being bold. Four v2.9.0 rows are registered at
+      **L297–L300**, one per condition at its in-loop best. `scripts/check_ledger.py` exit 0,
+      **281 rows, 41 blocks, 3 bolds, 0 violations**.
+    - **v2.9.1 open — three conditions training**, all seed 42, all under `data/runs/v2.9.1/`, all
+      `phase: training` with `halt_reason` null. Two carry the new training scene law against their
+      own v2.9.0 controls (`buffer_cap` 1e6 and 10 000); the third is the second of those with
+      `schedules.sigma.sigma_min` 0.3 → 0.0, a single-key pair. Gates 1–5 passed before launch —
+      flag-off parity byte-identical for both samplers, the eval pool rebuilt to its own manifest
+      digest, each config diff exactly its registered field set, and the schedule gate at exactly
+      0.0. No PID is named here; run directories are the stable identifier.
+    - **v2.8.5's seven conditions and its `ell` axis are closed** — the axis returned no separation
+      except an upper-side penalty at `ell = 0.35`, and the compressed-update condition closed
+      **NOT RESOLVED** after being signalled at round 477.9. Detail is in
+      `docs/versions/v2.8.5_results.md`; v2.9.0 re-ran that condition to full budget against a
+      matched control on a repaired evaluator and it **still lost at 13 of 14 matched rounds**, so
+      the three causes v2.8.5 named for the NOT-RESOLVED verdict were removed and the axis failed
+      anyway. **Sixteen v2.8.5 rows stay registered at L281–L296.**
     - **Pool of record: `fullcb`** — `eval_fullcb_quadrotor-3d-d2r_n2000_seed823456`, n 2000,
-      unchanged; its digest lives in the pool manifest, not here. `scripts/check_ledger.py` exit 0,
-      **277 rows, 3 bolds, 0 violations**. **Sixteen v2.8.5 rows registered at L281–L296**: seven
-      registered-cell `best.pt` rows (one per condition), the bold `ell` 0.125 @45000 row, five
-      runs' own `final` rows on pool `full` seed 23456, two `B1` budget rows at step 30000, and the
-      superseded `ell` 0.175 @33000 row, which stays registered but **not bold**.
+      unchanged; its digest lives in the pool manifest, not here. v2.9.0 built two replacement pools
+      under corrected altitude and omega laws and measured that their `cps` differs from `fullcb`'s
+      by less than the scene-sampling noise of an independent 2000-scene draw, so **no pool-level
+      effect was established and the pool of record did not move**; both carry
+      `pool_role = "NOT REGISTERED"` in their own manifests.
     - **Bold state:** double_integrator v2.3.0 (flagged — `cps_v2` reads `-`, and the row names no
       checkpoint); quadrotor_planar v2.7.1 0.9036; **quadrotor_3d v2.8.5 `ell` 0.125 @45000 =
       0.8701** [0.8472, 0.8919] (ledger **L294**, adopted checkpoint `step_045000.pt`, secured at

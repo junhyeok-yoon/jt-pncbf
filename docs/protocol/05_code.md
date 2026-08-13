@@ -141,7 +141,7 @@ class Framework(Protocol):
 
 The `data/` tree has exactly **two** subtrees: `runs/`, holding every artifact any run produces, git-ignored; and `secured_data/`, holding the frozen evaluation pools and the per-version snapshots, committed to git. Anything else appearing directly under `data/` is non-conforming and is reported rather than adopted.
 
-Every produced artifact is filed under the version that produced it, at creation time. Artifacts are never relocated afterwards — not at close, not at a version bump — so a path is stable from the moment it is written and the version that owns an artifact is readable from its path alone.
+Every produced artifact is filed under the version that produced it, at creation time, so a path is stable from the moment it is written and the version that owns an artifact is readable from its path alone. A run directory belonging to a version lives under that version's directory; a version-prefixed sibling is not created.
 
 ```text
 data/
@@ -207,7 +207,7 @@ bolded against JT rows (the existing classification clause governs).
 
 **No loose files.** Nothing sits directly under `data/`, `data/runs/`, or `data/runs/vX.Y.Z/`. Every produced file lives inside one of the three entry kinds; a registry or manifest spanning several runs gets its own `<run_id>/`.
 
-**A non-conforming path is recorded, not relocated.** Naming conformance is checked at creation, the only point at which it can still be corrected, because artifacts are never moved afterwards. A directory created outside the three entry kinds therefore stays where it is; the version that owns it is read from the `run.version` of the `config.yaml` files it contains rather than from its name; and both facts are stated wherever it is cited.
+**A non-conforming path is corrected by Researcher decision.** Naming conformance is checked at creation. A directory created outside the three entry kinds stays where it is until that decision is taken, and until then the version that owns it is read from the `run.version` of the `config.yaml` files it contains rather than from its name. The correction is a rename: contents and file count are unchanged, and every reference to the path is updated in the same change.
 
 **Abbreviation.** Where the rest of the protocol writes `data/<run_id>/`, it means `data/runs/vX.Y.Z/<run_id>/`, or `data/runs/vX.Y.Z/set__…/<run_id>/` for a phase of a multi-phase execution.
 

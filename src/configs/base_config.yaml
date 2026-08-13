@@ -53,6 +53,15 @@ scene_train:
   min_start_goal_dist: 1.0
   start_goal_clearance: 0.10
   init_feasibility_margin: 0.05
+  # v2.9.1 (changes.md 4.1): four OPTIONAL keys split what `start_goal_clearance` used to drive jointly.
+  # All four are ABSENT here on purpose -- absent means "inherit exactly the pre-v2.9.1 quantity", so this
+  # file's scene law is byte-identical to v2.9.0 and every eval pool still reproduces (gates 2 and 3).
+  # A v2.9.1 CONDITION sets them in its own run config; they are training-only and no eval caller reads them.
+  #   start_obstacle_clearance:  the START's horizontal obstacle clearance   (absent -> start_goal_clearance)
+  #   goal_obstacle_clearance:   the GOAL's horizontal obstacle clearance    (absent -> start_goal_clearance)
+  #   band_margin:               the vertical band margin on the train z draw (absent -> start_goal_clearance)
+  #   arena_margin:              the start/goal xy arena inset, TRAINING only (absent -> the module constant
+  #                              scene_init._START_GOAL_ARENA_MARGIN = 0.3, which the eval sampler keeps)
 
 obs:
   # v2.8.1 S1: obstacle-encoder selector. Global default `hard_topk` (the v2.8.0 argsort/top-k, unchanged for

@@ -322,7 +322,7 @@ Each pool ships with a manifest JSON containing:
 
 **Pool payload (pinned for SHA reproducibility).** The `.pkl` is a single dict with a fixed key order — `pool_format_version`, `system`, `seed`, `n_scenes`, then the stacked scene tensors (`obstacle_centers`, `obstacle_radii`, `obstacle_active`, `start`, `goal`, `init_velocity`) — serialized with `pickle.HIGHEST_PROTOCOL`. The byte-level reproducibility of the file (hence the SHA) depends on this fixed key order and on the deterministic RNG draw order of `03_train` §1.1. The manifest's timestamp and git fields are excluded from the pool file, so manifests are not byte-identical across regenerations even though the pool `.pkl` files are.
 
-The pool generation script is `src/eval/build_pools.py`, which accepts `system` so per-system pools are added without code change. Re-running it must produce a byte-identical pool `.pkl` given the same seed and sampler params (verified by SHA).
+The pool generation script is `src/eval/build_pools.py`, which accepts `system` so per-system pools are added without code change. Re-running it must produce a byte-identical pool `.pkl` given the same seed and sampler params (verified by SHA). A pool records beside itself how it was built; without that it cannot be remade whatever its seed says.
 
 ---
 
