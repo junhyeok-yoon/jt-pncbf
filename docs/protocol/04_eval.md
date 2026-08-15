@@ -291,24 +291,35 @@ The eval sampler reuses the training mechanism (`03_train` §1) with these overr
 - $\delta^{\text{eval}} = \texttt{eval.scene.start\_goal\_clearance}$ — strictly larger than the train value (looser).
 - Obstacle-field parameters identical to training (`base_config.obstacle.*`).
 - Initial velocity: same uniform $[-v_{\text{init,max}}, v_{\text{init,max}}]$ as training (per `03_train` §1.2). The unavoidable-collision rejection (`03_train` §1.3) is applied identically.
-- Initial position and attitude: on dimensions where recoverability is **not** monotone in looseness, the eval pool is the recoverable restriction, not a loosening. Concretely for the vertical axis under full-$\mathrm{SO}(3)$ attitude — training draws $z$ over the full arena band (including unrecoverable low starts, which the value function must learn), while eval restricts $z$ to a recoverable range conditioned on initial tilt. Recoverability of such a bound is established by an **attitude-aware** feasibility screen: a purely ballistic screen that ignores initial attitude is insufficient, since attitude determines whether thrust can arrest a descent. The bound is chosen as the widest one that keeps the flagged fraction at zero under that screen, not by argument.
+- Initial position and attitude: eval draws $z$ over the full arena band and the $\mathrm{SO}(3)$ attitude marginal is preserved exactly; no dimension of the initial draw is conditioned on another. Vertical admission is certified, not restricted: a constrained-input doom certificate — a plant-favorable reachable upper envelope under the per-rotor box, vertical thrust bounded by $(4 f_{\max}/m)\cdot\max(\cos\theta,\,0)$ and the righting rate by the box torque, with every uncertain term resolved toward the plant — must flag zero scenes at the episode horizon. The certificate's discrimination is established on an analytic doomed corner before a zero count is accepted. A screen that models one recovery maneuver is not an admission instrument: its flags carry no impossibility content.
 
-  **Canonical vertical bound.** The bound carries no fitted coefficient. Attitude, body rates and velocity are drawn first; the screen then returns, for that draw, the altitude $D_{\text{down}}$ lost while righting to upright and the overshoot $D_{\text{up}} = \max(0, v_z)^2 / (2g)$, and the start is drawn $z_0 \sim U\big(-\text{world\_lim} + D_{\text{down}} + \delta^{\text{eval}},\ \text{world\_lim} - \max(D_{\text{up}}, \delta^{\text{eval}})\big)$. Goal $z$ carries $\delta^{\text{eval}}$ from each surface, as it does from every other hazard surface. Only $z$ is redrawn — the attitude draw is never rejected — so the Haar marginal is preserved exactly; rejecting whole scenes would quietly bias the pool toward upright starts and weaken the very axis the $SO(3)$ distribution exists to stress. The screen grants the plant no more authority than it has: thrust and torque contend through the mixer (`01_env` §3.4), one ZOH step elapses before any corrective thrust acts, the gyroscopic term takes its worst sign, and the initial spin is adverse. Its reference surface is the **domain surface** $|p_z| = \text{world\_lim}$, not the out-of-bounds box; referencing the outer box makes the screen return no restriction at all, since the arena is wide enough to absorb the fall.
+  **The restriction removes the axis it conditions on.** A restricted pool, where additionally built as a diagnostic, carries almost no vertical failures by construction, so it cannot resolve a change to the vertical channel — it measures competence with initial-condition infeasibility already subtracted. The unrestricted pool is retained beside it and carries the headline for any vertical claim; the restricted pool answers the separate question of what remains after infeasible starts are removed. Reporting one without the other states neither question clearly.
 
-  **The restriction removes the axis it conditions on.** A pool built this way carries almost no vertical failures by construction, so it cannot resolve a change to the vertical channel — it measures competence with initial-condition infeasibility already subtracted. The unrestricted pool is retained beside it and carries the headline for any vertical claim; the restricted pool answers the separate question of what remains after infeasible starts are removed. Reporting one without the other states neither question clearly.
-
-Eval scenes are **looser** than training (larger clearance, larger min start-goal distance) so we never evaluate on scenes that training would have rejected — on clearance-type dimensions. On dimensions where looseness would admit **unrecoverable** initial conditions (notably the vertical axis under full-$\mathrm{SO}(3)$ attitude), the eval pool is instead the recoverable restriction, so the measure reflects policy competence and not initial-condition infeasibility.
+Eval scenes are **looser** than training (larger clearance, larger min start-goal distance) so we never evaluate on scenes that training would have rejected — on clearance-type dimensions. On the vertical axis under full-$\mathrm{SO}(3)$ attitude, admission is the doom-certificate zero-flag condition above; a restricted pool is a diagnostic construction only and never carries the headline.
 
 ### 6.2 Pools (committed)
 
-Two pools are pre-generated, serialized, and committed to git under `data/secured_data/pools/`, both built by the same `build_pools.py` machinery. Every run reads them; nothing is generated in memory at evaluation time.
+Per system, an in-loop pool and a full pool are pre-generated, serialized, and committed to git under `data/secured_data/pools/`, all built by the same `build_pools.py` machinery. Every run reads them; nothing is generated in memory at evaluation time.
 
-| pool | $N$ | seed | role | path |
-|---|---|---|---|---|
-| in-loop | 500 | 12345 | selection (best.pt by `cps`) | `data/secured_data/pools/eval_inloop_<system>_n500_seed12345.{pkl,manifest.json}` |
-| full | 2000 | 23456 | final eval / headline reporting | `data/secured_data/pools/eval_full_<system>_n2000_seed23456.{pkl,manifest.json}` |
+The pools of record are registered per system:
 
-`<system>` is a short tag (`di` for Double Integrator, `uni` for Unicycle, `quadrotor-planar`, `quadrotor-3d-d2r`). The tag is part of the filename because the project has multiple systems and pools are not interchangeable across them; e.g. `eval_inloop_di_n500_seed12345.pkl`. The in-loop and full pools are **disjoint** (different seeds, different sizes), separating selection (in-loop) from reporting (full), analogous to validation vs test in standard ML.
+| system | role | pool |
+|---|---|---|
+| double_integrator | full (headline / scoring) | `eval_full_di_n2000_seed123456` |
+| double_integrator | in-loop (selection) | `eval_inloop_di_n500_seed112345` |
+| unicycle | full | `eval_full_unicycle_n2000_seed123456` |
+| unicycle | in-loop | `eval_inloop_unicycle_n500_seed112345` |
+| quadrotor_planar | full | `eval_full_quadrotor-planar_n2000_seed23456` |
+| quadrotor_planar | in-loop | `eval_inloop_quadrotor-planar_n500_seed12345` |
+| quadrotor_3d | full | `eval_fullcb_quadrotor-3d-d2r_n2000_seed823456` |
+| quadrotor_3d | in-loop | `eval_inloopv2_quadrotor-3d-d2r-mixed_n2000_seed145678` |
+
+All entries live under `data/secured_data/pools/` as `.{pkl,manifest.json}`. The committed file
+is the pool of record and its manifest SHA is its identity. A superseded pool remains committed
+and is marked superseded; rows scored on it are not comparable to rows on its successor. The `di`/`unicycle` pools at seeds 23456/12345 are superseded: their admission
+filter does not regenerate under shipped code.
+
+The in-loop and full pools of a system are **disjoint** (different seeds, different sizes), separating selection (in-loop) from reporting (full), analogous to validation vs test in standard ML. Pools are not interchangeable across systems.
 
 The in-loop pool selects `best.pt` during training; the full pool is what the trainer's automated final eval runs and is the headline-reporting standard. Because pool scenes are drawn by a single seeded RNG in a fixed order (§6.3, `03_train` §1.1), any smaller-$N$ pool at a given seed is a byte-identical prefix of a larger one at the same seed — so checkpoint **re-selection** (re-evaluating a run's saved checkpoints on the full $N=2000$ pool to pick the true best, since the in-loop pool is smaller and noisier) is well-defined and reproducible.
 
@@ -486,6 +497,10 @@ The bulky per-step `metrics.csv` is excluded; the full training curve stays in t
 run directory. `ADOPTED.md` is the identity record and the only file in the set that carries digests
 (`06_workflow` §6.1). This file set is the definition; `06_workflow` §6.3 governs when a snapshot is
 created and does not restate its contents.
+
+For OC-framework entries the three top-level figures are not produced; the per-eval
+`figures/inloop/` tree stands in their place and the entry inventory records the substitution.
+The remaining items of this set apply unchanged.
 
 Per-version aggregate lives at `data/secured_data/<version>/aggregate/` (only when multi-seed aggregation is performed):
 

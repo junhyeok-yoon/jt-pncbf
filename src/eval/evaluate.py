@@ -175,7 +175,9 @@ def evaluate(
         # (step_outcomes / resolve_outcome / first_physical_event_step already accept the batch
         # dim; batched_scene carries per-scene obstacles + goal). ONE host transfer per chunk;
         # masks are sliced per scene in the loop. Bit-identical to the former per-scene calls (C1).
-        chunk_masks = step_outcomes(filtered.states, batched_scene, framework.system, config)
+        chunk_masks = step_outcomes(
+            filtered.states, batched_scene, framework.system, config, actions=filtered.u_safe
+        )
         chunk_resolved = resolve_outcome(chunk_masks)
         chunk_phys = first_physical_event_step(chunk_masks)
         chunk_min_wd = eval_min_window_displacement_batched(chunk_masks, chunk_phys)
@@ -195,10 +197,11 @@ def evaluate(
         lqr_event_step_cpu = None
         if lqr_batch is not None:
             lqr_resolved = _resolve_states(
-                lqr_batch,
+                lqr_batch.states,
                 batched_scene,
                 framework.system,
                 config,
+                actions=lqr_batch.u_safe,
             )
             lqr_event_step_cpu = lqr_resolved.event_step.detach().cpu()
 
@@ -231,7 +234,7 @@ def evaluate(
             lqr_outcome = None
             lqr_event_step = None
             if lqr_batch is not None:
-                lqr_states = lqr_batch[:, local_idx : local_idx + 1, :]
+                lqr_states = lqr_batch.states[:, local_idx : local_idx + 1, :]
                 lqr_outcome = lqr_resolved.outcome[local_idx]
                 lqr_event_step = int(lqr_event_step_cpu[local_idx].item())
 
@@ -360,7 +363,11 @@ def _rollout_lqr_batch(
     max_steps: int,
     dt: float,
     config: Mapping[str, Any],
-) -> Tensor:
+) -> RolloutResult:
+    # v2.9.1 item 2: returns the FULL RolloutResult (was `.states`) so the baseline's outcome
+    # resolution can be given the same executed-command stack rollout_eval's own done mask now uses.
+    # Without that the LQR baseline could be frozen by the done mask on a reach the scoring predicate
+    # then refuses, and the frozen episode would resolve as `stuck` instead.
     def policy_fn(x: Tensor, policy_scene: Any) -> Tensor:
         goal = torch.as_tensor(policy_scene.goal, dtype=x.dtype, device=x.device)
         return system.lqr_action(x, goal)
@@ -381,7 +388,7 @@ def _rollout_lqr_batch(
         max_steps,
         dt,
         config=config,
-    ).states
+    )
 
 
 def _load_pool_with_manifest(
@@ -434,8 +441,9 @@ def _resolve_states(
     scene: Scene,
     system: System,
     config: Mapping[str, Any],
+    actions: Tensor | None = None,
 ) -> OutcomeResult:
-    return resolve_outcome(step_outcomes(states, scene, system, config))
+    return resolve_outcome(step_outcomes(states, scene, system, config, actions=actions))
 
 
 def _episode_row(

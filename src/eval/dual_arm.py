@@ -69,6 +69,7 @@ def _rollout(scenes, un_fn: Callable[[Tensor, Any], Tensor], config, h_fn, syste
         sviol = torch.zeros_like(empt); infc = torch.zeros_like(empt); inf2 = torch.zeros_like(empt)
         sat = torch.zeros_like(empt)                                 # v2.8.0 B6.3: per-step saturation flag
         states = [x]
+        us: list[Tensor] = []                                        # v2.9.1 item 2: executed commands
         with torch.no_grad():
             for t in range(max_steps):
                 un = un_fn(x, bs)
@@ -84,8 +85,12 @@ def _rollout(scenes, un_fn: Callable[[Tensor, Any], Tensor], config, h_fn, syste
                 else:
                     u = torch.clamp(un, min=bounds[:, 0], max=bounds[:, 1])
                 sat[t] = (torch.minimum((u - bounds[:, 0]).abs(), (u - bounds[:, 1]).abs()) <= 1.0e-3).any(dim=1)
+                us.append(u)
                 x = rk4_step(system, x, u, dt); states.append(x)
-        S = torch.stack(states, 0); masks = step_outcomes(S, bs, system, config); res = resolve_outcome(masks)
+        S = torch.stack(states, 0)
+        # v2.9.1 item 2: the reach predicate's third leg reads the COMMANDED turn rate on systems where
+        # it is a control input (unicycle); every other system ignores `actions` (bit-identical).
+        masks = step_outcomes(S, bs, system, config, actions=torch.stack(us, 0)); res = resolve_outcome(masks)
         an = first_physical_event_step(masks)
         an = torch.where(an >= 0, an, torch.full_like(an, max_steps))
         act = torch.arange(max_steps, device=device).unsqueeze(1) < an.unsqueeze(0)

@@ -269,9 +269,20 @@ loss:
     lambda_a: 0.05                  # action_norm
     lambda_s: 0.1                   # smoothness
     lambda_sat: 1.0                 # sat_excess (on pre-projection |a_phi|)
-    sat_excess_threshold: [19.62, 1.0]   # v2.6.1 Axis A (dependent): torque component 0.2->1.0 to TRACK the
-                                    # new torque box so L_sat stays 0 within the legal box. PER-CHANNEL
-                                    # [thrust, torque] = box bounds (was [19.62, 0.2] in v2.6.0). In-box output -> penalty 0.
+    sat_excess_threshold: u_bounds  # v2.9.1 item 1: PER SYSTEM, resolved from that system's OWN action box
+                                    # (max(|lo|,|hi|) per channel of system.u_bounds) instead of one
+                                    # hand-written list. Was the literal [19.62, 1.0] -- the quadrotor_planar
+                                    # box -- broadcast over the action dim with NO system gate, which on
+                                    # double_integrator penalised legal |a_y| in (1.0, 2.0] and on the unicycle
+                                    # two thirds of the legal turn-rate range. Resolves to: DI [2.0, 2.0]
+                                    # (base_config.yaml:26 u_max), unicycle [2.0, 3.0] (base_config.yaml:29-30
+                                    # a_max/omega_max), quadrotor_planar [19.62, 1.0] (UNCHANGED, = f_max/tau_max),
+                                    # quadrotor_3d [4.905]x4 (UNCHANGED, = f_rotor_max, the value every 3D
+                                    # launcher already sets by hand). An explicit list/scalar here is still
+                                    # honoured verbatim, so archived configs and launcher overrides are
+                                    # bit-identical. v2.6.1 Axis A (dependent, superseded by this): torque
+                                    # component 0.2->1.0 to TRACK the new torque box so L_sat stays 0 within
+                                    # the legal box -- exactly the hand-tracking this sentinel removes.
     lambda_pretanh: 1.0
     z_target: 1.0                   # v2.6.0 raised 0.867->1.0: clamp_tanh reaches the box at |z|=0.867, so
                                     # z_target>=0.867 leaves boundary-reaching (incl. deep-safe tilted-IC
@@ -325,6 +336,23 @@ filter:
     k: 10
     quadrotor_3d:                    # v2.8.0 B6.4: shipped 3D fallback = {kstep, phases 1, k 3}
       mode: kstep                    # (v2.7.6_results.md:29 selected it; per-system via B6.1 plumbing)
+      phases: 1
+      k: 3
+    # v2.9.1 Researcher decision: the SAME cell on all four systems. `phases` is written explicitly
+    # because its ABSENCE resolves to 2 (filter_hardnet.py:567), which is not what 3D runs.
+    # This SUPERSEDES quadrotor_planar's registered {kstep, k 5} adoption (docs/ledger.md:132) and
+    # the global {none, k 10} that double_integrator and unicycle previously inherited. The
+    # adoption is not deleted from the record; it is superseded by decision.
+    quadrotor_planar:
+      mode: kstep
+      phases: 1
+      k: 3
+    double_integrator:
+      mode: kstep
+      phases: 1
+      k: 3
+    unicycle:
+      mode: kstep
       phases: 1
       k: 3
 

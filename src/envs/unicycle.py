@@ -86,7 +86,19 @@ class Unicycle:
 
     def angular_rate(self, x: Tensor) -> Tensor:
         # turn rate is a control input (u[1]), not a state -> structural zero (condition vacuous).
+        # v2.9.1: kept as-is for every state-only consumer; the reach predicate now prefers
+        # `commanded_angular_rate` below whenever the caller has the executed action stack.
         return torch.zeros_like(x[..., 0])
+
+    def commanded_angular_rate(self, x: Tensor, u: Tensor) -> Tensor:
+        """v2.9.1 item 2 — the turn rate this system actually carries at `x`, read off the COMMAND.
+
+        `dynamics` sets dtheta/dt = u[:, 1] exactly, so |u[..., 1]| IS the instantaneous angular-rate
+        magnitude; there is no state component to read it from. Defining this method is what makes
+        `outcomes.step_outcomes`' third reach leg (||omega|| <= env.goal_angrate_radius) live on the
+        unicycle instead of vacuous. No other system defines it, so no other system's outcome moves.
+        """
+        return torch.abs(u[..., 1])
 
     def lqr_action(self, x: Tensor, goal: Tensor) -> Tensor:
         goal = _batched_goal(goal, x)

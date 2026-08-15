@@ -263,6 +263,7 @@ def rollout_eval(
             scene,
             torch.stack(states, dim=0),
             config,
+            actions=torch.stack(u_safe_steps, dim=0),
         )
 
     if max_steps == 0:
@@ -296,8 +297,12 @@ def _physical_done_mask(
     scene: Any,
     states: Tensor,
     config: Mapping[str, Any],
+    actions: Tensor | None = None,
 ) -> Tensor:
-    masks = step_outcomes(states, scene, system, config)
+    # v2.9.1 item 2: `actions` is the EXECUTED command stack so far ([T, B, adim] against [T+1, B, D]
+    # states). It is only read by systems whose turn rate is a control input (unicycle); every other
+    # system ignores it and this call is bit-identical to the pre-v2.9.1 one.
+    masks = step_outcomes(states, scene, system, config, actions=actions)
     return masks.collided[-1] | masks.goal_reached[-1] | masks.oob[-1]
 
 

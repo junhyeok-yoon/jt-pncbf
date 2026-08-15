@@ -115,13 +115,35 @@ class OCPNCBFFramework:
         self.system = system
         self.value_net = value_net
         self.config = config
-        self._filter = CBFQPFilter(system, self._h_fn, config)
+        # v2.9.1 D7 REPAIR (docs/versions/v2.9.1/xsystem/oc_arm.md §4.1, §8 D7): the ENFORCEMENT FORM is now
+        # selected here by the SAME `filter.type` key the JT trainer reads at jt_pncbf/train.py:228-237, with
+        # the SAME default ("hardnet"), so both arms deploy the exact dual projection and an OC-vs-JT `cps`
+        # comparison no longer confounds certificate with enforcement. The h_fn handed to the filter is this
+        # framework's own `_h_fn` (the learned OC certificate), exactly as the reference deploy
+        # scripts/verification/hardnet_oc_eval.py:44-66 does; `policy_fn` is supplied so filter.lookahead is
+        # reachable on this arm too (shipped off). "cbf_qp" keeps the pre-repair CBFQPFilter construction
+        # reachable -- every OC artifact on disk (oc_arm.md §4.3) was produced under it.
+        _filter_type = str(config.get("filter", {}).get("type", "hardnet"))
+        if _filter_type == "hardnet":
+            from src.common.filter_hardnet import HardNetFilter
+            self._filter = HardNetFilter(system, self._h_fn, config, policy_fn=self.policy)
+        elif _filter_type == "backup_switching":
+            from src.common.filter_backup import BackupSwitchingFilter
+            self._filter = BackupSwitchingFilter(system, self._h_fn, config, policy_fn=self.policy)
+        elif _filter_type == "cbf_qp":
+            self._filter = CBFQPFilter(system, self._h_fn, config)
+        else:
+            raise ValueError(
+                f"Unknown filter.type {_filter_type!r}; expected 'hardnet', 'backup_switching' or 'cbf_qp'."
+            )
 
     def policy(self, x: Tensor, scene: Any) -> Tensor:
         goal = _scene_goal_batch(scene, x)
         return self.system.lqr_action(x, goal)
 
-    def filter(self, x: Tensor, u_nom: Tensor, scene: Any) -> tuple[Tensor, Tensor, Tensor]:
+    def filter(self, x: Tensor, u_nom: Tensor, scene: Any) -> tuple[Tensor, ...]:
+        # HardNet / BackupSwitching return (u_safe, infeasible); CBFQPFilter returns (u_safe, infeasible,
+        # slack). Every consumer reads the first two (src/eval/evaluate.py:412-424 asserts len >= 2).
         return self._filter(x, scene, u_nom)
 
     def value(self, x: Tensor, scene: Any) -> Tensor:
@@ -581,6 +603,13 @@ def _value_step(
     }
 
 
+def _value_ceiling(config: Mapping[str, Any]) -> float:
+    """v2.8.4 ceiling axis — the SINGLE config key, shared with the read-out (value_net.py).
+    Default 1.0 reproduces the shipped label bit for bit. The lower bound stays at -1.0.
+    Verbatim from src/frameworks/jt_pncbf/losses.py:118-122 so both arms read the key identically."""
+    return float((config.get("network", {}) or {}).get("value", {}).get("ceiling", 1.0))
+
+
 def _targets_for_tensor_batch(
     *,
     system: System,
@@ -599,6 +628,12 @@ def _targets_for_tensor_batch(
         float(config["env"]["dt"]),
         target_rhs,
         bootstrap_tail,
+        # v2.9.1 D3 REPAIR (docs/versions/v2.9.1/xsystem/oc_arm.md §1.0c fact 1, §5.2 item 1, §8 D3): without
+        # this argument the LABEL clamped at pncbf_target's default 1.0 while the READ-OUT
+        # (value_net.py:26, :38) clamps at network.value.ceiling, so at any ceiling != 1.0 the OC arm
+        # regressed onto a different function from the JT arm. The JT arm passes the same expression at
+        # jt_pncbf/losses.py:186, :218, :248. Default 1.0 leaves every pre-repair call byte-identical.
+        ceiling=_value_ceiling(config),
     ).detach()
     return targets.gather(0, batch.step_indices.unsqueeze(0)).squeeze(0)
 
@@ -847,7 +882,22 @@ def _write_pool_manifest_copy(run_dir: Path, config: Mapping[str, Any]) -> None:
     )
 
 
-def _pool_path(pool_name: str, config: Mapping[str, Any], system_name: str) -> Path:
+def _pool_stem_for(pool_name: str, config: Mapping[str, Any], system_name: str) -> str:
+    # v2.9.1 D1 REPAIR (docs/versions/v2.9.1/xsystem/oc_arm.md §1.4, §8 D1): this is a verbatim adoption of
+    # the JT arm's src/frameworks/jt_pncbf/train.py:2182-2212. The pre-repair OC stem builder passed no
+    # `variant` argument, so `pool_variant(config, system)` was discarded and quadrotor_3d silently resolved
+    # the pre-`d2`, n=500 pool while the JT arm resolved the -d2r pools. DI / unicycle / quadrotor_planar
+    # carry an empty variant and no mixed in-loop standard, so their stems are unchanged by construction.
+    from src.eval.build_pools import obstacle_distribution_name, pool_stem, pool_variant
+
+    # v2.8.0 dual-scoring standard: quadrotor_3d in-loop evaluation uses the MIXED pool (1000 full-attitude +
+    # 1000 tilt<=60, per-IC provenance) so both regimes are exposed every cadence in one evaluation. Other
+    # systems and the `full` pool are unchanged. Gated on config so a checkpoint predating the standard (or a
+    # config that opts out via eval.in_loop.mixed=false) resolves the legacy in-loop pool.
+    if (pool_name == "inloop" and system_name == "quadrotor_3d"
+            and bool(config.get("eval", {}).get("in_loop", {}).get("mixed", True))):
+        return "eval_inloopv2_quadrotor-3d-d2r-mixed_n2000_seed145678"  # v2.8.3 S2 successor (predecessor resolvable)
+
     if pool_name == "inloop":
         n_scenes = int(config["eval"]["in_loop"]["n"])
         seed = int(config["eval"]["in_loop"]["seed"])
@@ -856,9 +906,18 @@ def _pool_path(pool_name: str, config: Mapping[str, Any], system_name: str) -> P
         seed = int(config["eval"]["full"]["seed"])
     else:
         raise ValueError(f"Unknown pool: {pool_name!r}")
-    return POOL_DIR / (
-        f"{pool_stem(pool_name, system_name, n_scenes, seed, obstacle_distribution_name(config))}.pkl"
+    return pool_stem(
+        pool_name, system_name, n_scenes, seed,
+        obstacle_distribution_name(config), pool_variant(config, system_name),
     )
+
+
+def _pool_path(pool_name: str, config: Mapping[str, Any], system_name: str) -> Path:
+    # v2.7.3 M0c: variant (from config) selects the scene-variant pool; hard-assert it exists + SHA-matches
+    # its manifest so a run cannot silently fall back to the wrong/absent pool.
+    from src.eval.build_pools import resolve_pool_or_raise
+
+    return resolve_pool_or_raise(_pool_stem_for(pool_name, config, system_name))  # secured then eval_pools (v2.7.4)
 
 
 def _train_scene_sampler(config: Mapping[str, Any]) -> Any:

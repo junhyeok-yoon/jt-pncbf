@@ -1,0 +1,108 @@
+{
+  "argv": "UNRECOVERABLE",
+  "command_line": "UNRECOVERABLE",
+  "config": {
+    "effective_config_at_build_time": "UNRECOVERABLE",
+    "loader_used_at_build_time": "UNRECOVERABLE",
+    "note": "`sampler_params` is the ONLY surviving snapshot of the build-time configuration. It is a partial snapshot: it carries env.bounds / env.v_init_max / env.world_lim, eval.scene, obstacle.*, obstacle_distribution and scene_train.init_feasibility_margin, and nothing else. It does not identify which loader produced it, so whether base_config alone or base+exp merged was used is UNRECOVERABLE from the artifacts.",
+    "sampler_params_recorded_in_manifest": {
+      "env": {
+        "bounds": {
+          "f_max": 19.62,
+          "f_min": 0.0,
+          "omega_max": 4.0,
+          "tau_max": 0.2,
+          "v_max": 2.5
+        },
+        "v_init_max": 0.5,
+        "world_lim": 4.0
+      },
+      "eval_scene": {
+        "min_start_goal_dist": 1.5,
+        "start_goal_clearance": 0.15
+      },
+      "fixed_obstacle": {
+        "active_count": 1,
+        "center": [
+          0.0,
+          0.0
+        ],
+        "radius": 0.8
+      },
+      "obstacle": {
+        "corridor_along_factor": 1.5,
+        "corridor_perp_factor": 1.0,
+        "n_max": 12,
+        "n_min": 1,
+        "p_corridor": 0.6,
+        "r_max": 0.8,
+        "r_min": 0.15
+      },
+      "obstacle_distribution": "random",
+      "scene_train": {
+        "init_feasibility_margin": 0.05
+      }
+    },
+    "sources_sha256_at_build_time": {
+      "src/configs/base_config.yaml": "UNRECOVERABLE",
+      "src/configs/exp_config.yaml": "UNRECOVERABLE"
+    }
+  },
+  "cwd": "UNRECOVERABLE",
+  "derived_from": "UNRECOVERABLE",
+  "env": {
+    "CUDA_VISIBLE_DEVICES": "UNRECOVERABLE",
+    "PYTHONPATH": "UNRECOVERABLE"
+  },
+  "executable": "UNRECOVERABLE",
+  "finished_at": "UNRECOVERABLE",
+  "generated_by": {
+    "note": "a scratch generator, deliberately NOT added to the repository. This file is a RECORD, not a build product: every value in it is either read from the pool/manifest beside it, measured from a file whose sha256 is given here, or the literal UNRECOVERABLE. Nothing in it needs the generator to be re-run to be checked.",
+    "path": "/tmp/claude-1000/-home-junhyeok-MIT-jt-pncbf/31d93785-ac11-4206-bf50-a4c3de145dff/scratchpad/gen_invocation.py",
+    "sha256": "1b8c6ef6ede23a5338d47de0055be1a29730e268545f3f439db32230935bf2e9"
+  },
+  "git": "NO git command of any kind was run to write this record.",
+  "module_sha256_at_record_time": {
+    "scripts/analysis/v291_pool_rebuild.py": "93e7e6345e8b852bd8a554d23c5d1a28fe95d410c1189d2358cae7d580344d24",
+    "src/configs/base_config.yaml": "bf76fe45f6585d43fcae952c8345acb814cbd25f4bfe7c4aba3409e50d3e4876",
+    "src/configs/exp_config.yaml": "b9fceab97f8cc02882d6948fd5747bc29b99b77b9501bca3e9178074748ccf4f",
+    "src/envs/double_integrator.py": "239f9fd30b433299249a459ca91cb459be052337bf9f9e8286919b56115b3ea1",
+    "src/envs/quadrotor_planar.py": "8de242c33e823bf22bf088719424f404b44d1d7cf5d11274ea6e83b48b3c7cd6",
+    "src/envs/scene_init.py": "c6ab3d3e86077f6f9ed6718e87d811da55779cc76c667ef4ae1e0d5dbe166707",
+    "src/envs/scene_init_eval.py": "bc5d239c970b286a8570e672b8fd6e4cd1c899c1cd36b933adf72b39e369a57b",
+    "src/envs/unicycle.py": "bbfb51833f06759e3910b3ddfafae038fbd598f8d4d9ade71047aa20f17e1cc5",
+    "src/eval/build_pools.py": "09616e52c30c733ba7f5c7db16eba1466a22b481620cbf0515985df5c23f59a6"
+  },
+  "pool": {
+    "created_at_in_manifest": "2026-07-15T04:06:23+00:00",
+    "git_commit_in_manifest": "f5edc2513bb630a40e7a44cf6a2c229d999e631c",
+    "manifest": "eval_inloop_quadrotor-planar_n500_seed12345.manifest.json",
+    "n_scenes": 500,
+    "obstacle_distribution": "random",
+    "pool_format_version": 1,
+    "pool_sha256_agrees": true,
+    "pool_sha256_in_manifest": "4c8af29c550bce8102333ff4504886e4256cd50842bc08354141475115467e19",
+    "pool_sha256_recomputed_at_record_time": "4c8af29c550bce8102333ff4504886e4256cd50842bc08354141475115467e19",
+    "role": "in-loop selection (04_eval 6.2)",
+    "seed": 12345,
+    "stem": "eval_inloop_quadrotor-planar_n500_seed12345",
+    "system": "quadrotor_planar"
+  },
+  "record_status": "RETROSPECTIVE. This pool was built before the amendment, so no invocation was captured at build time. Fields that describe the build PROCESS are therefore UNRECOVERABLE and are marked as such rather than reconstructed. Fields that describe the pool ITSELF are read from the pool and its manifest and are exact. Blocks named *_at_record_time were MEASURED when this file was written and describe the repository now, NOT the repository at build time.",
+  "record_written_at": "2026-08-13T17:01:01+00:00",
+  "reproducibility_at_record_time": {
+    "checker": "scripts/analysis/v291_pool_rebuild.py --stem eval_inloop_quadrotor-planar_n500_seed12345 --system quadrotor_planar --scratch <SCRATCH>",
+    "checker_config_loader": "base_config.yaml deep-merged with exp_config.yaml (v291_pool_rebuild.py:41-45)",
+    "checker_sha256": "93e7e6345e8b852bd8a554d23c5d1a28fe95d410c1189d2358cae7d580344d24",
+    "cpu_only": true,
+    "gate_3_result": "PASS -- reproduces bit-for-bit",
+    "rebuilt_pool_sha256": "4c8af29c550bce8102333ff4504886e4256cd50842bc08354141475115467e19",
+    "recorded_pool_sha256": "4c8af29c550bce8102333ff4504886e4256cd50842bc08354141475115467e19",
+    "wrote_only_to_scratch": true
+  },
+  "script": "UNRECOVERABLE",
+  "script_sha256": "UNRECOVERABLE",
+  "started_at": "UNRECOVERABLE",
+  "wall_s": "UNRECOVERABLE",
+  "what": "how eval_inloop_quadrotor-planar_n500_seed12345.pkl was built -- the provenance record 04_eval section 6 (amended 2026-08-13) requires beside every pool."
+}

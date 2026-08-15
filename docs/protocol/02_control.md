@@ -177,7 +177,12 @@ infeasible flag; the reported `infeasibility` is the mean over episodes. This is
 
 **Empty-branch fallback.** `filter.empty_fallback = {mode: none | kstep, phases: 1 | 2, k: int}`.
 Per-system deployed defaults: quadrotor_planar = `{kstep, phases 2, k 5}`; quadrotor_3d =
-`{kstep, phases 1, k 3}`; all other systems = `{none}`. Under kstep, ONLY on rows where the box/half-space
+`{kstep, phases 1, k 3}`; all other systems = `{none}`. The registered scoring cell fixes
+`empty_fallback = {kstep, phases 1, k 3}` uniformly across systems; the per-system deployed
+defaults above govern deployment only and do not define the scoring cell. The eval-only status of
+kstep mode is enforced by configuration, not by code: the filter construction path reads the same
+key for training collection, so no per-system `empty_fallback` sub-block may appear in a training
+config. Under kstep, ONLY on rows where the box/half-space
 intersection is empty, the returned action is the first-phase control of the argmin, over a
 piecewise-constant candidate family (per-system control grid from the box U: corners + center/zero + per-axis
 extremes; deterministic fixed-order tie-break), of V_hat at the k-step rollout endpoint under the plant model — a

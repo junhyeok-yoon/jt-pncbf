@@ -36,11 +36,58 @@ class OutcomeResult:
     collision_cause: list[str] = field(default_factory=list)
 
 
+def _reach_angular_rate(
+    system: System,
+    states: Tensor,
+    actions: Tensor | None,
+) -> Tensor:
+    """v2.9.1 item 2 — the third leg of the reach predicate, for systems whose turn rate is a CONTROL
+    INPUT rather than a state.
+
+    `System.angular_rate(x)` reads the angular rate off the state. On the unicycle the turn rate is
+    `u[1]` (`unicycle.dynamics`: dtheta/dt = omega = u[:,1]), so `angular_rate` is a hard structural
+    zero and the third leg was vacuous there: a unicycle turning at omega_max could be scored as
+    having arrived. A system may therefore expose `commanded_angular_rate(x, u)`; when it does AND the
+    caller supplies the executed action stack, that is what the predicate reads.
+
+    Alignment is BACKWARD (zero-order hold): state x_t was produced by the command u_{t-1} held over
+    [t-1, t), so the turn rate the body carried on arriving at x_t is |u_{t-1}[1]|. The initial state
+    x_0 precedes every command; its commanded rate is undefined and is taken as 0 — which is exactly
+    the pre-v2.9.1 structural value at that one index. Backward alignment also keeps the outcome at
+    step t causal (it depends only on controls applied up to t).
+
+    Systems that do NOT define `commanded_angular_rate` (double_integrator, quadrotor_planar,
+    quadrotor_3d) take the `system.angular_rate(states)` branch unchanged, whatever `actions` is —
+    so their masks are bit-identical to the pre-v2.9.1 function by construction.
+    """
+    commanded = getattr(system, "commanded_angular_rate", None)
+    if commanded is None or actions is None:
+        return system.angular_rate(states)
+    if actions.ndim != states.ndim:
+        raise ValueError(
+            f"actions must have the same rank as states, got {tuple(actions.shape)} "
+            f"vs {tuple(states.shape)}."
+        )
+    n_states = states.shape[0]
+    n_actions = actions.shape[0]
+    if n_actions == n_states:
+        aligned = actions
+    elif n_actions == n_states - 1:
+        aligned = torch.cat([torch.zeros_like(actions[:1]), actions], dim=0)
+    else:
+        raise ValueError(
+            f"actions has {n_actions} steps, expected {n_states} or {n_states - 1} "
+            f"for states with {n_states} steps."
+        )
+    return commanded(states, aligned.to(device=states.device, dtype=states.dtype))
+
+
 def step_outcomes(
     states: Tensor,
     scene: Any,
     system: System,
     config: Mapping[str, Any],
+    actions: Tensor | None = None,
 ) -> StepOutcomeMasks:
     positions = system.position(states)
     obstacle = _collided_exact(positions, scene)
@@ -68,7 +115,7 @@ def step_outcomes(
     goal = torch.as_tensor(scene.goal, dtype=states.dtype, device=states.device)
     goal_distance = torch.linalg.norm(positions - goal, dim=-1)
     speed = system.speed(states)
-    angrate = system.angular_rate(states)
+    angrate = _reach_angular_rate(system, states, actions)
     goal_angrate_radius = float(config["env"].get("goal_angrate_radius", float("inf")))
     goal_reached = (
         (goal_distance <= float(config["env"]["goal_radius"]))

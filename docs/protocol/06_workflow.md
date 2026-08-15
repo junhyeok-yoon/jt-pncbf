@@ -222,7 +222,9 @@ evaluation row are not registered. Numeric outcome fields (`reach`, `collision`,
 `stuck`, `timeout`, `infeasibility`, `saturation_rate`, `cps`) are recorded to 4 decimal
 places; CIs use the same precision when included. Run-ids are recorded verbatim from the
 `<run_id>` directory. The `parent` column may be `-` if the run is not a child of another
-registered run.
+registered run. Ledger row order follows each row's `date` cell. Artifact timestamps are
+not an ordering key, and an artifact's mtime is never edited to satisfy ordering or any other
+check.
 
 During the infeasibility-definition transition (`04_eval` §1 History note), each new row's
 `verdict`/note field carries both scores (`legacy cps X / cps-v2 Y`); pre-transition rows

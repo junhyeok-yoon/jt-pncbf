@@ -778,9 +778,11 @@ runtime effect.
 
 3. **$\sigma$ pinned at $\sigma_{\max}$.** If $\sigma_n^{\text{tgt}}$ equals
    $\sigma_{\max}$ for `halt.sigma_max_cycles` consecutive collection cycles, halt:
-   exploration is failing to find unsafe signal even at the noise ceiling.
+   exploration is failing to find unsafe signal even at the noise ceiling. `halt.sigma_max_cycles`
+   has no reader in code; the rule is not enforced by any gate.
 4. **`cps` floor.** Once warmup is past, if the in-loop `cps` drops below
-   `halt.cps_floor` (default $-0.5$), halt: training has collapsed. The floor is a threshold on a
+   `halt.cps_floor` (default $-0.5$), halt: training has collapsed. `halt.cps_floor` is wired in
+   the OC trainer only; the JT loop reads no such halt. The floor is a threshold on a
    metric, so it is only meaningful against that metric's reachable range: a change to the outcome
    predicates or to `cps` shifts the whole range and the floor is re-derived from the new one, never
    carried across or relaxed to fit. A floor placed outside the reachable range on a given stage is a

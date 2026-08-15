@@ -9,85 +9,69 @@ the Strategist, and the Executor.
 ## Current state (dashboard)
 
 !!! note "STATUS — keep this section short and always current"
-    - **v2.8.5 CLOSED** (record `docs/versions/v2.8.5_results.md`) and **v2.9.0 CLOSED** (record
-      `docs/versions/v2.9.0_results.md`). Active version: **v2.9.1**, open, three conditions
-      training. `src/_version.py`, `pyproject.toml` and `src/configs/exp_config.yaml` all read
-      **v2.9.1** and agree. **Every run in every version below is a single run at seed 42; no result
-      here is a multi-seed aggregate.**
-    - **v2.9.0 — both registered hypotheses scored; the performance one failed.**
-      **A1 (`cps` on the registered cell) is FALSIFIED**: the compressed condition is **below its
-      control at 13 of 14 matched rounds ≥ 300**, mean paired difference **−0.034378**. Per-round
-      CIs overlap at **13 of the 14**; they are **disjoint at round 300** alone
-      ([0.717244, 0.780145] against [0.808011, 0.861132]). **No separation is claimed in either
-      direction** — one round's separation carries nothing, and the verdict rests on the sign count,
-      which is what A1 registered. **A2 (eval share of end-to-end wall) is
-      NOT falsified**: **7.26 %** whole-run and **8.32 %** worst residency segment against the
-      59.11 % `COMPRESS500` recorded, clearing it by 7.11× at the worst segment.
-    - **v2.9.0 conditions, and where each stopped** (all seed 42, under `data/runs/v2.9.0/`):
-      COMPRESS1000 **done @10000 = round 1000** · BUFCAP10K **done @10000** · BUFCAP5K
-      **done @10000** · BUFCAP2K **STOPPED @5721 = round 572.1** by Researcher instruction under a
-      free-VRAM trigger, **no `final.pt` and no `report.md`**; its series is truncated and its
-      maximum is not comparable to one taken over 1000 rounds. `halt_reason` is `null` on all four.
-      The `buffer_cap` series (1e6 → 10k / 5k / 2k) is **reported with no verdict** — it was not a
-      registered axis of the version.
-    - **v2.9.0 changed no bold row and secured nothing.** `data/secured_data/v2.9.0/` does not
-      exist, which is consistent with no v2.9.0 row being bold. Four v2.9.0 rows are registered at
-      **L297–L300**, one per condition at its in-loop best. `scripts/check_ledger.py` exit 0,
-      **281 rows, 41 blocks, 3 bolds, 0 violations**.
-    - **v2.9.1 open — three conditions training**, all seed 42, all under `data/runs/v2.9.1/`, all
-      `phase: training` with `halt_reason` null. Two carry the new training scene law against their
-      own v2.9.0 controls (`buffer_cap` 1e6 and 10 000); the third is the second of those with
-      `schedules.sigma.sigma_min` 0.3 → 0.0, a single-key pair. Gates 1–5 passed before launch —
-      flag-off parity byte-identical for both samplers, the eval pool rebuilt to its own manifest
-      digest, each config diff exactly its registered field set, and the schedule gate at exactly
-      0.0. No PID is named here; run directories are the stable identifier.
-    - **v2.8.5's seven conditions and its `ell` axis are closed** — the axis returned no separation
-      except an upper-side penalty at `ell = 0.35`, and the compressed-update condition closed
-      **NOT RESOLVED** after being signalled at round 477.9. Detail is in
-      `docs/versions/v2.8.5_results.md`; v2.9.0 re-ran that condition to full budget against a
-      matched control on a repaired evaluator and it **still lost at 13 of 14 matched rounds**, so
-      the three causes v2.8.5 named for the NOT-RESOLVED verdict were removed and the axis failed
-      anyway. **Sixteen v2.8.5 rows stay registered at L281–L296.**
-    - **Pool of record: `fullcb`** — `eval_fullcb_quadrotor-3d-d2r_n2000_seed823456`, n 2000,
-      unchanged; its digest lives in the pool manifest, not here. v2.9.0 built two replacement pools
-      under corrected altitude and omega laws and measured that their `cps` differs from `fullcb`'s
-      by less than the scene-sampling noise of an independent 2000-scene draw, so **no pool-level
-      effect was established and the pool of record did not move**; both carry
-      `pool_role = "NOT REGISTERED"` in their own manifests.
-    - **Bold state:** double_integrator v2.3.0 (flagged — `cps_v2` reads `-`, and the row names no
-      checkpoint); quadrotor_planar v2.7.1 0.9036; **quadrotor_3d v2.8.5 `ell` 0.125 @45000 =
-      0.8701** [0.8472, 0.8919] (ledger **L294**, adopted checkpoint `step_045000.pt`, secured at
-      `data/secured_data/v2.8.5/seed42/`, digest pinned in that snapshot's `ADOPTED.md`). **The
-      adopted checkpoint is a FIXED-STEP checkpoint, not that run's `best.pt`**, which is at step
-      50000 and scores 0.8614 on the same cell. This is a **basis** classification under
-      `06_workflow` §2.5 — single seed 42, and its CI overlaps `ell` 0.25, `ell` 0.10 and CLIP50 at
-      every round — and is **not** a `04_eval` §5 CI-separated beat. Both the v2.8.4 ARM row (L271)
-      and the v2.8.5 `ell` 0.175 row (L288) are un-bolded and carry standing supersession lines.
+    - **v2.9.1 CLOSED** (record `docs/versions/v2.9.1_results.md`; close decisions in its §13).
+      Earlier closed: v2.8.5, v2.9.0. **No new version is open** — `src/_version.py`,
+      `pyproject.toml` and `src/configs/exp_config.yaml` all still read **v2.9.1** and agree.
+      **Every result below is single seed 42, with one exception: ledger L314 is a 3-seed
+      aggregate (42, 12345, 99).** There is no `data/secured_data/v2.9.1/aggregate/`.
+    - **v2.9.1 verdict, one line: the registered axis was falsified, a new basis row was secured,
+      and no improvement was detected.** **A1 (`coll_band_lower`) is FALSIFIED on both registered
+      pairs** — moving the five training clearance floors did not lower band-lower collision; the
+      paired mean difference is **positive** on both (+0.000156 and +0.000396, 0.02× and 0.05× the
+      0.0083 admissibility floor). L304 is secured as the `quadrotor_3d` basis row at **0.8722**,
+      **+0.002098** over the superseded v2.8.5 row — **0.25×** the floor, with **overlapping** CIs
+      ([0.8471, 0.8962] vs [0.8472, 0.8919]) and single seed on both sides. That is a
+      `06_workflow` §2.5 **BASIS** classification and **not** an `04_eval` §5 CI-separated beat.
+    - **Bold set (3, one per system — `unicycle` has none):**
+      **quadrotor_3d L304 = 0.8722**, checkpoint `step_009300.pt`, secured at
+      `data/secured_data/v2.9.1/seed42/` · **quadrotor_planar L313 = 0.8519**, checkpoint
+      `data/secured_data/v2.7.0/seed42_iter5/checkpoints/best.pt` (`3b27d691…`) ·
+      **double_integrator L314 = 0.8682** (3-seed mean), checkpoints
+      `data/secured_data/v2.3.0/seed{42,12345,99}/checkpoints/best.pt`.
+      **L313 and L314 moved onto their rows at this close** (from L132 and L62) as **basis
+      re-scores of those rows' own checkpoints** — both new figures are **lower** than the rows they
+      supersede (0.851927 vs 0.9036; 0.868247 vs 0.8698), so **neither is an improvement claim**.
+      L132 and L62 keep their content and carry standing supersession lines.
     - **Presence check (§6.3), every system:** 3 of 3 bold rows PRESENT **by digest**, 5 of 5
-      checkpoint entries (the double_integrator bold is a 3-seed aggregate), each digest matched
-      against the snapshot's own `ADOPTED.md`. `unicycle` carries 5 rows and no bold row, so §6.3 is
-      vacuous for it. **"Committed" is unverified here** — staging is the Researcher's action.
-    - Baselines: `data/baselines/{ppo, backup_cbf}/` and `data/secured_data/baselines/` populated.
-      backup_cbf has **no checkpoint of its own** — two filter cells over the CTRL checkpoint; every
-      citation carries *"hand-designed policy + online rollout certificate (implicit/backup CBF);
-      NOT an analytic closed-form CBF."* **PPO ledger placement (PF-3) still awaits the Researcher.**
-    - **Open items.** **C0** — `cps_v2` applicability on `quadrotor_3d`, an axis and not
-      bookkeeping, since resolving it re-scores every registered row; it must not be silently
-      dropped. **PF-5** — `train.py:693` gates the zero-value step on the safety-channel type rather
-      than on `k_v`; tagged, not applied. **C21** — the two secured v2.7.0 `report.md` sentences
-      citing `collection.py:204`'s hard-coded 0.0, disposition undecided, and the training-time
-      empty rate unmeasurable while it stands. **C22** — the two literal `max=1.0` clamps inside
-      `rpcbf_target`, the box_klamp basis question, and `docs/protocol.zip` alongside the
-      authoritative `docs/protocol/`. **C23** — the automatic ledger-registration rule did not
-      fire once across the version; all sixteen rows above were registered at the close, not as
-      part of completing each eval. **C24** — the
-      shell `grep` shim honours `.gitignore` and silently omits `tests/`, `scripts/analysis/` and
-      `scripts/deck/`, so any earlier repo-wide sweep should be re-run and every count must name the
-      binary that produced it. Also open: `verify.sh`'s state before launch (C6, unestablishable
-      from disk); `eval_batch_size` still neither a config key nor a column of `eval_metrics.csv`;
-      the 31 unselectored `signed_h` sites, none repaired. **v2.8.5's own protocol follow-ups are
-      tagged PF-6 … PF-16** in `docs/versions/v2.8.5/build_log.md` §11; nine of the eleven are open.
-
+      checkpoint entries (double_integrator is a 3-seed set), each matched against the snapshot's own
+      `ADOPTED.md`. No promotion was needed for the bold moves — each new bold row scores its
+      predecessor's checkpoint. **"Committed" is unverified here** — staging is the Researcher's action.
+    - **Ledger:** `scripts/check_ledger.py` exit 0 — **296 rows, 42 blocks, 3 bolds, 0 violations,
+      79 warnings**. v2.9.1 registers **L304–L315**. One warning is expected and disclosed: bold
+      L313's `parent` is named by digest, which the run-id matcher cannot resolve.
+    - **Table I, the eight cross-system cells (L305–L312), all n = 2000, all seed 42.** JT exceeds OC
+      on all four systems: `double_integrator` 0.8805 → **0.9048** · `unicycle` 0.6705 → **0.8731** ·
+      `quadrotor_planar` 0.6591 → **0.7757** · `quadrotor_3d` 0.6818 → **0.8680**. This is
+      **structural coverage, not a tested hypothesis** — it was not pre-registered, and no CI is
+      available on any of the eight rows.
+    - **Promotion at close: nothing further.** `data/secured_data/` stands at **1724 files** —
+      `v2.9.1/seed42/` (the L304 snapshot) plus `v2.9.1/experiments/` (**eight** entries, the Table I
+      cells). An experiments entry is **bold-ineligible** under §6.3, which is why
+      `double_integrator`'s highest current-basis figure (L309, 0.904757) is not the bold row.
+    - **Pool of record: `fullcb`** — `eval_fullcb_quadrotor-3d-d2r_n2000_seed823456`, **unchanged by
+      decision**. The z-law audit established that it was not built under the `04_eval` §6.1 vertical
+      bound (252 of 2000 scenes outside), but that screen is not an impossibility instrument — L312's
+      own artifact records 51 collisions in total, so **at least 201 flagged scenes did not collide**
+      — and the corrected constrained-input doom certificate certifies **0 of 2000** vertically doomed
+      with a non-vacuous gate 4. **Obstacle-coupled impossibility remains outside every instrument on
+      record.** No `quadrotor_3d` row is re-scored.
+    - **Deferred at this close, all still open.** The `04_eval` §6.2 **pool-registration delta** is
+      drafted and not installed, to be discussed separately — until it settles, L307–L310 and L314 are
+      comparable to each other and **not** to any historical DI/unicycle row. The **protocol delta is
+      deferred** in full: `PF-1 … PF-10` are listed with before→after sketches in
+      `v2.9.1_results.md` §10.5 and none is applied. **No source change this cycle** — PF-2
+      (`filter_hardnet.py:192` has no caller-mode guard, so the eval-only property is
+      config-enforced, not code-enforced) and PF-3 (`exp_config.yaml`'s three `empty_fallback`
+      sub-blocks) stay as recorded defects.
+    - **Carried from earlier versions, unchanged.** Baselines `data/baselines/{ppo, backup_cbf}/` and
+      `data/secured_data/baselines/` populated; backup_cbf has **no checkpoint of its own** — two
+      filter cells over the CTRL checkpoint, cited as *"hand-designed policy + online rollout
+      certificate (implicit/backup CBF); NOT an analytic closed-form CBF."* **PPO ledger placement
+      still awaits the Researcher.** Open items **C0** (`cps_v2` applicability on `quadrotor_3d` — an
+      axis, not bookkeeping, since resolving it re-scores every registered row), **C21**, **C22**,
+      **C23**, **C24**, `verify.sh`'s pre-launch state (C6), `eval_batch_size` still neither a config
+      key nor a column of `eval_metrics.csv`, and the 31 unselectored `signed_h` sites. v2.8.5's
+      `PF-6 … PF-16` are in `docs/versions/v2.8.5/build_log.md` §11; nine of eleven remain open.
 
 ## Map
 

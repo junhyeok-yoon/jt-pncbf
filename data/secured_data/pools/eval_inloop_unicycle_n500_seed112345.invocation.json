@@ -1,0 +1,233 @@
+{
+  "argv": [
+    "/tmp/claude-1000/-home-junhyeok-MIT-jt-pncbf/31d93785-ac11-4206-bf50-a4c3de145dff/scratchpad/v291_build_dixuni_pools.py",
+    "--system",
+    "unicycle",
+    "--out-dir",
+    "/tmp/claude-1000/-home-junhyeok-MIT-jt-pncbf/31d93785-ac11-4206-bf50-a4c3de145dff/scratchpad/build1",
+    "--full-seed",
+    "123456",
+    "--inloop-seed",
+    "112345"
+  ],
+  "command_line": "PYTHONPATH=. CUDA_VISIBLE_DEVICES= nice -n 19 /home/junhyeok/miniconda3/envs/pncbf/bin/python /tmp/claude-1000/-home-junhyeok-MIT-jt-pncbf/31d93785-ac11-4206-bf50-a4c3de145dff/scratchpad/v291_build_dixuni_pools.py --system unicycle --out-dir /tmp/claude-1000/-home-junhyeok-MIT-jt-pncbf/31d93785-ac11-4206-bf50-a4c3de145dff/scratchpad/build1 --full-seed 123456 --inloop-seed 112345",
+  "config": {
+    "effective_config": {
+      "env": {
+        "bounds": {
+          "double_integrator": {
+            "u_max": 2.0,
+            "v_max": 2.5
+          },
+          "unicycle": {
+            "a_max": 2.0,
+            "omega_max": 3.0
+          }
+        },
+        "dt": 0.05,
+        "goal_angrate_radius": 0.3,
+        "goal_radius": 0.15,
+        "goal_speed_radius": 0.3,
+        "h_scale": 0.35,
+        "k_obs": 5,
+        "obstacle_distribution": "random",
+        "oob_limit": 8.0,
+        "stuck_radius": 0.1,
+        "stuck_window_steps": 60,
+        "v_init_max": 0.5,
+        "world_lim": 4.0
+      },
+      "eval": {
+        "bootstrap": {
+          "n_resample": 1000,
+          "seed": 20260508
+        },
+        "full": {
+          "n": 2000,
+          "seed": 123456
+        },
+        "in_loop": {
+          "n": 500,
+          "seed": 112345
+        },
+        "insertion": {
+          "radius": 0.45,
+          "t_insert": 50
+        },
+        "max_steps": 200,
+        "multi_seed": {
+          "min": 3,
+          "recommend": 5
+        },
+        "scene": {
+          "min_start_goal_dist": 1.5,
+          "start_goal_clearance": 0.15
+        }
+      },
+      "filter": {
+        "cbf_qp": {
+          "eps_abs": 1e-09,
+          "max_iter": 500,
+          "max_iter_in": 100,
+          "max_workers": 32,
+          "penalty": 10.0,
+          "relax_eps1": 0.5,
+          "v_shift": 0.001
+        },
+        "gamma_margin": 0.0,
+        "hardnet": {
+          "box_aware": true,
+          "epsilon": 0.0005
+        }
+      },
+      "hazard": {
+        "ell": null,
+        "geom_form": "clip"
+      },
+      "lqr": {
+        "double_integrator": {
+          "Q": [
+            1.0,
+            1.0,
+            0.1,
+            0.1
+          ],
+          "R": [
+            1.0,
+            1.0
+          ]
+        },
+        "unicycle": {
+          "Q": [
+            0.5,
+            0.5,
+            0.1,
+            0.1
+          ],
+          "R": [
+            0.5,
+            0.5
+          ],
+          "v_min": 0.1
+        }
+      },
+      "network": {
+        "control": {
+          "activation": "leaky_relu",
+          "hidden": 256,
+          "n_layers": 2,
+          "output": "clamp_tanh",
+          "output_gain": 1.4286
+        },
+        "value": {
+          "head": "linear_clipped",
+          "hidden": 256,
+          "n_layers": 3,
+          "n_vs": 2,
+          "softplus_beta": 20.0
+        }
+      },
+      "obs": {
+        "encoder": "hard_topk",
+        "quadrotor_3d": {
+          "encoder": "hard_topk"
+        }
+      },
+      "obstacle": {
+        "corridor_along_factor": 1.5,
+        "corridor_perp_factor": 1.0,
+        "n_max": 12,
+        "n_min": 1,
+        "p_corridor": 0.6,
+        "r_max": 0.8,
+        "r_min": 0.15
+      },
+      "scene_train": {
+        "init_feasibility_margin": 0.05,
+        "min_start_goal_dist": 1.0,
+        "start_goal_clearance": 0.1
+      }
+    },
+    "loader": "src.eval.build_pools.load_base_config() -- base_config.yaml ALONE, byte-for-byte the loader `python src/eval/build_pools.py --system <s>` uses. exp_config.yaml is NOT merged.",
+    "loader_alternative_checked": "base+exp deep-merged (scripts/analysis/v291_pool_rebuild.py:42-45) -- see `reproducibility`.",
+    "overrides_applied_in_memory": {
+      "eval.full.seed": 123456,
+      "eval.in_loop.seed": 112345
+    },
+    "sources_sha256": {
+      "src/configs/base_config.yaml": "bf76fe45f6585d43fcae952c8345acb814cbd25f4bfe7c4aba3409e50d3e4876",
+      "src/configs/exp_config.yaml": "b9fceab97f8cc02882d6948fd5747bc29b99b77b9501bca3e9178074748ccf4f"
+    }
+  },
+  "cwd": "/home/junhyeok/MIT/jt-pncbf",
+  "derived_from": {
+    "difference": [
+      "eval.in_loop.seed and eval.full.seed overridden IN MEMORY after load_base_config() (the CLI has no --seed flag and reads both from config); before = {'eval.in_loop.seed': 12345, 'eval.full.seed': 23456}, after = {'eval.in_loop.seed': 112345, 'eval.full.seed': 123456}",
+      "git_commit passed to write_pool explicitly, read from .git/HEAD with file I/O, so git_head_or_unknown() (which shells out to `git rev-parse HEAD`) is never reached -- NO git command of any kind is run",
+      "--output-dir is a scratch directory; nothing else differs"
+    ],
+    "shipped_entry_point": "src/eval/build_pools.py::main (`python src/eval/build_pools.py --system unicycle`)",
+    "shipped_entry_point_sha256": "09616e52c30c733ba7f5c7db16eba1466a22b481620cbf0515985df5c23f59a6"
+  },
+  "env": {
+    "CUDA_VISIBLE_DEVICES": "",
+    "MKL_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "PYTHONPATH": "."
+  },
+  "executable": "/home/junhyeok/miniconda3/envs/pncbf/bin/python",
+  "finished_at": "2026-08-13T17:18:51+00:00",
+  "generated_by": {
+    "note": "a scratch generator, deliberately NOT added to the repository. Every field is either captured live during the build it describes, or measured from a file whose sha256 is given here. No field is UNRECOVERABLE.",
+    "path": "/tmp/claude-1000/-home-junhyeok-MIT-jt-pncbf/31d93785-ac11-4206-bf50-a4c3de145dff/scratchpad/v291_build_dixuni_pools.py",
+    "sha256": "0072c41d76ada9a4edcad345763149bdffbf98413cf7cff3a80ae3b1d64a38a0"
+  },
+  "git": "NO git command of any kind was run by this build; write_pool was given git_commit explicitly (read from .git/HEAD by file I/O) so git_head_or_unknown() was never reached.",
+  "module_sha256": {
+    "src/configs/base_config.yaml": "bf76fe45f6585d43fcae952c8345acb814cbd25f4bfe7c4aba3409e50d3e4876",
+    "src/configs/exp_config.yaml": "b9fceab97f8cc02882d6948fd5747bc29b99b77b9501bca3e9178074748ccf4f",
+    "src/envs/double_integrator.py": "239f9fd30b433299249a459ca91cb459be052337bf9f9e8286919b56115b3ea1",
+    "src/envs/scene_init.py": "c6ab3d3e86077f6f9ed6718e87d811da55779cc76c667ef4ae1e0d5dbe166707",
+    "src/envs/scene_init_eval.py": "bc5d239c970b286a8570e672b8fd6e4cd1c899c1cd36b933adf72b39e369a57b",
+    "src/envs/scene_init_fixed.py": "b80db7ad417c226b7fb2e0238f2f9413a19eeae8a0e421d7c416cd71b4b53025",
+    "src/envs/unicycle.py": "bbfb51833f06759e3910b3ddfafae038fbd598f8d4d9ade71047aa20f17e1cc5",
+    "src/eval/build_pools.py": "09616e52c30c733ba7f5c7db16eba1466a22b481620cbf0515985df5c23f59a6"
+  },
+  "pool": {
+    "bytes": 174485,
+    "git_commit_recorded_in_manifest": "58f1706f8cedc9cbb8166d28ac6da57c1aaae279",
+    "manifest": "eval_inloop_unicycle_n500_seed112345.manifest.json",
+    "n_scenes": 500,
+    "name": "inloop",
+    "obstacle_distribution": "random",
+    "pool_format_version": 1,
+    "pool_sha256": "83c83557c997c78feeaf23f9db3b7086bc1a61c5d57838fd6f9ca556787b3e20",
+    "seed": 112345,
+    "stem": "eval_inloop_unicycle_n500_seed112345",
+    "system": "unicycle",
+    "variant": ""
+  },
+  "reproducibility": {
+    "build_config_loader": "base_config.yaml ALONE (src/eval/build_pools.load_base_config)",
+    "built_pool_sha256": "83c83557c997c78feeaf23f9db3b7086bc1a61c5d57838fd6f9ca556787b3e20",
+    "checker": "scripts/analysis/v291_pool_rebuild.py --stem eval_inloop_unicycle_n500_seed112345 --system unicycle --scratch <SCRATCH2>",
+    "checker_config_loader": "base_config.yaml deep-merged with exp_config.yaml (v291_pool_rebuild.py:42-45)",
+    "checker_invoked_through": "a scratch wrapper that ONLY prepends the scratch build dir to the checker's hard-coded POOL_DIRS so the not-yet-promoted manifest resolves; v291_pool_rebuild.main() itself is called unmodified.",
+    "checker_sha256": "93e7e6345e8b852bd8a554d23c5d1a28fe95d410c1189d2358cae7d580344d24",
+    "cpu_only": true,
+    "gate": "v2.9.1 xsystem item 2 -- rebuild into a SECOND scratch directory and compare sha256.",
+    "gate_result": "PASS -- sha256 identical",
+    "loader_invariance": "the build used base_config alone and the rebuild used base+exp merged, and the two .pkl files are byte-identical, so the loader choice does NOT change this pool. The two loaders differ only in manifest provenance fields the sampler never reads (obstacle.per_system[quadrotor_3d]; for unicycle also env.bounds.unicycle.v_max=2.5).",
+    "rebuilt_pool_sha256": "83c83557c997c78feeaf23f9db3b7086bc1a61c5d57838fd6f9ca556787b3e20",
+    "supersedes": {
+      "reason": "the superseded pool does not regenerate under the shipped sampler; it was built with the pre-v2.3.1 form of _passes_unavoidable_collision_filter (projected DISTANCE into v^2/(2a) instead of projected SPEED). Established by falsification in docs/versions/v2.9.1/xsystem/corrections.md item 3. The superseded pool is RETAINED UNMODIFIED beside this one.",
+      "stem": "eval_inloop_unicycle_n500_seed12345"
+    },
+    "wrote_only_to_scratch": true
+  },
+  "script": "scratch generator; see `generated_by`",
+  "script_sha256": "0072c41d76ada9a4edcad345763149bdffbf98413cf7cff3a80ae3b1d64a38a0",
+  "started_at": "2026-08-13T17:18:51+00:00",
+  "wall_s": 0.049,
+  "what": "how eval_inloop_unicycle_n500_seed112345.pkl was built -- the provenance record 04_eval section 6 (amended 2026-08-13) requires beside every pool."
+}

@@ -217,6 +217,10 @@ bolded against JT rows (the existing classification clause governs).
 
 **File schemas** — defined in `04_eval` §7.2 / §7.3. `05_code` does not duplicate.
 
+**Scoring artifacts.** A scoring producer writes one artifact per scored condition, named
+`row__<condition>__step<N>.json`. Fixed per-system output paths are prohibited: a file a ledger
+row's `eval_source` cites is immutable and is never a producer's output target.
+
 ---
 
 ## 4. `.gitignore` policy

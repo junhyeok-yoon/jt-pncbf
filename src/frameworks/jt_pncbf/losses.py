@@ -29,6 +29,49 @@ Tensor = torch.Tensor
 # clears it before a run and persists it to jac_classes.csv after.
 _JAC_CLASS_LOG: list[dict[str, Any]] = []
 
+# v2.9.1 item 1 — the sentinel that makes `loss.policy.sat_excess_threshold` resolve from the running
+# system's OWN action box instead of a hand-written constant. See `resolve_sat_excess_threshold`.
+SAT_EXCESS_FROM_U_BOUNDS = "u_bounds"
+
+
+def resolve_sat_excess_threshold(system: System, policy_cfg: Mapping[str, Any]) -> Tensor | float:
+    """v2.9.1 item 1 — per-system saturation-excess box for L_sat.
+
+    MECHANISM: resolution from `system.u_bounds`, NOT a per-system config block.
+
+    WHY. `sat_excess_threshold` is not a free hyperparameter: it is the action box, and L_sat is
+    defined to be zero for any command inside it. Writing the box a second time by hand is exactly how
+    it went wrong -- a single `[19.62, 1.0]` (the `quadrotor_planar` box) was broadcast over the action
+    dimension with no system gate, so on `double_integrator` it penalised legal |a_y| in (1.0, 2.0] and
+    on the `unicycle` it penalised two thirds of the legal turn-rate range (|omega| in (1.0, 3.0]).
+    A per-system block like `filter.empty_fallback`'s would fix today's four numbers but would drift the
+    moment a bound moves -- which already happened once, at v2.6.1, when the planar torque box went
+    0.2 -> 1.0 and this key had to be hand-tracked to match. Resolution from `system.u_bounds` cannot
+    drift, needs no per-system key, and yields the right ARITY automatically (2 channels on DI /
+    unicycle / planar, 4 on `quadrotor_3d`), which one hand-written list cannot.
+
+    RESOLVED VALUE: per channel j, `max(|lo_j|, |hi_j|)` -- the largest magnitude the box admits on that
+    channel, so an in-box command is never penalised and the penalty starts exactly at the boundary.
+    On an asymmetric box such as the planar thrust channel [0, 19.62] this is 19.62, reproducing the
+    shipped constant exactly; on `quadrotor_3d`'s [0, 4.905]^4 it is [4.905]*4, reproducing the value
+    every 3D launcher sets by hand.
+
+    BACKWARD COMPATIBILITY: an explicit list/tuple or scalar in the config is still honoured verbatim,
+    so every archived run config and every launcher that overrides this key is bit-identical.
+    """
+    raw = policy_cfg["sat_excess_threshold"]
+    if isinstance(raw, (list, tuple)):
+        return torch.as_tensor(list(raw), dtype=torch.float64)
+    if isinstance(raw, str):
+        if raw != SAT_EXCESS_FROM_U_BOUNDS:
+            raise ValueError(
+                "loss.policy.sat_excess_threshold must be a number, a per-channel list, or the "
+                f"sentinel {SAT_EXCESS_FROM_U_BOUNDS!r}; got {raw!r}."
+            )
+        bounds = system.u_bounds.to(dtype=torch.float64)
+        return torch.maximum(bounds[:, 0].abs(), bounds[:, 1].abs())
+    return float(raw)
+
 
 @dataclass(frozen=True)
 class ValueLossResult:
@@ -872,9 +915,11 @@ def policy_bptt_loss(
 
             # v2.6.0: sat_excess_threshold may be per-channel [thrust, torque] (quadrotor box bounds) or a
             # scalar (DI/unicycle). Broadcast a per-channel tensor over the action dim.
-            _sat_thr = policy_cfg["sat_excess_threshold"]
-            sat_thr = (torch.tensor(_sat_thr, device=u_nom.device, dtype=u_nom.dtype)
-                       if isinstance(_sat_thr, (list, tuple)) else float(_sat_thr))
+            # v2.9.1 item 1: the sentinel "u_bounds" resolves the box from THIS system's own u_bounds
+            # (see resolve_sat_excess_threshold); an explicit list/scalar is still honoured verbatim.
+            _sat_thr = resolve_sat_excess_threshold(system, policy_cfg)
+            sat_thr = (_sat_thr.to(device=u_nom.device, dtype=u_nom.dtype)
+                       if isinstance(_sat_thr, torch.Tensor) else float(_sat_thr))
             sat_excess = (u_nom.abs() - sat_thr).clamp_min(0.0)
             sat_excess_values.append((sat_excess * sat_excess).sum(dim=1).mean())
 
