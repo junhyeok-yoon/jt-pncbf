@@ -24,6 +24,9 @@ Checks, in order:
   8. parent resolves on disk or is `-` (unresolved -> warning, so the script is usable
      on a partial checkout)
   9. at most one bold row per system, and every bold row carries a resolving parent
+ 10. alias uniqueness on (alias, pool stem) within a version block
+ 11. the prose columns (verdict, eval_source) are at most MAX_CELL_CHARS characters each;
+     the full pre-cap text of every capped cell lives in docs/ledger_verdicts.md
 
 Legacy baselines: rules 4 and 5 were installed over a table that already carried
 violations in closed version blocks that a later dispatch may not rewrite. Those exact
@@ -52,6 +55,9 @@ REQUIRED_COLUMNS = (
     "collision", "coll_obstacle", "coll_band_lower", "coll_band_upper", "cps", "verdict",
 )
 COL: dict[str, int] = {}
+
+MAX_CELL_CHARS = 400
+PROSE_COLUMNS = ("verdict", "eval_source")
 
 # Pool stems a row's eval_source may name. Used by rule 10: an alias may repeat within a version
 # block when the SAME run/cell was scored on DIFFERENT pools -- that is one run owning several rows,
@@ -341,6 +347,19 @@ def main(argv: list[str]) -> int:
                 )
             else:
                 seen[key] = line_no
+
+    # ---- rule 11: the two prose columns are length-capped -----------------------------
+    # The ledger is a row-per-run index and is read as one; length, not sentence count, is what
+    # makes the table unreadable, so the bound is on characters. The full pre-cap text of every
+    # capped cell lives in docs/ledger_verdicts.md under the row's own anchor.
+    for line_no, cells in usable:
+        for name in PROSE_COLUMNS:
+            n = len(cells[COL[name]])
+            if n > MAX_CELL_CHARS:
+                violations.append(
+                    "[11] L%d %s is %d characters, limit %d (move the detail to "
+                    "docs/ledger_verdicts.md)" % (line_no, name, n, MAX_CELL_CHARS)
+                )
 
     # ---- rules 6 and 7: cps pairing, collision decomposition ------------------------
     for line_no, cells in usable:

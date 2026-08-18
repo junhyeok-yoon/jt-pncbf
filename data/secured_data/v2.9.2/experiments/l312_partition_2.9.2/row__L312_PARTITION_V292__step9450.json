@@ -1,0 +1,136 @@
+{
+  "label": "L312_PARTITION_V292",
+  "source_row": "L312",
+  "ckpt": "data/runs/v2.9.1/set__20260814-030107__seed42/v2.9.1__jt__20260814-030107__seed42/checkpoints/best.pt",
+  "ckpt_step": 9450,
+  "pool": "eval_fullcb_quadrotor-3d-d2r_n2000_seed823456.pkl",
+  "n": 2000,
+  "ebs": 2000,
+  "wall_s": 5.0,
+  "reproduced": true,
+  "reproduction_checks": {
+    "reach": [
+      0.9535,
+      0.9535,
+      true
+    ],
+    "collision": [
+      0.0255,
+      0.0255,
+      true
+    ],
+    "oob": [
+      0.0,
+      0.0,
+      true
+    ],
+    "stuck": [
+      0.0005,
+      0.0005,
+      true
+    ],
+    "timeout": [
+      0.0205,
+      0.0205,
+      true
+    ],
+    "infeasibility": [
+      0.07920887809902627,
+      0.07920887809902627,
+      true
+    ],
+    "cps": [
+      0.8679873365702921,
+      0.8679873365702921,
+      true
+    ],
+    "EMPTY_ep": [
+      0.583,
+      0.583,
+      true
+    ],
+    "SINGULAR_ep": [
+      0.0955,
+      0.0955,
+      true
+    ]
+  },
+  "components": {
+    "reach": 0.9535,
+    "collision": 0.0255,
+    "oob": 0.0,
+    "stuck": 0.0005,
+    "timeout": 0.0205,
+    "infeasibility": 0.07920887809902627
+  },
+  "cps_recomputed": 0.8679873365702921,
+  "EMPTY_episode_frac": 0.583,
+  "SINGULAR_episode_frac": 0.0955,
+  "theta_ref_deg": 60.0,
+  "partitions": {
+    "ALL": {
+      "n": 2000,
+      "reach": 0.9535,
+      "collision": 0.0255,
+      "oob": 0.0,
+      "stuck": 0.0005,
+      "timeout": 0.0205,
+      "shares_sum": 1.0,
+      "coll_obstacle": 0.0075,
+      "coll_band_lower": 0.018,
+      "coll_band_upper": 0.0,
+      "split_residual": 0.0,
+      "counts": {
+        "goal": 1907,
+        "collision": 51,
+        "oob": 0,
+        "stuck": 1,
+        "timeout": 41
+      },
+      "unattributed": 0
+    },
+    "tilt_le_60": {
+      "n": 486,
+      "reach": 0.9753086419753086,
+      "collision": 0.012345679012345678,
+      "oob": 0.0,
+      "stuck": 0.0,
+      "timeout": 0.012345679012345678,
+      "shares_sum": 1.0,
+      "coll_obstacle": 0.0102880658436214,
+      "coll_band_lower": 0.00205761316872428,
+      "coll_band_upper": 0.0,
+      "split_residual": 0.0,
+      "counts": {
+        "goal": 474,
+        "collision": 6,
+        "oob": 0,
+        "stuck": 0,
+        "timeout": 6
+      },
+      "unattributed": 0
+    },
+    "tilt_gt_60": {
+      "n": 1514,
+      "reach": 0.9464993394980185,
+      "collision": 0.029722589167767502,
+      "oob": 0.0,
+      "stuck": 0.0006605019815059445,
+      "timeout": 0.023117569352708058,
+      "shares_sum": 1.0,
+      "coll_obstacle": 0.0066050198150594455,
+      "coll_band_lower": 0.023117569352708058,
+      "coll_band_upper": 0.0,
+      "split_residual": 0.0,
+      "counts": {
+        "goal": 1433,
+        "collision": 45,
+        "oob": 0,
+        "stuck": 1,
+        "timeout": 35
+      },
+      "unattributed": 0
+    }
+  },
+  "per_episode_npz": "data/runs/v2.9.2/mppi/perepisode__L312_PARTITION_V292.npz"
+}

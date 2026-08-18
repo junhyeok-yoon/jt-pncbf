@@ -1,0 +1,143 @@
+{
+  "label": "MPPI_CASCRATE_N2000_V292",
+  "variant": "cascaded_rate",
+  "system": "quadrotor_3d",
+  "pool": "eval_fullcb_quadrotor-3d-d2r_n2000_seed823456.pkl",
+  "pool_sha256": "3682a4e38ab3405d0afd4cfc119a73225eee4ef945cf4a58eed23b2eb6118517",
+  "pool_sha8": "3682a4e3",
+  "n_scenes": 2000,
+  "ebs": 200,
+  "seed": 42,
+  "n_samples": 1024,
+  "horizon": 40,
+  "lam": 1.0,
+  "lam_mode": "absolute",
+  "c_crash": 100000.0,
+  "sigma_channel_override_read_back": [
+    0.25,
+    0.15,
+    0.15,
+    0.05
+  ],
+  "controller_sigma_channel_read_back": [
+    0.25,
+    0.15000000596046448,
+    0.15000000596046448,
+    0.05000000074505806
+  ],
+  "sigma_scalar_shipped_and_INERT": 1.0,
+  "switches": {
+    "b1": false,
+    "b2": false,
+    "b3": false,
+    "g1": false,
+    "g2": false,
+    "g3": false,
+    "g4": false
+  },
+  "wall_s": 157.7,
+  "n_control_steps": 2000,
+  "anchor_400_prefix": {
+    "expected": {
+      "collision": 263,
+      "goal": 123,
+      "timeout": 14
+    },
+    "got": {
+      "collision": 263,
+      "goal": 123,
+      "timeout": 14
+    },
+    "exact": true,
+    "source": "data/runs/v2.8.4/mppi_sigma/cell__3C1_control.json"
+  },
+  "theta_ref_deg": 60.0,
+  "partitions": {
+    "ALL": {
+      "n": 2000,
+      "reach": 0.298,
+      "collision": 0.6525,
+      "oob": 0.0,
+      "stuck": 0.0,
+      "timeout": 0.0495,
+      "shares_sum": 1.0,
+      "coll_obstacle": 0.328,
+      "coll_band_lower": 0.3235,
+      "coll_band_upper": 0.001,
+      "split_sum": 0.6525,
+      "split_residual": 0.0,
+      "counts": {
+        "goal": 596,
+        "collision": 1305,
+        "oob": 0,
+        "stuck": 0,
+        "timeout": 99
+      },
+      "cause_counts": {
+        "obstacle": 656,
+        "band_lower": 647,
+        "band_upper": 2
+      },
+      "unattributed": 0
+    },
+    "tilt_le_60": {
+      "n": 486,
+      "reach": 0.41975308641975306,
+      "collision": 0.51440329218107,
+      "oob": 0.0,
+      "stuck": 0.0,
+      "timeout": 0.06584362139917696,
+      "shares_sum": 1.0,
+      "coll_obstacle": 0.4074074074074074,
+      "coll_band_lower": 0.102880658436214,
+      "coll_band_upper": 0.00411522633744856,
+      "split_sum": 0.51440329218107,
+      "split_residual": 0.0,
+      "counts": {
+        "goal": 204,
+        "collision": 250,
+        "oob": 0,
+        "stuck": 0,
+        "timeout": 32
+      },
+      "cause_counts": {
+        "obstacle": 198,
+        "band_lower": 50,
+        "band_upper": 2
+      },
+      "unattributed": 0
+    },
+    "tilt_gt_60": {
+      "n": 1514,
+      "reach": 0.25891677675033026,
+      "collision": 0.6968295904887715,
+      "oob": 0.0,
+      "stuck": 0.0,
+      "timeout": 0.04425363276089828,
+      "shares_sum": 1.0,
+      "coll_obstacle": 0.30250990752972257,
+      "coll_band_lower": 0.3943196829590489,
+      "coll_band_upper": 0.0,
+      "split_sum": 0.6968295904887715,
+      "split_residual": 0.0,
+      "counts": {
+        "goal": 392,
+        "collision": 1055,
+        "oob": 0,
+        "stuck": 0,
+        "timeout": 67
+      },
+      "cause_counts": {
+        "obstacle": 458,
+        "band_lower": 597,
+        "band_upper": 0
+      },
+      "unattributed": 0
+    }
+  },
+  "per_episode_npz": "data/runs/v2.9.2/mppi/perepisode__MPPI_CASCRATE_N2000_V292.npz",
+  "infeasibility": "STRUCTURALLY INAPPLICABLE",
+  "mean_proj_mag": "STRUCTURALLY INAPPLICABLE",
+  "privilege": "PRIVILEGED: the planner reads the full 13-D state and the exact obstacle field and rolls the true plant inside its own planner; the learned arms see a 34-D observation and carry no plant model. MPPI runs an identity filter, so infeasibility and mean_proj_mag are STRUCTURALLY INAPPLICABLE, not zero-by-measurement. An MPPI row is a model-based reference point, not a peer of a learned-certificate row.",
+  "cell_difference_vs_learned_rows": "ebs 200 here against the learned rows' 2000; same pool, same n 2000, same seed 42."
+}
