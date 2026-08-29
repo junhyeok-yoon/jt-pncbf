@@ -131,7 +131,18 @@ def value_target_barrier(system: Any, x: Tensor, scene: Any, config: Any) -> Ten
         v_z = x[..., 9]                                            # state [x,y,z,q(4),vx,vy,vz,w(3)]
         psi_up = torch.clamp(z - limit, max=psi_cap)
         psi_lo = torch.clamp(-z - limit, max=psi_cap)
-        h = torch.maximum(h, torch.maximum(psi_up + c_z * v_z, psi_lo - c_z * v_z))
+        # v2.9.3: `lead_terms` DROPS both vertical lead terms +/- c_z v_z, leaving the position-only
+        # band max(psi_up, psi_lo). DEFAULT True => bit-identical to every run before v2.9.3, and the
+        # key is absent from every persisted config, so `.get` returns the default there. Together
+        # with env.quadrotor_3d.c_gain = 0.0 (which zeroes the ONLY horizontal velocity term, line
+        # 115 above) this makes h POSITION-ONLY on quadrotor_3d -- the axis c_gain alone cannot
+        # reach, since c_z is computed from omega_max and no config key sets it.
+        # Consumed at the value-labeling sites ONLY (jt collection.py:125,:182,:468; oc :599,:624);
+        # no filter row, loss term or outcome predicate reads this function.
+        if bool(band.get("lead_terms", True)):
+            h = torch.maximum(h, torch.maximum(psi_up + c_z * v_z, psi_lo - c_z * v_z))
+        else:
+            h = torch.maximum(h, torch.maximum(psi_up, psi_lo))
     return h
 
 

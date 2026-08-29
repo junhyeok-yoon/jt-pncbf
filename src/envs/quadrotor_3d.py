@@ -57,6 +57,16 @@ class QuadrotorQuad3D:
         # DEFAULTING to the registered SOFT_TOPK_BETA=2.0 so a config with no `beta` key (022629 and all prior)
         # resolves byte-identically. A checkpoint predating the key resolves to 2.0 (obs_band_z/encoder precedent).
         self.soft_beta = float((_obs.get(self.name, {}) or {}).get("beta", SOFT_TOPK_BETA))
+        # v2.9.2 item A -- FROZEN-OBSTACLE ABLATION, EVAL ONLY. Under `eval.obs_freeze_obstacles`
+        # the obstacle block of the observation is replaced by the value it took at step zero, held
+        # for the whole episode; every other channel (v^b, omega^b, goal^b, g^b, p_z, v_z) stays
+        # live. The frozen block is supplied by the caller on the scene (`frozen_obs_block`), so the
+        # substitution is stateless here and both consumers of the observation -- the certificate
+        # and the policy -- necessarily read the same frozen block. DEFAULT FALSE: absent key or a
+        # scene without the block leaves this path byte-identical to the shipped observation. The
+        # key lives under `eval` and is read nowhere in the training entry points.
+        self.obs_freeze_obstacles = bool(
+            (config.get("eval", {}) or {}).get("obs_freeze_obstacles", False))
         self.soft_dc = SOFT_DC
         self.soft_inner = SOFT_INNER
         phys = config["env"]["quadrotor_3d"]
@@ -124,6 +134,15 @@ class QuadrotorQuad3D:
         g_b = _rot(Rt, g_world)                              # R(q)^T(-e3)
         c_off_b = _rot_k(Rt, c_off_world)                    # [B,K,3]
         obstacle_block = torch.cat([c_off_b, top_radii.unsqueeze(-1)], dim=-1).reshape(x.shape[0], -1)
+        if self.obs_freeze_obstacles:                    # v2.9.2 item A, eval only (see __init__)
+            _fb = getattr(scene, "frozen_obs_block", None)
+            if _fb is not None:
+                if _fb.shape != obstacle_block.shape:
+                    raise ValueError(
+                        f"frozen_obs_block {tuple(_fb.shape)} does not match the live obstacle "
+                        f"block {tuple(obstacle_block.shape)}; the scene was not row-subset with "
+                        f"the state.")
+                obstacle_block = _fb.to(device=obstacle_block.device, dtype=obstacle_block.dtype)
         base = torch.cat([v_b, omega_b, goal_b, g_b, obstacle_block], dim=1)
         if not self.obs_band_z:
             return base

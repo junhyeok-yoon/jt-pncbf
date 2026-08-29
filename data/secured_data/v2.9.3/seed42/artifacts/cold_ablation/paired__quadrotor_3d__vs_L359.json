@@ -1,0 +1,115 @@
+{
+  "system": "quadrotor_3d",
+  "contrast": "approach-term ablation on the cold basis",
+  "comparator_row": "L359",
+  "ablated_label": "COLDABL_quadrotor_3d",
+  "n": 2000,
+  "pool": "eval_fullcb_quadrotor-3d-d2r_n2000_seed823456.pkl",
+  "basis": "h400 on the registered cell",
+  "axis": "env.quadrotor_3d.c_gain 0.3 -> 0.0, ONE key of 328",
+  "note": "comparator L359 is the same cold 40000-step condition at c_gain 0.3; both arms have training.jt.value_init_ckpt null, so this contrast isolates the approach term. The warm ablation L318/L330 moved c_gain AND value_init_ckpt and cgain_cells.md:188 records it cannot separate them.",
+  "cps_comparator": 0.8831103827473097,
+  "cps_ablated": 0.8743131884151223,
+  "cps_comparator_registered": 0.8831103827473097,
+  "cps_ablated_reported": 0.8743131884151223,
+  "comparator_ci_registered": [
+    0.8588587759794698,
+    0.9051813222728226
+  ],
+  "comparator_ci_recomputed": [
+    0.8597369263573322,
+    0.9060521874420957
+  ],
+  "ablated_ci_reported": [
+    0.8505714225083725,
+    0.8973988013884944
+  ],
+  "ablated_ci_recomputed": [
+    0.8502274394123479,
+    0.8983253917351348
+  ],
+  "paired_delta_mean": -0.008797194332187359,
+  "paired_delta_ci": [
+    -0.02186896749853058,
+    0.004336527445183884
+  ],
+  "abs_delta": 0.008797194332187359,
+  "floor": 0.0083,
+  "inside_floor": false,
+  "delta_in_floor_units": -1.0599029315888384,
+  "delta_ci_excludes_zero": false,
+  "episodes_changed": 1374,
+  "bootstrap": {
+    "resamples": 10000,
+    "seed": 20292,
+    "method": "percentile",
+    "kind": "scene bootstrap"
+  },
+  "components_comparator": {
+    "reach": 0.9595,
+    "collision": 0.0235,
+    "oob": 0.0,
+    "stuck": 0.0005,
+    "timeout": 0.0165,
+    "infeasibility": 0.06879872417563442
+  },
+  "components_ablated": {
+    "reach": 0.9555,
+    "collision": 0.026,
+    "oob": 0.0,
+    "stuck": 0.0,
+    "timeout": 0.0185,
+    "infeasibility": 0.06645603861625896
+  },
+  "counts_comparator": {
+    "goal": 1919,
+    "collision": 47,
+    "oob": 0,
+    "stuck": 1,
+    "timeout": 33
+  },
+  "counts_ablated": {
+    "goal": 1911,
+    "collision": 52,
+    "oob": 0,
+    "stuck": 0,
+    "timeout": 37
+  },
+  "SINGULAR_episode_frac": {
+    "comparator": 0.1115,
+    "ablated": 0.11,
+    "delta": -0.0015000000000000013
+  },
+  "EMPTY_episode_frac": {
+    "comparator": 0.5095,
+    "ablated": 0.5075,
+    "delta": -0.0020000000000000018
+  },
+  "SINGVIOL_episode_frac": {
+    "comparator": 0.0025,
+    "ablated": 0.002
+  },
+  "legs_note": "SINGULAR and EMPTY are reported separately and are never summed; the ablation's registered reading is the SINGULAR leg.",
+  "predictions": {
+    "1_singular_rises": {
+      "statement": "Removing the approach term raises the SINGULAR episode fraction above the un-ablated cold cell L359.",
+      "falsifier": "the ablated fraction is at or below L359's 0.1115",
+      "comparator": 0.1115,
+      "ablated": 0.11,
+      "verdict": "FALSIFIED"
+    },
+    "2_cps_falls_beyond_floor": {
+      "statement": "cps falls below L359 by more than the admissibility floor 0.0083.",
+      "falsifier": "the gap is inside the floor, or the sign is opposite",
+      "paired_delta_mean": -0.008797194332187359,
+      "paired_delta_ci": [
+        -0.02186896749853058,
+        0.004336527445183884
+      ],
+      "floor": 0.0083,
+      "delta_in_floor_units": -1.0599029315888384,
+      "verdict": "HELD",
+      "falsified_because": null
+    }
+  }
+}

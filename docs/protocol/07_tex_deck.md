@@ -129,6 +129,10 @@ Read this document before writing or modifying a `.tex` or a `.pptx`. Rule IDs
 - **I4. 인용하는 이론 결과에는 증명이 있어야 한다.** 슬라이드가 인용하는 theorem·proposition·
   corollary는 `docs/tex/`의 이론 문서에 증명과 함께 존재해야 한다(§11 T2). 증명이 없으면 인용하지
   않는다.
+- **I5. 비율은 소수점 한 자리로 쓴다.** 백분율은 소수점 한 자리로 쓰고, pool의 부분집합에 대한 비율은
+  count를 괄호로 함께 쓴다(`p (k)`). 두 자리는 마지막 자리가 표준오차 규모일 때에만 쓰며 그 근거를
+  출처에 밝힌다. count가 사실이고 비율은 count에서 도출한다. 합을 100.0에 맞추는 재조정은 count가
+  없는 표에서만 한다.
 
 ## 7. 그림 (J)
 

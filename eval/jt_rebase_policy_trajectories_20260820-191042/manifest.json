@@ -1,0 +1,75 @@
+{
+ "producer": "eval/jt_rebase_policy_trajectories_20260820-191042/make_policy_traj.py",
+ "figures": {
+  "classA_paths_xy.png": "eval/jt_rebase_policy_trajectories_20260820-191042/classA_paths_xy.png",
+  "classA_profiles.png": "eval/jt_rebase_policy_trajectories_20260820-191042/classA_profiles.png",
+  "classA_aggregate.png": "eval/jt_rebase_policy_trajectories_20260820-191042/classA_aggregate.png",
+  "classB_paths_xy.png": "eval/jt_rebase_policy_trajectories_20260820-191042/classB_paths_xy.png",
+  "classB_profiles.png": "eval/jt_rebase_policy_trajectories_20260820-191042/classB_profiles.png",
+  "classB_aggregate.png": "eval/jt_rebase_policy_trajectories_20260820-191042/classB_aggregate.png"
+ },
+ "numeric_artifacts": [
+  "data/runs/v2.9.3/jt_rebase/policy_traj/perscene__classA.npz",
+  "data/runs/v2.9.3/jt_rebase/policy_traj/perscene__classB.npz",
+  "data/runs/v2.9.3/jt_rebase/policy_traj/profiles__classA.npz",
+  "data/runs/v2.9.3/jt_rebase/policy_traj/profiles__classB.npz",
+  "data/runs/v2.9.3/jt_rebase/policy_traj/summary.json",
+  "data/runs/v2.9.3/jt_rebase/policy_traj/selection_rule_preregistered.json"
+ ],
+ "selection_rule": {
+  "A": "Fixed grid coordinates, no dependence on any measured quantity. Keep every grid scene whose cell is azimuth 0 deg, elevation 0 deg, distance 4.0 m -- one scene per registered initial-tilt value {0, 60, 90, 120, 180} deg. Ordered by ascending tilt.",
+  "B": "Two clauses, both scanned in ascending pool index, on the SHIPPED obstacle-contact channel StepOutcomeMasks.collided_obstacle evaluated over each policy's OWN live window. B1 = the FIRST THREE scenes where the fixed nominal enters an obstacle and the learned policy does NOT. B2 = the FIRST THREE scenes where NEITHER policy enters an obstacle."
+ },
+ "selection": {
+  "A": {
+   "n_satisfying": 5,
+   "indices": [
+    15,
+    16,
+    17,
+    18,
+    19
+   ],
+   "tilt_deg": [
+    0.0,
+    60.0,
+    90.0,
+    120.0,
+    180.0
+   ]
+  },
+  "B": {
+   "clause_B1_n_satisfying": 239,
+   "clause_B1_indices": [
+    7,
+    14,
+    24
+   ],
+   "clause_B2_n_satisfying": 948,
+   "clause_B2_indices": [
+    2,
+    4,
+    5
+   ],
+   "indices": [
+    7,
+    14,
+    24,
+    2,
+    4,
+    5
+   ]
+  }
+ },
+ "checkpoint": {
+  "pointer": "data/runs/v2.9.3/jt_rebase/jtrow__quadrotor_3d__COLD40K.json",
+  "ckpt": "data/runs/v2.9.3/set__20260820-063427__seed42/v2.9.3__jt__20260820-063427__seed42/checkpoints/best.pt",
+  "ckpt_step": 32550,
+  "step_matches_row": true,
+  "strict_load": true,
+  "warm_pointer_replaced": "data/runs/v2.9.1/launch/jtrow__quadrotor_3d.json (best.pt @ 9450, ledger L328/L312) -- READ-ONLY, untouched"
+ },
+ "diagnostic": true,
+ "ledger_row": null,
+ "cps": null
+}

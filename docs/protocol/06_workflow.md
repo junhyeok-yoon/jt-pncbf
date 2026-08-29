@@ -56,7 +56,7 @@ The Researcher decides to start a new version (`vX.Y.Z`). The Strategist drafts 
 5. **Eval plan.** Number of seeds (≥ 3, recommend ≥ 5). Comparison target: the previous secured version. Comparison rule: non-overlapping 95% CIs on pooled `cps` (`04_eval` §5).
 6. **Risks.** What could go wrong; what the halt protocol (`03_train` §4.7) would catch; what to watch in TensorBoard during the first hours.
 
-`docs/versions/` is local-only (§6); `changes.md` is the Strategist's working spec for the version, not a tracked git artifact. It must exist on disk before code changes begin, and the Executor's first action is to read it.
+`docs/versions/` is local-only (§6); `changes.md` is the Strategist's working spec for the version, not a tracked git artifact. It must exist on disk before code changes, evaluations or build-logs begin, and the Executor's first action is to read it. No line of work runs without an open version: when none is open, the version is opened first, and every build-log is written into the open version's directory.
 
 **When the bump happens.** The bump to the next version string is performed immediately after
 the preceding version's push, not at the next version's close. The close of `vX.Y.Z` therefore
@@ -153,12 +153,24 @@ line number, so completion is evidenced by the artifact rather than asserted (§
 training run is likewise not closed out — by completion, by halt, or by external interrupt —
 until every usable evaluation it produced carries a row. Registration is never deferred to
 the version close, and a close that finds an unregistered evaluation records the omission
-against the eval task that produced it rather than absorbing it as close work.
+against the eval task that produced it rather than absorbing it as close work. The close finds
+omissions by enumeration, not by memory: every `score__*.json` with `n >= 2000` under the
+version's run directory is matched against the ledger's artifact citations, and each unmatched
+artifact is listed in `results.md` §12 with the task that produced it.
 
 **Reproduction is the gate for work standing on a registered row.** A recomputation, a
 re-measurement, or an instrumented replay that reports on a row already in the ledger takes
 reproduction of that row's every outcome field as its pass condition. Failing that gate, the
-work stands on a different population than the row it cites and reports nothing.
+work stands on a different population than the row it cites and reports nothing. A re-scoring
+takes its cap, pool and batch size from the cell it re-scores onto and records each in its
+artifact. A producer never carries a pool identifier or a source tag as a literal; both are
+derived from the pool it loaded.
+
+**Every exported number names its artifact.** A downstream document — a deck, a manuscript, its
+provisional tables — takes each value from a score artifact, or from a `csv_lines` block that
+artifact carries, and names the artifact beside it; a value copied from a build-log or typed from
+a report is not an export. A partition or diagnostic of a registered row is exported only after it
+has passed the reproduction gate above.
 
 **`cps` and `cps_v2` are different infeasibility conventions.** Which one a system is scored
 under is read from that system's own scoring path (`04_eval` §1), and values carried under the
@@ -199,8 +211,10 @@ produced by a full-pool final, an in-loop best, or an eval-only re-evaluation do
 question; the pool size does.
 
 **SOTA marking (bold).** Bold marks the current headline of a lineage: **exactly one bold row
-per `system`, across the whole ledger, at any time.** The bold row is that system's highest-scoring
-eligible row; every cell of it is bolded (markdown `**...**`).
+per `system`, across the whole ledger, at any time.** The bold row is that system's highest `cps_v2`
+among eligible rows on the pool of record — the pool the registered evaluation cell names for
+that system — within the standing comparison class; every cell of it is bolded (markdown
+`**...**`). The ranking is by point value.
 Eligibility is the pool-size condition stated above and nothing else: `n >= 2000`, whatever the
 row type — an eval-only re-evaluation on a 2000-episode pool is eligible, an in-loop best or a
 full-pool final on 500 is not. Ranking is on `cps_v2`, the `04_eval` §1 current definition; a row
@@ -210,7 +224,9 @@ flagged, not un-bolded, until it is re-scored. Rows from a **different deploymen
 class** than the standing comparison basis — e.g. training-free analytic-barrier runs, or
 evaluations at non-default deploy rates ($dt_{\text{ctrl}}$, $dt_{V_{\mathcal M}}$) — are
 likewise never SOTA-bolded on `cps` alone; the
-Executor flags such rows for Researcher classification instead. When a new full-pool result
+Executor flags such rows for Researcher classification instead. Rows on a changed plant —
+altered input limits, thrust-to-weight ratio or bounds — belong to no class the bold ranks and
+are never eligible. When a new full-pool result
 supersedes the previous SOTA **of the same system**, the previous bold is removed in the same
 edit that registers the new row, and the superseded row carries a standing supersession line;
 historical rows never retain bold. A system's first full-pool row establishes that system's
@@ -236,14 +252,16 @@ the core finding only — the result, SOTA status, and any honest qualifier that
 meaning (e.g. "CI overlaps prior -> point-estimate, not a confirmed beat", "tie",
 "no collapse"). Mechanism explanations, per-checkpoint detail, and extended context belong
 in the build-log and `results.md`, not the ledger; a short "see <build-log>" pointer is
-allowed. Long multi-sentence verdicts are not kept in the ledger.
+allowed. Long multi-sentence verdicts are not kept in the ledger. A number quoted in a verdict
+cell is the row's own or another registered row's, named by line; a number that has no row is
+not carried inside a verdict cell.
 
 **Within-version iterations.** When the Researcher directs further mechanism iterations
 inside an open version: each iteration registers its hypothesis and falsifier in the
 transmitted prompt (`changes.md` remains an open-once document and is not amended per
 iteration); each completed iteration appends its ledger row(s) immediately (interim
-registration — the ledger never waits for close; bold only on a CI-separated improvement
-claim); and the phase report carries one clearly-titled section per iteration.
+registration — the ledger never waits for close; the bold follows the SOTA marking rule
+above); and the phase report carries one clearly-titled section per iteration.
 
 **A prediction is registered against a measurement that can resolve it.** Before a hypothesis is
 registered, three things are checked and recorded with it: that the metric responds to the axis
@@ -314,7 +332,10 @@ a paused step suspends only its dependents, not the other steps.
    stated explicitly. Nothing about git is collected. What cannot be determined is written as
    undetermined and is never guessed. **Work that is already done is not done again**: where
    the document already exists it is updated rather than rewritten, and existing content is
-   not overwritten.
+   not overwritten. A dispatch that writes or amends the document carries two pass conditions:
+   every inserted item is proved by a grep of the file, quoted in the report, and every forward
+   reference the document makes to one of its own sections resolves to an entry there. An edit
+   is written to disk as it is made, never batched for a single write at the end.
 2. **Strategist review** [PAUSE]. The Strategist reads the document against the version's
    registered hypotheses and falsifiers and reports what is unscored or mis-scored, what is
    asserted without an artifact behind it, and where this version's result conflicts with an

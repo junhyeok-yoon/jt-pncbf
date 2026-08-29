@@ -2317,6 +2317,12 @@ eval_only(registered cell, pool fullcb (the registered pool of record, n 2000), 
 **eval_only(registered cell, pool fullcb (the registered pool of record, n 2000), ebs 2000, terminal (0.15,0.3,0.3), projection dual_solve, empty_fallback {kstep,phases 1,k 3}, alpha (2.0,100.0), gamma_margin 0.0, value ceiling 1.3, hazard geom_form exp ell 0.125, n 2000, re-score at the run's in-loop best step, ckpt v2.9.1__jt__20260813-121049__seed42/checkpoints/step_009300.pt @ step 9300 = round 930, which is the step status.json records as best_step so best.pt carries the same weights; this is the ADOPTED checkpoint and its digest is pinned in data/secured_data/v2.9.1/seed42/ADOPTED.md and appears in no tracked prose); artifact data/runs/v2.9.1/rescore/row__v291__SCENELAW_C1000_SIG0__step9300.json**
 
 <a id="v2-9-1--quadrotor-3d--best-pt-oc3d-v291"></a>
+
+**BOLD REMOVED 2026-08-20.** Bold moved to the 400-step cold-start cells on Researcher
+approval (L359 takes quadrotor_3d). This row is retained for provenance and is not un-registered; per
+`06_workflow` 2.5 historical rows never retain bold. It was scored at `eval.max_steps` **200**,
+off the 400-step basis the paper reports, which is the condition STATUS 5 recorded as blocking
+any bold change and which this move resolves.
 ## v2.9.1 · quadrotor_3d · best.pt OC3D_V291
 
 `anchor: v2-9-1--quadrotor-3d--best-pt-oc3d-v291` · ledger line 305 at the time of writing · cps `0.6818` · date `2026-08-13 17:48:32`
@@ -2444,6 +2450,12 @@ eval_only(registered cell, pool fullcb (the registered pool of record, sha8 3682
 **eval_only(current-basis re-score of the L132 checkpoint, registered cell + explicit env.goal_angrate_radius 0.3, pool eval_full_quadrotor-planar_n2000_seed23456 (n 2000) -- the SAME pool and cell as L306/L311, ebs 2000, terminal (0.15, 0.3, 0.3), the checkpoint L132 names by digest 3b27d691 @ step 48000 (path in the verdict); cps recomputed from its own components with residual +2.22e-16); artifact data/runs/v2.9.1/launch/boldrescore__planar_iter5.json**
 
 <a id="v2-9-1--double-integrator--l62-current-basis-re-score"></a>
+
+**BOLD REMOVED 2026-08-20.** Bold moved to the 400-step cold-start cells on Researcher
+approval (L358 takes quadrotor_planar). This row is retained for provenance and is not un-registered; per
+`06_workflow` 2.5 historical rows never retain bold. It was scored at `eval.max_steps` **200**,
+off the 400-step basis the paper reports, which is the condition STATUS 5 recorded as blocking
+any bold change and which this move resolves.
 ## v2.9.1 · double_integrator · L62 current-basis re-score
 
 `anchor: v2-9-1--double-integrator--l62-current-basis-re-score` · ledger line 314 at the time of writing · cps `**0.8682**` · date `**2026-08-14 09:41:00**`
@@ -2459,6 +2471,12 @@ eval_only(registered cell, pool fullcb (the registered pool of record, sha8 3682
 **eval_only(current-basis re-score of the L62 3-seed checkpoint set, registered cell + explicit env.goal_angrate_radius 0.3, pool eval_full_di_n2000_seed123456 (n 2000, the REGENERATED pool -- same as L307/L309, NOT the pool of record) -- ebs 2000, terminal (0.15, 0.3, 0.3), the three secured seed snapshots @ steps 43500/49500/46500 (paths in the verdict); 3-seed mean of per-seed cps, each recomputed from its own components, max residual 1.1e-16); artifacts data/runs/v2.9.1/launch/boldrescore__di_seed42.json, data/runs/v2.9.1/launch/boldrescore__di_seed12345.json, data/runs/v2.9.1/launch/boldrescore__di_seed99.json; pool registration delta pending (Researcher-approved, deferred)**
 
 <a id="v2-9-1--quadrotor-3d--best-pt-valonly3d-v291"></a>
+
+**BOLD REMOVED 2026-08-20.** Bold moved to the 400-step cold-start cells on Researcher
+approval (L356 takes double_integrator). This row is retained for provenance and is not un-registered; per
+`06_workflow` 2.5 historical rows never retain bold. It was scored at `eval.max_steps` **200**,
+off the 400-step basis the paper reports, which is the condition STATUS 5 recorded as blocking
+any bold change and which this move resolves.
 ## v2.9.1 · quadrotor_3d · best.pt VALONLY3D_V291
 
 `anchor: v2-9-1--quadrotor-3d--best-pt-valonly3d-v291` · ledger line 315 at the time of writing · cps `0.8490` · date `2026-08-14 16:26:00`
@@ -2878,3 +2896,930 @@ eval_only(NEW CELL, the registered v282_agree_gate.gate_overrides cell with eval
 
 Single seed 42, one run, no CI. NOT bold, NOT promoted. Detail docs/versions/v2.9.2/mppi_h400.md.
 
+## v2.9.2 · quadrotor_3d · OBSFREEZE CONTROL live JT (L328)
+<a id="v2-9-2--quadrotor-3d--obsfreeze-control-live-jt-l328"></a>
+`anchor: v2-9-2--quadrotor-3d--obsfreeze-control-live-jt-l328` · cps `0.8853` · date `2026-08-19 00:46`
+**Cell.** The registered cell verbatim at eval.max_steps 400 with `eval.obs_freeze_obstacles` FALSE. It exists as the reproduction control for the frozen row of the same checkpoint.
+**Gate.** ALL_MATCH over 18 fields against registered row L312_h400, every residual 0: the five outcome counts and their shares, infeasibility, cps, saturation_rate, the three collision-cause counts, and the EMPTY and SINGULAR episode fractions.
+**Not bold, not promoted.** Reported only. docs/versions/v2.9.2/obs_conditioning.md
+
+
+## v2.9.2 · quadrotor_3d · OBSFREEZE CONTROL live OC (L321)
+<a id="v2-9-2--quadrotor-3d--obsfreeze-control-live-oc-l321"></a>
+`anchor: v2-9-2--quadrotor-3d--obsfreeze-control-live-oc-l321` · cps `0.7330` · date `2026-08-19 00:46`
+**Cell.** The registered cell verbatim at eval.max_steps 400 with `eval.obs_freeze_obstacles` FALSE. It exists as the reproduction control for the frozen row of the same checkpoint.
+**Gate.** ALL_MATCH over 18 fields against registered row L305_h400, every residual 0: the five outcome counts and their shares, infeasibility, cps, saturation_rate, the three collision-cause counts, and the EMPTY and SINGULAR episode fractions.
+**Not bold, not promoted.** Reported only. docs/versions/v2.9.2/obs_conditioning.md
+
+
+## v2.9.2 · quadrotor_3d · OBSFREEZE frozen-obstacle JT (L328)
+<a id="v2-9-2--quadrotor-3d--obsfreeze-frozen-obstacle-jt-l328"></a>
+`anchor: v2-9-2--quadrotor-3d--obsfreeze-frozen-obstacle-jt-l328` · cps `-0.9578` · date `2026-08-19 00:46`
+**Cell and departure.** The registered cell with ONE key changed: `eval.obs_freeze_obstacles` TRUE. The 4*k_obs obstacle columns of the observation -- the top-K cylinders' body-frame offsets and radii -- are replaced by their step-zero value for the whole episode; body velocity, body rates, body-frame goal, body-frame gravity and the band channels p_z and v_z stay live. The certificate and the policy read the same frozen block. Eval only; no training key touched.
+**Paired against the live control** (scene bootstrap, 10000 resamples, seed 20292): reach -0.7115 CI [-0.7310, -0.6915]; collision +0.4515; coll_obstacle +0.4490; coll_band_lower +0.0000 CI [-0.0030, +0.0030]; cps -1.8431. 1447 of 2000 episodes changed outcome.
+**Reach cost by obstacle count** (frozen minus live): 2-6 n 887 -0.6776 CI [-0.7080, -0.6471]; 7-12 n 613 -0.7520 CI [-0.7847, -0.7178]; 13-18 n 500 -0.7220 CI [-0.7600, -0.6820].
+**The population the ablation acts on** (A2, live trajectories): the top-K identity set differs from its step-zero value on 0.5118 of live steps; 0.5960 of episodes see any change; median first change at step 13.
+**Not bold, not promoted.** Reported only. docs/versions/v2.9.2/obs_conditioning.md
+
+
+## v2.9.2 · quadrotor_3d · OBSFREEZE frozen-obstacle OC (L321)
+<a id="v2-9-2--quadrotor-3d--obsfreeze-frozen-obstacle-oc-l321"></a>
+`anchor: v2-9-2--quadrotor-3d--obsfreeze-frozen-obstacle-oc-l321` · cps `-0.4835` · date `2026-08-19 00:46`
+**Cell and departure.** The registered cell with ONE key changed: `eval.obs_freeze_obstacles` TRUE. The 4*k_obs obstacle columns of the observation -- the top-K cylinders' body-frame offsets and radii -- are replaced by their step-zero value for the whole episode; body velocity, body rates, body-frame goal, body-frame gravity and the band channels p_z and v_z stay live. The certificate and the policy read the same frozen block. Eval only; no training key touched.
+**Paired against the live control** (scene bootstrap, 10000 resamples, seed 20292): reach -0.3990 CI [-0.4205, -0.3775]; collision +0.4155; coll_obstacle +0.4160; coll_band_lower -0.0005 CI [-0.0040, +0.0030]; cps -1.2165. 884 of 2000 episodes changed outcome.
+**Reach cost by obstacle count** (frozen minus live): 2-6 n 887 -0.2864 CI [-0.3168, -0.2559]; 7-12 n 613 -0.4568 CI [-0.4976, -0.4160]; 13-18 n 500 -0.5280 CI [-0.5720, -0.4840].
+**The population the ablation acts on** (A2, live trajectories): the top-K identity set differs from its step-zero value on 0.5204 of live steps; 0.5890 of episodes see any change; median first change at step 19.
+**Not bold, not promoted.** Reported only. docs/versions/v2.9.2/obs_conditioning.md
+
+## v2.9.3 · quadrotor_3d · FIXEDLAYOUT cert on randomized pool
+<a id="v2-9-3--quadrotor-3d--fixedlayout-cert-on-randomized-pool"></a>
+`anchor: v2-9-3--quadrotor-3d--fixedlayout-cert-on-randomized-pool` · cps `-0.0934` · date `2026-08-19 01:30`
+**Cell.** fixed-layout certificate on the full randomized registered pool. n 2000, ebs 2000, eval.max_steps 400, seed 42; the filter and projection are the registered cell's, unchanged.
+**Outcomes.** reach 0.6350, collision 0.3330 (obstacle 0.3015, band_lower 0.0315, band_upper 0.0000), incomplete 0.0320, infeasibility 0.1064, EMPTY 0.5070, SINGULAR 0.0965, cps -0.0934 CI [-0.1566, -0.0300].
+**The held layout.** 3 active cylinders, radii 0.297 to 0.585. REPRODUCED from the run seed and the run's own config, not read from a persisted artifact -- the trainer does not persist it. Recorded as a gap in the instrumentation rather than hidden.
+**Not bold, not promoted.** docs/versions/v2.9.2/obs_conditioning.md
+
+
+## v2.9.3 · quadrotor_3d · FIXEDLAYOUT cert on its trained layout
+<a id="v2-9-3--quadrotor-3d--fixedlayout-cert-on-its-trained-layout"></a>
+`anchor: v2-9-3--quadrotor-3d--fixedlayout-cert-on-its-trained-layout` · cps `0.8216` · date `2026-08-19 01:30`
+**Cell.** fixed-layout certificate on the layout it trained on. n 1755, ebs 2000, eval.max_steps 400, seed 42; the filter and projection are the registered cell's, unchanged.
+**Outcomes.** reach 0.9624, collision 0.0365 (obstacle 0.0074, band_lower 0.0291, band_upper 0.0000), incomplete 0.0011, infeasibility 0.2224, EMPTY 0.2741, SINGULAR 0.4308, cps 0.8216 CI [0.7965, 0.8493].
+**The held layout.** 3 active cylinders, radii 0.297 to 0.585. REPRODUCED from the run seed and the run's own config, not read from a persisted artifact -- the trainer does not persist it. Recorded as a gap in the instrumentation rather than hidden.
+**Not bold, not promoted.** docs/versions/v2.9.2/obs_conditioning.md
+
+
+## v2.9.3 · quadrotor_3d · L321 control on that layout
+<a id="v2-9-3--quadrotor-3d--l321-control-on-that-layout"></a>
+`anchor: v2-9-3--quadrotor-3d--l321-control-on-that-layout` · cps `0.8602` · date `2026-08-19 01:30`
+**Cell.** L321 on the same held layout, as the control for the layout cell. n 1755, ebs 2000, eval.max_steps 400, seed 42; the filter and projection are the registered cell's, unchanged.
+**Outcomes.** reach 0.9652, collision 0.0325 (obstacle 0.0068, band_lower 0.0256, band_upper 0.0000), incomplete 0.0023, infeasibility 0.1262, EMPTY 0.2769, SINGULAR 0.2866, cps 0.8602 CI [0.8348, 0.8864].
+**The held layout.** 3 active cylinders, radii 0.297 to 0.585. REPRODUCED from the run seed and the run's own config, not read from a persisted artifact -- the trainer does not persist it. Recorded as a gap in the instrumentation rather than hidden.
+**Not bold, not promoted.** docs/versions/v2.9.2/obs_conditioning.md
+
+
+## v2.9.3 · double_integrator · HOCBF analytic baseline (a1 1, a2 4)
+<a id="v2-9-3--double-integrator--hocbf-analytic-baseline-a1-1-a2-4"></a>
+`anchor: v2-9-3--double-integrator--hocbf-analytic-baseline-a1-1-a2-4` · cps `0.6540` · date `2026-08-19 01:37`
+**Cell and departure.** The registered double-integrator cell -- producer `v282_agree_gate.gate_overrides`, pool `eval_full_di_n2000_seed123456.pkl`, n 2000, `eval_batch_size` 2000, `eval.max_steps` 400, dt 0.05, terminal (0.15, 0.30, 0.30), seed 42, the OC row's own nominal `system.lqr_action(x, scene.goal)` and the shipped actuator box -- with ONE thing replaced: the certificate. In place of a learned value network the row is a hand-built two-level HIGH-ORDER CBF on the RAW clearance to the nearest active cylinder, `h = r_i* - ||p - c_i*||` in the repository's positive-unsafe convention. There is no checkpoint, no network and no learned quantity anywhere in this row. `src/common/filter_hocbf.py`, scored by `scripts/analysis/v293_hocbf_di.py`.
+**The cascade.** `L_g h == 0` identically (relative degree 2, verified against autograd at residual exactly 0), so the first-order row the deployed filter uses is inapplicable and a cascade is required: `psi_0 = h`, `psi_1 = L_f h + a1 h`, enforce `psi_1dot + a2 psi_1 <= 0`, i.e. `A.u <= b` with `A = L_g L_f h = -n^T` and `b = -L_f^2 h - (a1+a2) L_f h - a1 a2 h`, where `L_f h = -n.v` and `L_f^2 h = -(||v||^2 - (n.v)^2)/rho`. AFFINE IN THE INPUT, confirmed numerically before scoring on 1024 real pool states in float64: `psi_1dot(x,u)` matches `A.u + c` to 5.3e-15 and its second difference in `u` is 3.6e-15, i.e. zero. `||A|| == 1` at every row, so the deployed filter's singular clause is structurally vacuous here (measured `mass_singular` exactly 0.0).
+**A SECOND DEPARTURE, named.** The registered cell's `empty_fallback = {kstep, phases 1, k 3}` action substitution is NOT applied. On an infeasible row this baseline deploys the least-violating admissible command (`filter_hardnet._box_aware_projection`) and counts the step, per the dispatch; no slack variable was added. Grafting a rollout search onto an analytic filter would make it a hybrid and would stop the infeasibility figure measuring the analytic row.
+**Gains, screened.** Nine `(a1, a2)` pairs on the first 400 scenes of the registered pool, full grid in the build-log: cps 0.4646 (1,1), 0.5593 (1,2)=(2,1), **0.6470 (1,4)=(4,1)**, 0.5737 (2,2), 0.6183 (2,4)=(4,2), 0.5958 (4,4). With LINEAR class-K functions the row depends on the gains only through `a1+a2` and `a1*a2`, so the grid is SYMMETRIC -- the three transposed pairs were verified bit-identical in every field, and nine grid points are six distinct filters. The best cell leads the next distinct cell by 0.0287, well outside the 0.0083 admissibility floor, so no tie-break was needed. The maximum sits at a CORNER of the {1,2,4}^2 box; the nine-pair cap was fully consumed, so a wider-spread pair cannot be excluded as better.
+**Scored cell.** reach 0.8870, collision 0.1120 (obstacle 0.1120, band 0.0000/0.0000), oob 0.0000, stuck 0.0010, timeout 0.0000, infeasibility 0.0267, saturation 0.1574, cps 0.6540 CI [0.6114, 0.6979]. Beside the registered double-integrator rows on the identical cell: L323 (OC) cps 0.8822, collision 0.0055; L325 (JT) cps 0.9055, collision 0.0090. Paired scene bootstrap, 10 000 resamples: vs L323 dcps -0.2282 CI [-0.2651, -0.1913], dcollision +0.1065 CI [+0.0925, +0.1205]; vs L325 dcps -0.2515 CI [-0.2907, -0.2127], dcollision +0.1030 CI [+0.0895, +0.1165]. Against the unfiltered nominal at the same cell (reach 0.6635, collision 0.3365, cps -0.0095) it is a real filter; against the learned rows it is not close.
+**The QP's infeasibility rate, as its own figure.** The row and the box fail to intersect on 0.026697 of active steps, CI [0.024220, 0.029210], and 0.318 of episodes see at least one such step. Because the singular clause cannot fire here, that IS the reported column; the like-for-like EMPTY clause of the learned rows is 0.0175 (L323) and 0.0207 (L325), so the analytic program is infeasible 1.53x and 1.29x more often than theirs, and the reported column being lower than theirs is an artefact of their singular clause, not an advantage. Mean empty-step mass is 0.1491 on collided episodes against 0.0113 on reached episodes.
+**Why it is bad.** Of 224 collisions, 205 (91.5%) had an empty row within the 20 steps before impact, 19 (8.5%) are the single-nearest-obstacle row switching cylinders, and 0 are attributable to sampling with a feasible, correctly-locked row. The cascade demands a deceleration the box cannot deliver, and where it does, it hits. 3.15% of pool scenes start outside the level-1 set the cascade certifies (`psi_1(x_0) > 0`) and collide at 0.2222 against 0.1084 for compatible starts -- 14 of the 224 collisions.
+**Pre-cap eval_source, verbatim.** eval_only; NO checkpoint -- analytic certificate; registered cell v282_agree_gate.gate_overrides; pool eval_full_di_n2000_seed123456.pkl, n 2000, ebs 2000, max_steps 400; gains screened on the first 400 scenes of that pool; artifacts data/runs/v2.9.3/hocbf_di/score__final_a1-1_a2-4.json, data/runs/v2.9.3/hocbf_di/perepisode__final_a1-1_a2-4.npz, data/runs/v2.9.3/hocbf_di/grid.json, data/runs/v2.9.3/hocbf_di/affinity_check.json, data/runs/v2.9.3/hocbf_di/diag.json, data/runs/v2.9.3/hocbf_di/paired.json.
+**Not bold, not promoted.** No training was run, no existing module was edited, no config key on disk was changed. docs/versions/v2.9.3/hocbf_di.md
+
+
+## v2.9.3 · double_integrator · HOCBF one-parameter gain (a 3.0171)
+<a id="v2-9-3--double-integrator--hocbf-one-parameter-gain-a-3-0171"></a>
+`anchor: v2-9-3--double-integrator--hocbf-one-parameter-gain-a-3-0171` · cps `0.6130` · date `2026-08-19 03:05`
+**Cell and departure.** The registered double-integrator cell -- producer `v282_agree_gate.gate_overrides`, pool `eval_full_di_n2000_seed123456.pkl`, n 2000, `eval_batch_size` 2000, `eval.max_steps` 400, dt 0.05, terminal (0.15, 0.30, 0.30), seed 42, the OC row's own nominal `system.lqr_action(x, scene.goal)` and the shipped actuator box `[-2,2]^2` -- with the certificate replaced by a hand-built two-level HIGH-ORDER CBF on the RAW clearance to the nearest active cylinder. No checkpoint, no network, no learned quantity. Same construction and same code path as L348; the ONLY thing that differs from L348 is the gain. `src/common/filter_hocbf.py`, scored by `scripts/analysis/v293_hocbf_extend.py`.
+**The gain, and why it is one number.** With LINEAR class-K functions the row depends on `(a1, a2)` only through `a1+a2` and `a1*a2`, so the two gains are the two ROOTS of one characteristic polynomial and any transposed pair is bit-identical -- L348's nine-point grid was six filters, and its maximum sat at a corner of its `{1,2,4}^2` box. This row replaces that screen with `a1 = a2 = a`, which places the closed loop's double root at `-a` (CRITICALLY DAMPED) and reduces the row to `b = -L_f^2 h - 2a L_f h - a^2 h`. `a` was swept LOGARITHMICALLY over [0.1, 500] at 16 points on the first 400 scenes of the registered pool, every other key at its registered value. Screen cps: -0.2175 (a 0.10), +0.0550, +0.3025, +0.4000, +0.4647, +0.5666, **+0.6037 (a 3.0171)**, +0.4712, +0.1985, -0.0468, -0.1244, -0.1293, -0.1277, -0.1261, -0.1256, -0.1253 (a 500). The runner-up is +0.5666 at `a` 1.7100, a gap of 0.0371 -- outside the 0.0083 admissibility band -- so no tie-break was needed. Sanity: the sweep point `a` 0.9692 reproduces L348's grid cell `(1,1)` (cps 0.4647 vs 0.4646, reach and collision identical).
+**Q1 -- is small `a` infeasible from the first step? NO, and the refutation is exact.** At the four smallest gains (`a` 0.10, 0.18, 0.31, 0.55) the empty-clause step mass is EXACTLY 0.000000 and the fraction of scenes whose FIRST row is empty is 0.0000, while 36.00%, 25.50%, 17.00% and 8.25% of those same scenes start OUTSIDE the level-1 set `{psi_1 <= 0}`. L348's most conservative cell was not infeasible -- it was UNDER-DEMANDING: the correction the cascade requires of a violating state is `psi_1dot <= -a psi_1`, which shrinks with `a` at the same rate the level-1 set does, and as `a -> 0` the RHS tends to `-L_f^2 h = +||v_perp||^2/rho >= 0`, so `u = 0` always satisfies the row. Infeasibility here is a LARGE-`a`, interior phenomenon: 0 at `a <= 0.55`, peaking at 0.046774 (`a` 9.3926), decaying again as the row goes vacuous.
+**Q2 -- does any `a` trade collisions for incomplete episodes? NO on this plant.** Rows that STALL do exist below the old grid's floor (incomplete 0.2425 at `a` 0.10, 0.1100 at `a` 0.18; the grid never saw them because its smallest gain, `a` 1, is the 5th of 16 sweep points). But collision is MONOTONE DECREASING in `a` across the whole conservative half -- 0.2550, 0.2425, 0.2325, 0.2000, 0.1775, 0.1425, 0.1300 -- and the sweep minimum 0.1300 is attained where incomplete is 0.0000. Every gain that stalls also collides MORE. On the double integrator, under this box, the two-level analytic cascade has no conservative regime: it cannot buy safety with time.
+**Scored cell.** reach 0.8730, collision 0.1265 (obstacle 0.1265, band 0.0000/0.0000), oob 0.0000, stuck 0.0005, timeout 0.0000, infeasibility 0.0216, saturation 0.1768, cps 0.6130 CI [0.5665, 0.6558]. Counts goal 1746, collision 253, stuck 1. Beside the registered rows on the identical cell: L323 (OC) cps 0.8822 collision 0.0055; L325 (JT) cps 0.9055 collision 0.0090; unfiltered nominal cps -0.0095 collision 0.3365. Paired scene bootstrap, 10 000 resamples, percentile: vs L323 dcps -0.2692 CI [-0.3082, -0.2304], dcollision +0.1210 CI [+0.1070, +0.1355]; vs L325 dcps -0.2925 CI [-0.3347, -0.2508], dcollision +0.1175 CI [+0.1030, +0.1320].
+**Against L348, and the price of the reparameterization.** dcps -0.0410 CI [-0.0656, -0.0173], dcollision +0.0145 CI [+0.0065, +0.0230], 69 of 2000 episodes changed outcome. `a1 = a2` forces `a1*a2 = ((a1+a2)/2)^2`, so the critically-damped family is a ONE-DIMENSIONAL SLICE of the two-dimensional `(sum, product)` plane the row actually depends on, and L348's `(1, 4)` (sum 5, product 4) lies OFF it (`a` 3.0171 has sum 6.03, product 9.10). Tying the gains costs this plant 0.0410 cps with a CI clear of zero. That is reported, not absorbed. **L348 is KEPT, unamended.**
+**Mechanism at the selected gain.** Empty-row rate 0.014838 of pooled active steps (per-episode mean 0.021591, the reported column); singular clause exactly 0.000000, as `||L_g L_f h|| == 1` identically on this plant. Of 253 collisions, 230 (90.91%) had an empty row within the 20 steps before impact, 23 (9.09%) are the single-nearest-obstacle row switching cylinders, and 0 are attributable to sampling with a feasible, correctly-locked row. At those empty steps the row demands a mean 6.075 m/s^2 of deceleration along the outward normal (median 5.889, p90 9.045) against a box that can supply at most 2.576 there -- a deficit of 3.499, i.e. the cascade asks 2.36x what the actuator can give -- and the deployed command is a BOX CORNER, mean |u| = (2.000, 2.000), saturated in both channels. Mean empty-step mass 0.1343 on collided episodes against 0.0053 on reached ones.
+**A SECOND DEPARTURE, named.** The registered cell's `empty_fallback = {kstep, phases 1, k 3}` action substitution is NOT applied; on an infeasible row this baseline deploys the least-violating admissible command and counts the step, and no slack variable was added. Grafting a rollout search onto an analytic filter would make it a hybrid and would stop the infeasibility figure measuring the analytic row.
+**Pre-cap eval_source, verbatim.** eval_only; NO checkpoint -- analytic certificate; registered cell v282_agree_gate.gate_overrides; pool eval_full_di_n2000_seed123456.pkl, n 2000, ebs 2000, max_steps 400; gain from a 16-point log sweep of a1=a2 over [0.1,500] on the first 400 scenes of that pool; artifacts data/runs/v2.9.3/hocbf_extend/double_integrator/score__final_a-3.01709.json, perepisode__final_a-3.01709.npz, diag_a-3.01709.json, paired_a-3.01709.json, paired_vs_L348.json, di_parity.json, affinity_check.json, relative_degree.json; full sweep data/runs/v2.9.3/hocbf_sweep/double_integrator/sweep.json and selection.json.
+**Not bold, not promoted.** No training was run, no config key on disk was changed, no git operation was performed, single seed 42. The double-integrator row at L348's gain was re-scored through the extended module and matched it in EVERY field with delta exactly 0 (`di_parity.json`, `identical: true`). docs/versions/v2.9.3/hocbf_di.md §8
+
+
+## v2.9.3 · unicycle · HOCBF analytic (a 5.3234)
+<a id="v2-9-3--unicycle--hocbf-analytic-a-5-3234"></a>
+`anchor: v2-9-3--unicycle--hocbf-analytic-a-5-3234` · cps `0.5812` · date `2026-08-19 03:06`
+**Cell and departure.** The registered unicycle cell -- producer `v282_agree_gate.gate_overrides`, pool `eval_full_unicycle_n2000_seed123456.pkl`, n 2000, `eval_batch_size` 2000, `eval.max_steps` 400, dt 0.05, terminal (0.15, 0.30, 0.30), seed 42, the OC row's own nominal `system.lqr_action(x, scene.goal)` and the shipped actuator box `[-2,2] x [-3,3]` -- with the certificate replaced by a hand-built two-level HIGH-ORDER CBF on the RAW clearance to the nearest active cylinder, `h = r_i* - ||p - c_i*||` in the repository's positive-unsafe convention. No checkpoint, no network, no learned quantity. `src/common/filter_hocbf.py` (extended additively), scored by `scripts/analysis/v293_hocbf_extend.py`.
+**Relative degree, ESTABLISHED not assumed.** `x = [px, py, theta, v]`, `u = [a, omega]`. `L_g h == 0` identically, so the deployed first-order row is inapplicable and a cascade is required. Writing `e = (cos th, sin th)`, `e_perp = (-sin th, cos th)`, `s = n.e`, `t = n.e_perp` (so `s^2 + t^2 = 1` exactly): `L_f h = -v s`, `L_f^2 h = -v^2 t^2 / rho` (the same centripetal term as the double integrator), and `L_g L_f h = [-s, -v t]`. BOTH input channels appear at the second differentiation -- the acceleration through `dot v`, the turn rate through the heading -- so the relative degree is EXACTLY 2 IN BOTH INPUTS and a two-level cascade is the correct depth. Verified against autograd through the true plant on 1024 real pool states in float64: `L_g h` residual 0.000e+00, `L_f h` 4.441e-16, `L_g L_f h` columns 0.000e+00 / 4.441e-16, `psi_1dot(x,u)` vs `A.u + c` 7.105e-15, second difference in `u` 3.553e-15. The drift Lie chain `max |L_gj L_f^k h|` is (0, 0) at k=0 and (1.000, 2.470) at k=1 for `(a, omega)` -- the measurement that fixes the degree at 2.
+**The one degeneracy, structurally live and empirically empty.** `||L_g L_f h||^2 = s^2 + v^2 t^2` is NOT identically 1 as on the double integrator; it vanishes on `{v = 0 and s = 0}` -- standing still, heading tangential -- so the deployed filter's `||L_g h|| < 5e-4` singular clause is structurally live here. Measured over all 800 000 scored steps it fires on EXACTLY 0.
+**The gain.** `a1 = a2 = a` (critically damped, double root at `-a`), swept LOGARITHMICALLY over [0.1, 500] at 16 points on the first 400 scenes of the registered pool before this cell was scored. Screen cps: -0.1863 (a 0.10), +0.0625, +0.1550, +0.1924, +0.3247, +0.4415, +0.5157, **+0.5599 (a 5.3234)**, +0.4936, +0.1587, +0.0145, -0.0609, -0.0894, -0.1035, -0.1030, -0.1029 (a 500). Runner-up +0.5157 at `a` 3.0171, a gap of 0.0442, outside the 0.0083 band; no tie-break needed.
+**What the sweep shows on this plant.** Small `a` is NOT infeasible from the first step: at `a` 0.10, 0.18 and 0.31 the empty-clause mass is EXACTLY 0.000000 and no scene opens with an empty row, while 26.50%, 16.25% and 9.75% of scenes start outside the level-1 set. Infeasibility is instead an interior, large-`a` phenomenon, peaking at 0.029192 (`a` 16.572). And unlike the double integrator, this plant DOES trade collisions for incomplete episodes over an interior interval: as `a` falls 16.572 -> 9.3926 -> 5.3234 -> 3.0171, collision falls 0.2675 -> 0.1250 -> 0.0775 -> 0.0625 while incomplete rises 0.0150 -> 0.0625 -> 0.1025 -> 0.1475. Below `a` 3.0171 the trade reverses and both worsen. Incomplete reaches 0.3300 at `a` 0.10.
+**Scored cell.** reach 0.8210, collision 0.0590 (obstacle 0.0590, band 0.0000/0.0000), oob 0.0000, stuck 0.1200, timeout 0.0000, infeasibility 0.0062, saturation 0.1957, cps 0.5812 CI [0.5431, 0.6208]. Counts goal 1642, collision 118, stuck 240. Beside the registered unicycle rows on the identical cell: L324 (OC) cps 0.6753 collision 0.0020 incomplete 0.1495; L326 (JT) cps 0.8732 collision 0.0020 incomplete 0.0575; unfiltered nominal cps 0.0020 collision 0.3320. Paired scene bootstrap, 10 000 resamples, percentile: vs L324 dcps -0.0942 CI [-0.1283, -0.0605], dcollision +0.0570 CI [+0.0470, +0.0675], dincomplete -0.0295, 314 episodes changed; vs L326 dcps -0.2921 CI [-0.3303, -0.2550], dcollision +0.0570 CI [+0.0470, +0.0675], dincomplete +0.0625, 322 episodes changed. This is the analytic row's smallest OC gap of the three systems, but not because it is good: its collision rate is 29x either learned row's, and the OC row it nearly matches on cps is itself losing 0.1495 of the pool to stalls.
+**Mechanism.** Empty-row rate 0.003208 of pooled active steps (per-episode mean 0.006016); singular clause 0.000000. Of 118 collisions, 116 (98.31%) had an empty row within the 20 steps before impact, 2 (1.69%) are the nearest-obstacle argmax switching, and 0 are attributable to sampling with a feasible, correctly-locked row. At those empty steps the row demands a mean 10.683 in row units against a box supply of 3.965 (normalized by `||A||`: demand 9.106, supply 3.245, deficit 5.861), and the deployed command is a BOX CORNER, mean |u| = (2.000, 3.000), saturated in both channels. No pool scene starts outside the level-1 set at this gain.
+**Two further departures, named.** (1) The registered cell's `empty_fallback = {kstep, phases 1, k 3}` is NOT applied; the least-violating admissible command is deployed and the step is counted, with no slack variable. (2) `h_scale` is not read -- the hazard is the raw signed distance, not `signed_h`'s clipped ramp -- and the row is built from the single nearest active obstacle, which costs 2 of the 118 collisions. One named interaction: this system's third reach leg reads the COMMANDED turn rate off the executed action (`|u[1]| <= 0.30`), and on an empty row this baseline emits `|omega| = 3.0`, so no reach can register at such a step; empty rows are 0.0062 of steps.
+**Pre-cap eval_source, verbatim.** eval_only; NO checkpoint -- analytic certificate; registered cell v282_agree_gate.gate_overrides; pool eval_full_unicycle_n2000_seed123456.pkl, n 2000, ebs 2000, max_steps 400; gain from a 16-point log sweep of a1=a2 over [0.1,500] on the first 400 scenes of that pool; artifacts data/runs/v2.9.3/hocbf_extend/unicycle/score__final_a-5.32336.json, perepisode__final_a-5.32336.npz, diag_a-5.32336.json, paired_a-5.32336.json, affinity_check.json, relative_degree.json; full sweep data/runs/v2.9.3/hocbf_sweep/unicycle/sweep.json.
+**Not bold, not promoted.** No training was run, no config key on disk was changed, no git operation was performed, single seed 42. docs/versions/v2.9.3/hocbf_extend.md
+
+
+## v2.9.3 · quadrotor_planar · HOCBF analytic (a 3.0171)
+<a id="v2-9-3--quadrotor-planar--hocbf-analytic-a-3-0171"></a>
+`anchor: v2-9-3--quadrotor-planar--hocbf-analytic-a-3-0171` · cps `0.4171` · date `2026-08-19 03:07`
+**Cell and departure.** The registered planar-quadrotor cell -- producer `v282_agree_gate.gate_overrides`, pool `eval_full_quadrotor-planar_n2000_seed23456.pkl`, n 2000, `eval_batch_size` 2000, `eval.max_steps` 400, dt 0.05, terminal (0.15, 0.30, 0.30), seed 42, the OC row's own cascaded-PD nominal `system.lqr_action(x, scene.goal)` and the shipped actuator box `[0, 19.62] x [-1, 1]` -- with the certificate replaced by a hand-built two-level HIGH-ORDER CBF on the RAW clearance to the nearest active cylinder. No checkpoint, no network, no learned quantity. `src/common/filter_hocbf.py` (extended additively), scored by `scripts/analysis/v293_hocbf_extend.py`.
+**Relative degree, and WHERE THE CONSTRUCTION STOPS.** `x = [px, py, theta, vx, vy, omega]`, `u = [f_thr, tau]`. `L_g h == 0` identically. At the second level, with `Re = (-sin th, cos th)` the body thrust axis: `L_f h = -n.v`, `L_f^2 h = -(||v||^2 - (n.v)^2)/rho + g n_y`, and `L_g L_f h = [-(n.Re)/m, 0]`. So the relative degree is EXACTLY 2 -- but only with respect to the THRUST. THE TORQUE COLUMN IS IDENTICALLY ZERO, and not merely at this depth: every drift Lie derivative `L_f^k h` of this plant depends on the state only through `(p, v)` (the drift restricted to `(p, v)` is `(v, -g e_y)`, which is attitude-free), so `L_tau L_f^k h == 0` for EVERY k. Measured: the torque column of `max |L_tau L_f^k h|` over 1024 real pool states in float64 is 0.000e+00 at k = 0, 1, 2 and 3, while the thrust column is 0, 1.000, 9.738, 1.010e+02. Torque reaches the clearance only through the BILINEAR product `tau * f_thr` along the trajectory, which is not a relative degree at all; under the standard dynamic extension (thrust promoted to a state) the vector relative degree is (3, 4), so a FOUR-LEVEL cascade would be required to put torque in the row. It was not built. The depth-2 row therefore constrains the thrust MAGNITUDE only: it can push harder or ease off along the current thrust axis, and cannot re-point it.
+**Two further structural facts, both measured.** (1) `L_f^2 h` is NOT sign-definite here -- unlike the double integrator's pure centripetal term it carries `+g n_y`, so free fall closes clearance on anything below the vehicle. (2) `||L_g L_f h|| = |n.Re|/m` vanishes when the thrust axis is tangential to the cylinder, so the `||L_g h|| < 5e-4` singular clause is structurally live AND fires: step mass 0.000373, 2.80% of episodes. Affinity verified against autograd before scoring: `L_g h` 0.000e+00, `L_g L_f h` columns 8.882e-16 / 0.000e+00, `psi_1dot(x,u)` vs `A.u + c` 1.421e-14, second difference in `u` 1.066e-14.
+**The gain.** `a1 = a2 = a` (critically damped), swept LOGARITHMICALLY over [0.1, 500] at 16 points on the first 400 scenes of the registered pool before this cell was scored. Screen cps: -0.4899 (a 0.10), -0.0951, +0.0077, +0.1532, +0.1862, +0.3975, **+0.4586 (a 3.0171)**, +0.4583, +0.3581, +0.1334, -0.0368, -0.1222, -0.1429, -0.1416, -0.1483, -0.1478 (a 500). This is the only genuine tie of the three systems: `a` 5.3234 scores +0.4583, within 0.000254 of the maximum and inside the 0.0083 admissibility band, so the SMALLER gain is taken.
+**What the sweep shows on this plant, and it is the exception.** Here small `a` IS infeasible from the first step. At `a` 0.10, 43.75% of scenes start outside the level-1 set AND 27.00% already have an EMPTY row at step 0; the empty-clause mass is at its sweep maximum at the conservative end (0.057800 at `a` 0.10, 0.058446 at `a` 0.18) and decays monotonically to 0.000802 at `a` 500 -- the exact opposite of the double integrator and the unicycle, where it is 0.000000 at the conservative end. The cause is the plant, not the gain: as `a -> 0`, `b -> ||v_perp||^2/rho - g n_y`, which is NEGATIVE whenever the vehicle sits above the obstacle centre, and the thrust box is ONE-SIGNED (`f in [0, 19.62]`), so wherever the thrust axis leans toward the cylinder (`n.Re <= 0`) the box's best possible row value is exactly 0 and the row is empty. This plant also trades collisions for incomplete episodes over an interior interval (`a` 9.3926 -> 1.7100: collision 0.2100 -> 0.1700 -> 0.1575 -> 0.1575, incomplete 0.0000 -> 0.0100 -> 0.0275 -> 0.0575), weakly, before the trade reverses below `a` 1.7100. Incomplete reaches 0.2300 at `a` 0.10.
+**Scored cell.** reach 0.7990, collision 0.1650 (obstacle 0.1650, band 0.0000/0.0000), oob 0.0000, stuck 0.0360, timeout 0.0000, infeasibility 0.0531, saturation 0.0565, cps 0.4171 CI [0.3645, 0.4682]. Counts goal 1598, collision 330, stuck 72. Beside the registered planar rows on the identical cell: L322 (OC) cps 0.6963 collision 0.0520; L327 (JT) cps 0.7894 collision 0.0215; unfiltered nominal cps -0.2060 collision 0.4020. Paired scene bootstrap, 10 000 resamples, percentile: vs L322 dcps -0.2792 CI [-0.3322, -0.2283], dcollision +0.1130 CI [+0.0970, +0.1295], 455 episodes changed; vs L327 dcps -0.3723 CI [-0.4243, -0.3221], dcollision +0.1435 CI [+0.1285, +0.1595], 452 episodes changed. Against L327 the REPORTED infeasibility column is indistinguishable (dinfeas +0.0035 CI [-0.0024, +0.0097]), but the like-for-like EMPTY clause is higher by +0.0148 CI [+0.0093, +0.0206]: the reported column understates this baseline's feasibility problem, because the learned rows carry a large singular clause and this one carries almost none.
+**Mechanism, and it differs from the other two systems.** Empty-row rate 0.012429 of pooled active steps (per-episode mean 0.052810); singular-row rate 0.000246. Of 330 collisions, 190 (57.58%) had an empty row within the 20 steps before impact, 53 (16.06%) are the nearest-obstacle argmax switching, and 87 (26.36%) are sampling with a feasible, correctly-locked row -- the double integrator and the unicycle both record ZERO in that last class. At the empty pre-impact steps the row demands a mean 10.612 in row units against a box supply of 1.797, and on 68.44% OF THOSE STEPS THE SUPPLY IS <= 0: no admissible thrust produces any decay in the row direction at all, because the deficit is not a magnitude the thrust cannot reach but a DIRECTION the thrust axis cannot point in -- and pointing it is a torque action, which is not in the row. Where the supply is positive the row still asks a median 26.97 N against a 19.62 N ceiling. On those steps the filter saturates the thrust (mean 6.19 N, i.e. `f_max` on the 31.6% of steps where thrust helps and `f_min` elsewhere) and passes the nominal torque through UNTOUCHED, because its row has nothing to say about torque. 2.30% of scenes start outside the level-1 set and collide at 0.4348 against 0.1586 for compatible starts.
+**Two further departures, named.** (1) The registered cell's `empty_fallback = {kstep, phases 1, k 3}` is NOT applied; the least-violating admissible command is deployed and the step is counted, with no slack variable. (2) `h_scale` is not read, and the row is built from the single nearest active obstacle, which costs 53 of the 330 collisions.
+**Pre-cap eval_source, verbatim.** eval_only; NO checkpoint -- analytic certificate; registered cell v282_agree_gate.gate_overrides; pool eval_full_quadrotor-planar_n2000_seed23456.pkl, n 2000, ebs 2000, max_steps 400; gain from a 16-point log sweep of a1=a2 over [0.1,500] on the first 400 scenes of that pool; artifacts data/runs/v2.9.3/hocbf_extend/quadrotor_planar/score__final_a-3.01709.json, perepisode__final_a-3.01709.npz, diag_a-3.01709.json, paired_a-3.01709.json, affinity_check.json, relative_degree.json; full sweep data/runs/v2.9.3/hocbf_sweep/quadrotor_planar/sweep.json; the quadrotor_3d obstruction probe at data/runs/v2.9.3/hocbf_extend/quadrotor_3d_obstruction.json.
+**Not bold, not promoted.** No training was run, no config key on disk was changed, no git operation was performed, single seed 42. The 3-D quadrotor was NOT attempted and `HOCBFFilter` raises on it: its hazard is the clearance to a VERTICAL cylinder so `n` is horizontal, the only depth-2 channel is the collective thrust with coefficient `-(n . R e3)/m <= sin(tilt)` which vanishes identically on the hover manifold, the input is four rotor forces of which the row would constrain only the sum, and the torques are four levels away under dynamic extension. docs/versions/v2.9.3/hocbf_extend.md
+
+## v2.9.3 · quadrotor_planar · COLDSTART value_init null (quadrotor_planar)
+<a id="v2-9-3--quadrotor-planar--coldstart-value-init-null-quadrotor-planar"></a>
+`anchor: v2-9-3--quadrotor-planar--coldstart-value-init-null-quadrotor-planar` · cps `0.6807` · date `2026-08-19 12:40`
+**Cell and departure.** The registered cell unchanged at eval.max_steps 400; the ONE training key changed is `training.jt.value_init_ckpt` -> null, so the certificate starts from a random initialization instead of the observation-conditioned stage. Every other key is taken from L327's own persisted config, and the budget is that run's own.
+**Against its warm counterpart L327.** cps 0.6807 vs 0.7894, paired difference **-0.1087** CI [-0.1459, -0.0717], **13.09x the 0.0083 admissibility floor**; 1131 of 2000 episodes changed outcome.
+**Outcomes.** reach 0.8640, collision 0.0390 (obstacle 0.0390, band_lower 0.0000, band_upper 0.0000), incomplete 0.0970, infeasibility 0.0427, saturation 0.1808.
+**Registered prediction FALSIFIED on this system.** It predicted the cold-started pair would land within the floor of its warm counterpart; it does not.
+**Not bold, not promoted.** docs/versions/v2.9.3/cold_start.md
+
+## v2.9.3 · double_integrator · COLDSTART value_init null (double_integrator)
+<a id="v2-9-3--double-integrator--coldstart-value-init-null-double-integrator"></a>
+`anchor: v2-9-3--double-integrator--coldstart-value-init-null-double-integrator` · cps `0.8845` · date `2026-08-19 12:40`
+**Cell and departure.** The registered cell unchanged at eval.max_steps 400; the ONE training key changed is `training.jt.value_init_ckpt` -> null, so the certificate starts from a random initialization instead of the observation-conditioned stage. Every other key is taken from L325's own persisted config, and the budget is that run's own.
+**Against its warm counterpart L325.** cps 0.8845 vs 0.9055, paired difference **-0.0210** CI [-0.0420, +0.0004], **2.53x the 0.0083 admissibility floor**; 1241 of 2000 episodes changed outcome.
+**Outcomes.** reach 0.9580, collision 0.0140 (obstacle 0.0140, band_lower 0.0000, band_upper 0.0000), incomplete 0.0280, infeasibility 0.0583, saturation 0.7190.
+**Registered prediction FALSIFIED on this system.** It predicted the cold-started pair would land within the floor of its warm counterpart; it does not.
+**Not bold, not promoted.** docs/versions/v2.9.3/cold_start.md
+
+## v2.9.3 · unicycle · COLDSTART value_init null (unicycle)
+<a id="v2-9-3--unicycle--coldstart-value-init-null-unicycle"></a>
+`anchor: v2-9-3--unicycle--coldstart-value-init-null-unicycle` · cps `0.8129` · date `2026-08-19 12:40`
+**Cell and departure.** The registered cell unchanged at eval.max_steps 400; the ONE training key changed is `training.jt.value_init_ckpt` -> null, so the certificate starts from a random initialization instead of the observation-conditioned stage. Every other key is taken from L326's own persisted config, and the budget is that run's own.
+**Against its warm counterpart L326.** cps 0.8129 vs 0.8732, paired difference **-0.0603** CI [-0.0823, -0.0382], **7.27x the 0.0083 admissibility floor**; 993 of 2000 episodes changed outcome.
+**Outcomes.** reach 0.9150, collision 0.0055 (obstacle 0.0055, band_lower 0.0000, band_upper 0.0000), incomplete 0.0795, infeasibility 0.0387, saturation 0.7027.
+**Registered prediction FALSIFIED on this system.** It predicted the cold-started pair would land within the floor of its warm counterpart; it does not.
+**Not bold, not promoted.** docs/versions/v2.9.3/cold_start.md
+
+## v2.9.3 · quadrotor_3d · COLDSTART value_init null (quadrotor_3d)
+<a id="v2-9-3--quadrotor-3d--coldstart-value-init-null-quadrotor-3d"></a>
+`anchor: v2-9-3--quadrotor-3d--coldstart-value-init-null-quadrotor-3d` · cps `0.8686` · date `2026-08-19 12:40`
+**Cell and departure.** The registered cell unchanged at eval.max_steps 400; the ONE training key changed is `training.jt.value_init_ckpt` -> null, so the certificate starts from a random initialization instead of the observation-conditioned stage. Every other key is taken from L328's own persisted config, and the budget is that run's own.
+**Against its warm counterpart L328.** cps 0.8686 vs 0.8853, paired difference **-0.0167** CI [-0.0316, -0.0023], **2.02x the 0.0083 admissibility floor**; 1555 of 2000 episodes changed outcome.
+**Outcomes.** reach 0.9640, collision 0.0280 (obstacle 0.0095, band_lower 0.0180, band_upper 0.0005), incomplete 0.0080, infeasibility 0.1172, saturation 0.3555.
+**Registered prediction half held.** The 'not within the floor' half is right; the 'degrades rather than converging' half is wrong -- the run completed its full budget with no halt and posts the smallest cold-warm gap of the four systems. Its certificate matches **neither** the flat nor the saturated attractor: certified fraction 0.63, probe range 2.10, empty 0.322, mean projection 1.87. Signature: data/runs/v2.9.3/cold_start/signature__quadrotor_3d.json.
+**Not bold, not promoted.** docs/versions/v2.9.3/cold_start.md
+
+## v2.9.3 / double_integrator / COLDSTART40K bounded D_V (double_integrator)
+
+**The departure is three keys off L325's own registered joint config, all in training, none in the
+eval cell:** `training.jt.value_init_ckpt` null (certificate from scratch), `training.jt.n_steps`
+40000, `collection.jt.buffer_cap` 200000. The gate in `scripts/analysis/v293_cold40k_launch.py`
+refuses any launch whose flattened config diff is not exactly those three keys; this run passed it,
+reached 40000/40000 and halted with `halt_reason` null.
+
+**Scored** on the registered cell `v282_agree_gate.gate_overrides` at the h400 basis, this system's
+registered pool at n 2000, `eval_batch_size` 2000, `eval.max_steps` 400, seed 42, from the run's own
+`best.pt` @ step 26700 -- the rule the warm rows were scored under. **cps 0.893488.**
+
+**Both paired contrasts**, same pool, same order, scene bootstrap, 10000 resamples, percentile,
+generator seed 20292:
+
+| contrast | delta | CI | inside 0.0083 floor | CI excludes 0 |
+|---|---:|---|---|---|
+| vs **L325** (warm, 10000 steps, `value_init_ckpt` SET) | -0.012015 | [-0.031011, +0.007268] | False | False |
+| vs **L353** (cold@10000, unbounded cap 1000000) | +0.008964 | [-0.012596, +0.030642] | False | False |
+
+The second contrast is **budget plus cap, not budget alone**: at 10000 steps the 1000000-trajectory
+cap never bound, so L353 is an unbounded run and this one is not.
+
+**Buffer cap actually applied: 200000, UNIFORM across all four systems -- a deviation from the
+dispatched rule.** The rule was a per-system cap equal to the trajectory count D_V held at the end of
+that system's warm comparator's own 10000 steps. That count is logged nowhere and is not derivable
+from config arithmetic (the collector appends segments, not episodes), so it was measured by
+`scripts/analysis/v293_dv_trajectory_count.py` -- a stratified replay of the real `collect_jt` against
+the comparator's own checkpoints -- and for this system is **183691 +/- 4327**
+(`data/runs/v2.9.3/bufcap/dv_count__double_integrator.json`). The uniform 200000 exceeds it by **+8.9%**, so this
+cold run was permitted that much more history than its warm comparator actually held. That is a
+residual difference between the conditions, far smaller than the ~4x the unbounded cap allowed but
+not zero, and it is recorded here rather than left to be inferred from a config key.
+
+**Initial certificate state, established AT THE DEPLOYMENT ENTRY POINT** -- not inferred from the null
+`value_init_ckpt` key. `jt_pncbf.train.load_framework_from_checkpoint` (the function
+`src/eval/run_full._load_framework` calls) on this run's earliest checkpoint, over the registered
+pool's initial states: **ORDINARY** at step 150 -- V-hat in [-1.0000, +0.6827], range
+1.6827e+00, gradient norm max 1.5996e+00, fraction V-hat > 0 = 0.0320. Neither **flat**
+(constant, vanishing gradient, row identically zero, filter inert, every state certified) nor
+**saturated** (at the upper clamp, nothing certified, filter refuses everything). The trainer writes
+no step-0 checkpoint, so step 150 is the earliest DEPLOYABLE state of this run; that limit is
+stated rather than smoothed over. The same probe on the scored `best.pt` @ step 26700: **ORDINARY**,
+range 1.1862e+00, gradient norm max 7.0855e+00, fraction V-hat > 0 = 0.0050.
+
+**Registered predictions, scored on this system.**
+Prediction 1 -- the cold-warm gap shrinks by more than the floor when the budget goes 10000 -> 40000:
+|cold40k - warm| 0.012015 against |cold10k - warm| 0.020979, a shrink of +0.008964 > 0.0083 --
+**HELD**. **This leg is INFORMED, not blind:** the unbounded double_integrator run's in-loop series was seen before this cell was scored, so its prediction-1 result is recorded as informed rather than scored as a blind pre-registration.
+Prediction 2 concerns quadrotor_3d only and is not scored here.
+Prediction 3 -- no run halts and the degenerate verdict is NEITHER: reached 40000/40000, `halt_reason`
+null, certificate ORDINARY at both the earliest and the scored checkpoint -- **HELD** on this system.
+
+**`best.pt` discrepancy pair: NONE.** `status.json`/`best.pt` and the eval-record maximum agree
+exactly, delta 0.000000. `halt.early_stop_min_delta` 0.002 requires an eval to beat the incumbent by
+more than 0.002 to replace it, so `best.pt` CAN lag the best eval -- it did on the unbounded
+double_integrator run (+0.90485 @ 26400 against eval-max +0.90520 @ 29550). It did not here.
+
+**Not bold, not promoted.** Single seed 42. Which rows the paper's tables cite is a Researcher
+decision taken after all four cells exist; quadrotor_planar is running and quadrotor_3d is queued.
+
+
+
+**BOLD 2026-08-20 — a `06_workflow` 2.5 BASIS CLASSIFICATION, not a measured beat.**
+The Researcher's approval selects bold on the 400-step basis and fixes the standing comparison
+basis to the cold-start condition. Warm-start rows are therefore a **different training class**
+and are not ranked against this one -- the clause at `06_workflow` 2.5 that says such rows are
+"never SOTA-bolded on `cps` alone" and are "flagged for Researcher classification instead".
+That classification has now been made.
+
+**Nothing here is claimed as a beat.** Against the warm h400 runner-up L325 (0.905503): paired delta **-0.012015**, CI [-0.031011, +0.007268], which covers zero.
+The bolded row is 1.45x the 0.0083 floor BELOW its warm runner-up; it is bolded because the
+basis is the cold-start condition, not because it scores higher.
+Single seed 42. Supersedes L314, whose bold is removed in this edit.
+## v2.9.3 / unicycle / COLDSTART40K bounded D_V (unicycle)
+
+**The departure is three keys off L326's own registered joint config, all in training, none in the
+eval cell:** `training.jt.value_init_ckpt` null (certificate from scratch), `training.jt.n_steps`
+40000, `collection.jt.buffer_cap` 200000. The gate in `scripts/analysis/v293_cold40k_launch.py`
+refuses any launch whose flattened config diff is not exactly those three keys; this run passed it,
+reached 40000/40000 and halted with `halt_reason` null.
+
+**Scored** on the registered cell `v282_agree_gate.gate_overrides` at the h400 basis, this system's
+registered pool at n 2000, `eval_batch_size` 2000, `eval.max_steps` 400, seed 42, from the run's own
+`best.pt` @ step 31050 -- the rule the warm rows were scored under. **cps 0.874232.**
+
+**Both paired contrasts**, same pool, same order, scene bootstrap, 10000 resamples, percentile,
+generator seed 20292:
+
+| contrast | delta | CI | inside 0.0083 floor | CI excludes 0 |
+|---|---:|---|---|---|
+| vs **L326** (warm, 10000 steps, `value_init_ckpt` SET) | +0.001021 | [-0.018817, +0.021132] | True | False |
+| vs **L354** (cold@10000, unbounded cap 1000000) | +0.061328 | [+0.037306, +0.085375] | False | True |
+
+The second contrast is **budget plus cap, not budget alone**: at 10000 steps the 1000000-trajectory
+cap never bound, so L354 is an unbounded run and this one is not.
+
+**Buffer cap actually applied: 200000, UNIFORM across all four systems -- a deviation from the
+dispatched rule.** The rule was a per-system cap equal to the trajectory count D_V held at the end of
+that system's warm comparator's own 10000 steps. That count is logged nowhere and is not derivable
+from config arithmetic (the collector appends segments, not episodes), so it was measured by
+`scripts/analysis/v293_dv_trajectory_count.py` -- a stratified replay of the real `collect_jt` against
+the comparator's own checkpoints -- and for this system is **190396 +/- 2150**
+(`data/runs/v2.9.3/bufcap/dv_count__unicycle.json`). The uniform 200000 exceeds it by **+5.0%**, so this
+cold run was permitted that much more history than its warm comparator actually held. That is a
+residual difference between the conditions, far smaller than the ~4x the unbounded cap allowed but
+not zero, and it is recorded here rather than left to be inferred from a config key.
+
+**Initial certificate state, established AT THE DEPLOYMENT ENTRY POINT** -- not inferred from the null
+`value_init_ckpt` key. `jt_pncbf.train.load_framework_from_checkpoint` (the function
+`src/eval/run_full._load_framework` calls) on this run's earliest checkpoint, over the registered
+pool's initial states: **ORDINARY** at step 150 -- V-hat in [-1.0000, +0.4635], range
+1.4635e+00, gradient norm max 1.8007e+00, fraction V-hat > 0 = 0.0155. Neither **flat**
+(constant, vanishing gradient, row identically zero, filter inert, every state certified) nor
+**saturated** (at the upper clamp, nothing certified, filter refuses everything). The trainer writes
+no step-0 checkpoint, so step 150 is the earliest DEPLOYABLE state of this run; that limit is
+stated rather than smoothed over. The same probe on the scored `best.pt` @ step 31050: **ORDINARY**,
+range 1.0871e+00, gradient norm max 4.8933e+00, fraction V-hat > 0 = 0.0020.
+
+**Registered predictions, scored on this system.**
+Prediction 1 -- the cold-warm gap shrinks by more than the floor when the budget goes 10000 -> 40000:
+|cold40k - warm| 0.001021 against |cold10k - warm| 0.060307, a shrink of +0.059286 > 0.0083 --
+**HELD**.
+Prediction 2 concerns quadrotor_3d only and is not scored here.
+Prediction 3 -- no run halts and the degenerate verdict is NEITHER: reached 40000/40000, `halt_reason`
+null, certificate ORDINARY at both the earliest and the scored checkpoint -- **HELD** on this system.
+
+**`best.pt` discrepancy pair: NONE.** `status.json`/`best.pt` and the eval-record maximum agree
+exactly, delta 0.000000. `halt.early_stop_min_delta` 0.002 requires an eval to beat the incumbent by
+more than 0.002 to replace it, so `best.pt` CAN lag the best eval -- it did on the unbounded
+double_integrator run (+0.90485 @ 26400 against eval-max +0.90520 @ 29550). It did not here.
+
+**Not bold, not promoted.** Single seed 42. Which rows the paper's tables cite is a Researcher
+decision taken after all four cells exist; quadrotor_planar is running and quadrotor_3d is queued.
+
+
+**BOLD 2026-08-20 — a `06_workflow` 2.5 BASIS CLASSIFICATION, not a measured beat.**
+The Researcher's approval selects bold on the 400-step basis and fixes the standing comparison
+basis to the cold-start condition. Warm-start rows are therefore a **different training class**
+and are not ranked against this one -- the clause at `06_workflow` 2.5 that says such rows are
+"never SOTA-bolded on `cps` alone" and are "flagged for Researcher classification instead".
+That classification has now been made.
+
+**Nothing here is claimed as a beat.** Against the warm h400 runner-up L326 (0.873211): paired delta **+0.001021**, CI [-0.018817, +0.021132], which covers zero.
+The gap is **INSIDE the 0.0083 floor** at 0.12x. This is also **unicycle's first bold row** --
+the lineage had never carried one -- so it supersedes nothing.
+Single seed 42. Supersedes nothing.
+## v2.9.3 / quadrotor_planar / COLDSTART40K bounded D_V (quadrotor_planar)
+
+**Three keys off L327's own registered joint config, all in training, none in the eval cell:**
+`training.jt.value_init_ckpt` null, `training.jt.n_steps` 40000, `collection.jt.buffer_cap` 200000.
+Gate passed at exactly those three; the run reached 40000/40000 with `halt_reason` null.
+
+**Scored** on `v282_agree_gate.gate_overrides` at h400, pool `eval_full_quadrotor-planar_n2000_seed23456.pkl` n 2000, ebs 2000, max_steps 400,
+seed 42, from `best.pt` @ step 37050. **cps 0.763455.**
+
+| contrast | delta | CI | inside 0.0083 floor | CI excludes 0 |
+|---|---:|---|---|---|
+| vs **L327** (warm, 10000 steps, `value_init_ckpt` SET) | -0.025922 | [-0.061990, +0.009940] | False | False |
+| vs **L352** (cold@10000, unbounded cap) | +0.082763 | [+0.044579, +0.120830] | False | **True** |
+
+**This is the largest established effect in the axis.** The cold@10k contrast is 10.0x the floor with an
+interval that excludes zero: four times the budget with a bounded D_V moves this system by +0.083
+against the same cell at 10000 steps. The warm contrast remains 3.1x the floor but its interval
+contains zero, so cold-at-40000 is not separated from warm here either way.
+
+**Buffer cap 200000 uniform, a deviation from the dispatched per-system rule.** This system's measured
+comparator count is **171366 +/- 4237** (`data/runs/v2.9.3/bufcap/dv_count__quadrotor_planar.json`), the LOWEST of
+the four and the widest band; the uniform cap exceeds it by **+16.7%**, the largest excess in the
+chain. This run was therefore permitted a sixth more history than its warm comparator held.
+
+**The cap nonetheless bound, and memory saturated.** Eviction began near step 11000; the HWM settled
+at **4818 MiB** and held flat for the last 18000 steps (slope 0.0 MiB/1000 steps over the final
+blocks), against **307 MiB/1000 steps** pre-eviction. The dispatch flagged this system as the one where
+the trajectory-count cap was most likely to be in the wrong unit -- it is not. Zero-eviction check, weak
+form against its own comparator L327: cold **307** vs warm **307** MiB/1000 steps over steps 1000-10000,
+an exact match while the cap is still inert. The strong differencing form is unavailable here: the
+unbounded planar run died at step 13059, too early to difference against at depth.
+
+**Initial certificate state at the deployment entry point**, via
+`load_framework_from_checkpoint` over the registered pool's initial states: **ORDINARY** at step
+150 -- V-hat [-0.7015, +0.8514], range 1.5529e+00, gradient norm max 9.1146e-01,
+fraction V-hat > 0 = 0.2190. Neither **flat** nor **saturated**. Same probe on the scored `best.pt`
+@ step 37050: **ORDINARY**, range 1.8492e+00, gradient norm max 4.9577e+00.
+
+**Predictions.** 1: |cold40k - warm| 0.025922 against |cold10k - warm| 0.108685, shrink
+**+0.082763** > 0.0083 -- **HELD**, and by the widest margin of the three systems scored so far.
+This leg is **blind**. 2 concerns quadrotor_3d only. 3: 40000/40000, `halt_reason` null, certificate
+ORDINARY at both ends -- **HELD**.
+
+**`best.pt` discrepancy pair: NONE** (+0.77501 @ 37050 both ways, delta 0.000000) -- the third
+consecutive run with no discrepancy.
+
+**Still climbing at the budget.** Four new bests after step 25350, the last at 37050 (92.6% of budget),
++0.078 across the second half. Unlike the other two completed systems, this run had not flattened when
+its budget ran out. **Not bold, not promoted.** Single seed 42.
+
+
+**BOLD 2026-08-20 — a `06_workflow` 2.5 BASIS CLASSIFICATION, not a measured beat.**
+The Researcher's approval selects bold on the 400-step basis and fixes the standing comparison
+basis to the cold-start condition. Warm-start rows are therefore a **different training class**
+and are not ranked against this one -- the clause at `06_workflow` 2.5 that says such rows are
+"never SOTA-bolded on `cps` alone" and are "flagged for Researcher classification instead".
+That classification has now been made.
+
+**Nothing here is claimed as a beat.** Against the warm h400 runner-up L327 (0.789377): paired delta **-0.025922**, CI [-0.061990, +0.009940], which covers zero.
+The bolded row is 3.12x the 0.0083 floor BELOW its warm runner-up; it is bolded because the
+basis is the cold-start condition, not because it scores higher.
+Single seed 42. Supersedes L313, whose bold is removed in this edit.
+## v2.9.3 / quadrotor_3d / COLDSTART40K bounded D_V (quadrotor_3d)
+
+**Three keys off L328's own registered joint config, all in training, none in the eval cell:**
+`training.jt.value_init_ckpt` null, `training.jt.n_steps` 40000, `collection.jt.buffer_cap` 200000.
+Reached 40000/40000 with `halt_reason` null.
+
+**Scored** on `v282_agree_gate.gate_overrides` at h400, pool `eval_fullcb_quadrotor-3d-d2r_n2000_seed823456.pkl`, n 2000, ebs 2000, max_steps 400,
+seed 42, from `best.pt` @ step 32550. **cps 0.883110.**
+
+| contrast | delta | CI | inside 0.0083 floor | CI excludes 0 |
+|---|---:|---|---|---|
+| vs **L328** (warm, 10000 steps, `value_init_ckpt` SET) | -0.002202 | [-0.015168, +0.010789] | **True** | False |
+| vs **L355** (cold@10000, unbounded cap) | +0.014533 | [+0.000993, +0.028614] | False | **True** |
+
+**This is the only system in the axis where cold-at-40000 lands INSIDE the admissibility floor of its
+warm comparator** -- 0.002202, 0.27x the floor. And its cold@10k contrast has an interval
+excluding zero, so the budget increase is an established gain on this system.
+
+**Buffer cap 200000 uniform, deviation from the dispatched per-system rule.** Measured comparator count
+**187436 +/- 2921** (`data/runs/v2.9.3/bufcap/dv_count__quadrotor_3d.json`); the uniform cap exceeds it by
+**+6.7%**, so this run held that much more history than its warm comparator did.
+
+**Memory.** Eviction began near step 11500; the HWM settled at **6780 MiB** and held flat for the final
+~28000 steps (0 MiB/1000 steps across four consecutive blocks -- the cleanest saturation of the four),
+against **~600 MiB/1000 steps** pre-eviction, nearly double any other system's pre-cap rate. Zero-eviction
+check in the weak form (no unbounded 40000-step twin exists for this system): the HWM tracked its
+pre-cap line with no early departure, and the cap first bound after step 10000 as required.
+
+**DEGENERATE SIGNATURE: NEITHER.** Taken on the thresholds registered in `degenerate_probe.md` section 2,
+read off the LAST `metrics.csv` row (step 40000): `probe_h_min` -0.7937, `probe_h_max`
++0.8610, `label_mean` -0.4290, `rho_unsafe_label` 0.0922.
+Saturated needs `probe_h_min>0` OR `label_mean>0.5` OR `rho_unsafe_label>0.90` -- none hold. Flat needs
+`probe_h_max<0` OR `label_mean<-0.90` OR `rho_unsafe_label<0.02` -- none hold. Artifact
+`degenerate_signature__quadrotor_3d.json`.
+
+**Initial certificate state at the deployment entry point**, via
+`load_framework_from_checkpoint` over the registered pool's initial states: **ORDINARY** at step
+150 -- V-hat [-1.0000, +1.0411], range 2.0411e+00, gradient norm max
+2.7724e+00, fraction V-hat > 0 = 0.5550. Same probe on `best.pt` @ step
+32550: **ORDINARY**, range 2.2155e+00, gradient max 6.9080e+00, frac V-hat > 0
+0.1515. Neither flat nor saturated at either end.
+
+**Predictions -- all three scored on this system, all HELD.**
+1: |cold40k - warm| 0.002202 against |cold10k - warm| 0.016735, shrink **+0.014533** > 0.0083 --
+**HELD**, blind.
+2 (**scored here and nowhere else**): cps(cold@40k) within 0.0083 of its warm comparator --
+0.002202 -- **HELD**.
+3: 40000/40000, `halt_reason` null, degenerate verdict NEITHER, certificate ORDINARY at both ends --
+**HELD**.
+
+**`best.pt` discrepancy pair: NONE** (+0.87716 @ 32550 both ways) -- the fourth consecutive run with none.
+
+**Not bold, not promoted.** Single seed 42.
+
+
+**BOLD 2026-08-20 — a `06_workflow` 2.5 BASIS CLASSIFICATION, not a measured beat.**
+The Researcher's approval selects bold on the 400-step basis and fixes the standing comparison
+basis to the cold-start condition. Warm-start rows are therefore a **different training class**
+and are not ranked against this one -- the clause at `06_workflow` 2.5 that says such rows are
+"never SOTA-bolded on `cps` alone" and are "flagged for Researcher classification instead".
+That classification has now been made.
+
+**Nothing here is claimed as a beat.** Against the warm h400 runner-up L328 == L332 == L341 (0.8853120544848011, one checkpoint recorded three times): paired delta **-0.002202**, CI [-0.015168, +0.010789], which covers zero.
+The gap is **INSIDE the 0.0083 floor** at 0.27x.
+Single seed 42. Supersedes L304, whose bold is removed in this edit.
+## v2.9.3 / quadrotor_3d / COLD40K h200 instrument-compat (quadrotor_3d)
+
+**What this row is, and what it is not.** It is the L359 checkpoint --
+`data/runs/v2.9.3/set__20260820-063427__seed42/v2.9.3__jt__20260820-063427__seed42/checkpoints/best.pt`
+@ step 32550 -- scored on the registered cell `v282_agree_gate.gate_overrides` at
+`eval.max_steps` **200**, on the registered pool `eval_fullcb_quadrotor-3d-d2r_n2000_seed823456.pkl`,
+n 2000, ebs 2000, seed 42. It is **not** a basis row. The paper's basis is the 400-step one and
+stays there; L359 (h400, cps 0.8831) is this checkpoint's basis row.
+
+**Why it was taken.** Every figure producer and the policy-alone diagnostic resolve the JT
+checkpoint through one artifact, `data/runs/v2.9.1/launch/jtrow__quadrotor_3d.json`, whose
+`cell_read_back.max_steps` is 200. `scripts/analysis/v292_pi_only.py:82` runs at `MAX_STEPS = 200`
+behind a nine-field reproduction gate against that artifact's stored fields. A cold pointer
+carrying h400 numbers would fail that gate on all nine. The tool's horizon was **not** changed:
+the warm comparison it reproduces is h200, so moving the horizon would break the comparison
+rather than fix the pointer.
+
+**Instrument.** `v293_coldstart_score.run_learned`, imported verbatim -- the same function that
+produced L356-L359 -- called at `max_steps=200` by
+`scripts/analysis/v293_jt_rebase_pointer.py`. Two-clause infeasibility identity
+`identity_two_clauses_compose_flag` = True, mismatch steps 0. Collision split residual 0.0.
+
+**Result, beside the warm h200 comparator** (L312's own artifact,
+`data/runs/v2.9.1/launch/jtrow__quadrotor_3d.json`):
+
+| field | cold h200 | warm h200 (L312) | delta |
+|---|---|---|---|
+| cps | 0.864601 | 0.867987 | **-0.003387** |
+| reach | 0.9465 | 0.9535 | -0.0070 |
+| collision | 0.0230 | 0.0255 | -0.0025 |
+| oob | 0.0000 | 0.0000 | 0.0000 |
+| stuck | 0.0000 | 0.0005 | -0.0005 |
+| timeout | 0.0305 | 0.0205 | +0.0100 |
+| infeasibility | 0.068832 | 0.079209 | -0.010377 |
+| EMPTY_episode_frac | 0.5095 | 0.5830 | -0.0735 |
+| SINGULAR_episode_frac | 0.1115 | 0.0955 | +0.0160 |
+
+The cps gap is **0.41x the 0.0083 admissibility floor** -- no separation. cps CI
+[0.8400, 0.8872]. Saturation rate 0.4205. Incomplete 61/2000 = 0.0305, all timeout, zero stuck.
+Collision decomposes 0.0060 obstacle / 0.0170 band_lower / 0.0000 band_upper.
+
+**Cross-horizon note, reported not claimed.** The same checkpoint reads 0.8831 at h400 and
+0.8646 at h200; the warm checkpoint reads 0.8853 at h400 and 0.8680 at h200. Both move the same
+direction by a similar amount, so the horizon effect is not what separates them -- nothing
+separates them at either horizon.
+
+**Artifacts.** `data/runs/v2.9.3/jt_rebase/score__COLD40K_quadrotor_3d_h200.json`,
+`perepisode__COLD40K_quadrotor_3d_h200.npz`, `jtrow__quadrotor_3d__COLD40K.json`.
+
+**Not bold, not promoted.** Single seed 42.
+
+## v2.9.3 / quadrotor_3d / COLDABL approach-term ablation (quadrotor_3d)
+
+**The one item in the jt_rebase programme that evaluation could not reach.**
+`env.quadrotor_3d.c_gain` has a reader on the TRAINING path (`src/common/quadrotor_barrier.py:115`,
+inside `value_target_barrier`, reached from the value-target labelling sites in
+`src/frameworks/jt_pncbf/collection.py`) and **none on the scoring path**, so the ablated arm had to
+be trained.
+
+**ONE key of 328.** Parent is L359's own persisted launch config
+`data/runs/v2.9.3/cold_start_40k/config__quadrotor_3d.yaml`; the flattened diff is exactly
+`env.quadrotor_3d.c_gain` 0.3 -> 0.0. The cold parent already carries
+`training.jt.value_init_ckpt: null`, so there is nothing to repoint. The **warm** ablation could not
+say this: `data/runs/v2.9.2/launch/launch__JT3D_CGAIN0_V292.json` gates `c_gain` **and**
+`training.jt.value_init_ckpt` (repointed to a budget-truncated OC certificate), and
+`docs/versions/v2.9.2/cgain_cells.md:188` states the design "cannot separate the ablated term from
+the truncated warm start".
+
+**Run.** `v293_cold_ablation_launch.py`, a third launcher; `v293_cold40k_launch.py` and
+`v293_coldstart_launch.py` are unmodified. Seed 42, 40000/40000 steps, `halt_reason` null,
+`phase` done, wall **11.91 h**, `cuda_max_mem_mb` 6730.68 against the L359 twin's 6780 — the two
+memory curves agree to within 5 MiB at every matched step. `best.pt` @ step 31500.
+
+**Scored** by `v293_coldstart_score.run_learned`, the same function that produced L356-L359, on the
+registered cell at `eval.max_steps` 400, pool fullcb n 2000 ebs 2000. Two-clause infeasibility
+identity True, mismatch steps 0; collision split residual 0.0.
+
+| field | L359 (c_gain 0.3) | ablated (c_gain 0.0) | delta |
+|---|---:|---:|---:|
+| cps | 0.883110 | **0.874313** | −0.008797 |
+| reach | 0.9595 | 0.9555 | −0.0040 |
+| collision | 0.0235 | 0.0260 | +0.0025 |
+| coll_obstacle | 0.0065 | 0.0100 | +0.0035 |
+| coll_band_lower | 0.0170 | 0.0160 | −0.0010 |
+| stuck | 0.0005 | 0.0000 | −0.0005 |
+| timeout | 0.0165 | 0.0185 | +0.0020 |
+| infeasibility | 0.068799 | 0.066456 | −0.002343 |
+| saturation_rate | 0.4199 | 0.3948 | −0.0251 |
+
+**Paired against L359** on the identical pool in identical order — scene bootstrap, 10000
+resamples, percentile, generator seed 20292: **delta −0.008797, CI [−0.021869, +0.004337]**,
+**1.06× the 0.0083 floor**, `inside_floor` false, **CI covers zero**, 1374 of 2000 episodes changed.
+
+**The two infeasibility legs, reported separately and never summed:**
+
+| leg | L359 | ablated | delta |
+|---|---:|---:|---:|
+| **SINGULAR_episode_frac** | 0.1115 | **0.1100** | **−0.0015** |
+| EMPTY_episode_frac | 0.5095 | 0.5075 | −0.0020 |
+| SINGVIOL_episode_frac | 0.0025 | 0.0020 | −0.0005 |
+
+**PREDICTION 1 — FALSIFIED.** Registered before the run: *removing the approach term raises the
+SINGULAR episode fraction above L359, as it did on both warm arms*; falsified if the ablated
+fraction is at or below 0.1115. It is **0.1100** — it did not rise. On the warm arms the same
+removal multiplied the SINGULAR leg by 2.60 (JT, 0.0960 -> 0.2500) and 2.38 (OC, 0.1680 -> 0.3990).
+On the cold basis the effect is absent.
+
+**PREDICTION 2 — HELD, and narrowly.** Registered: *cps falls below L359 by more than the floor
+0.0083*; falsified if inside the floor or opposite in sign. The drop is −0.008797, sign correct and
+**1.06×** the floor, so the registered criterion is met — **but the interval covers zero**, so the
+drop is not separated from no-effect. The prediction as written did not require CI exclusion, and
+it is scored as written; the qualifier is recorded here rather than folded into the verdict.
+
+**What this changes.** The warm ablation's headline — a 2.6× jump in the SINGULAR leg — **does not
+reproduce once the initializer confound is removed**. The warm arm moved `c_gain` and
+`value_init_ckpt` together; this arm moves only `c_gain`, and the SINGULAR leg does not move. That
+is evidence the warm jump was carried by the repointed, budget-truncated certificate rather than by
+the approach term, which is precisely the separation `cgain_cells.md:188` said its design could not
+make.
+
+**Not bold, not promoted.** Single seed 42.
+
+---
+
+## v2.9.3 / quadrotor_3d / R1 cold
+
+*Section added 2026-08-23; `state_retrieve_20260822.md` heading 3 recorded its absence.*
+
+**What the row is.** The factorial table's cell R1 — the joint pair, HardNet enforcement, on the
+**cold** basis — re-scored so the manuscript's factorial figure does not quote a warm number beside
+cold ones. Artifact `data/runs/v2.9.3/jt_rebase/factorial_cold/score__R1_new400.json`
+(mtime 2026-08-20 19:14, 2 695 B).
+
+**The cell, read back from the artifact's own `effective_cell_read_back`.** `HardNetFilter`,
+`projection dual_solve`, `empty_fallback` mode `kstep` k 3 phases 1, `alpha` (2.0, 100.0),
+`gamma_margin` 0.0, `box_klamp_enabled` false — i.e. the registered
+`v282_agree_gate.gate_overrides` cell. Pool `eval_fullcb_quadrotor-3d-d2r_n2000_seed823456`
+sha8 `3682a4e3`, n 2000, ebs 2000, `eval_max_steps` 400, dt 0.05, `band_collision_limit` 4.0.
+Nominal source: the checkpoint's own `policy_net`, repointed to L359's `best.pt` @ step 32550.
+
+| field | value |
+|---|---:|
+| cps | **0.8831103827473097** |
+| cps CI | [0.858312, 0.904848] |
+| reach | 0.9595 |
+| collision | 0.0235 (obstacle 0.0065, band_lower 0.0170, band_upper 0.0000) |
+| stuck / timeout / oob | 0.0005 / 0.0165 / 0.0000 |
+| infeasibility | 0.068799 (empty share 0.054760, singular share 0.014989) |
+| saturation_rate | 0.419916 |
+| outcome counts | goal 1919, collision 47, stuck 1, timeout 33 |
+| wall | 8.39 s |
+
+**The finding.** `cps` is **bit-identical to L359's** 0.8831103827473097 in every compared field.
+That is the cold analogue of the gate L332 passed against L328: the factorial cell **is** the
+registered cell at h400, so R1 needs no separate measurement and the manuscript's factorial R1 entry
+is vacated in favour of L359's own number.
+
+**Interval convention differs from the registered rows, and the difference is recorded rather than
+reconciled.** This artifact's `ci_method` is *"percentile bootstrap over scenes, 1000 resamples,
+FIXED seed 20260808"*. The registered cold and alternation rows use 10000 resamples at generator
+seed 20292. The point estimate is unaffected; only the interval is drawn under a different
+convention, so R1's CI must not be quoted beside L359's as if the two were produced identically.
+
+**Not bold, not promoted.** Single seed 42. Eval-only; no training run belongs to this row.
+
+---
+
+## v2.9.3 / quadrotor_3d / R2 cold
+
+*Section added 2026-08-23; `state_retrieve_20260822.md` heading 3 recorded its absence.*
+
+**What the row is.** The factorial table's cell R2 — the **learned policy with backup-certificate QP
+enforcement in place of HardNet** — on the cold basis. It is the one vacated manuscript cell that had
+no cold equivalent on disk. Artifact
+`data/runs/v2.9.3/jt_rebase/factorial_cold/score__R2_new400.json` (mtime 2026-08-20 19:20, 3 805 B).
+
+**The cell, read back from the artifact.** `filter_class` **`BackupQPFilter`** — not HardNet — with
+`T_b` 20, `eps` 0.0, `k_d` 8.0, `kp_att` 320.0, `kd_att` 16.0, `c_v` 0.3, `form` `brake`,
+`setpoint` `hold`, `alpha` 1.0, `qp_penalty_read_back` 1.0e6, `terminal` `none`. The HardNet fields
+(`projection`, `empty_fallback*`, `alpha_safe/unsafe`, `gamma_margin`, `box_klamp_enabled`) are all
+null because that filter is not constructed. Same pool, n, ebs, cap and dt as R1; nominal is again
+the checkpoint's own `policy_net` at L359's `best.pt` @ step 32550.
+
+| field | value |
+|---|---:|
+| cps | **0.7985571637745791** |
+| cps CI | [0.764279, 0.830546] |
+| reach | 0.9395 |
+| collision | 0.0535 (obstacle 0.0295, band_lower 0.0240, band_upper 0.0000) |
+| stuck / timeout / oob | 0.0000 / 0.0070 / 0.0000 |
+| infeasibility | 0.101476 (empty share 0.000000, singular share 0.000000) |
+| saturation_rate | 0.376425 |
+| outcome counts | goal 1879, collision 107, timeout 14 |
+
+**The finding.** Against the warm counterpart L335 the cold R2 is **+0.0121**, above the 0.0083
+floor, but the two intervals overlap ([0.7643, 0.8305] against [0.7537, 0.8188]), so there is **no
+separation**. The substantive reading is the one the row already carries: swapping HardNet for the
+backup QP on the identical learned policy costs **0.0846 cps** against R1 on the same basis
+(0.883110 → 0.798557) and more than doubles collision (0.0235 → 0.0535, obstacle 0.0065 → 0.0295).
+
+**Why `empty_share` and `singular_share` are exactly zero.** They are HardNet diagnostics —
+`last_empty` and `last_singular` on the projection row — and `BackupQPFilter` publishes neither, so
+zero here means *not measured on this filter*, not *no infeasible steps*. The `infeasibility` column
+0.101476 is the evaluator's own, and it is the number to read.
+
+**Interval convention.** Same as R1: 1000 resamples at fixed seed 20260808, not the registered
+10000 at generator seed 20292.
+
+**Not bold, not promoted.** Single seed 42. Eval-only.
+
+---
+
+## v2.9.3 / quadrotor_3d / ALTSEP separated collection (quadrotor_3d)
+
+**The third rung of the alternation ladder, and the one that removes the last shared quantity.**
+L359 is the interleaved control (`K_V` 3, `K_pi` 1 every macro step). ALTBLK alternates in
+500-macro-step blocks but still collects into **both** buffers every round. ALTSEP alternates in the
+same blocks and collects into the **active buffer only**, doubling `n_episodes` on the active pass so
+the per-buffer totals and the per-macro-step rollout count equal L359's.
+
+**NINE keys of 328**, all alternation, off L359's own persisted config
+(`data/runs/v2.9.3/alternation_sep/launch__ALTSEP_QUADROTOR_3D_V293.json`, mtime 2026-08-22 21:00):
+`run.framework` jt_pncbf → alt_pncbf; `training.alt.enabled` absent → true;
+`training.alt.value_block` 500; `training.alt.policy_block` 500; `training.alt.first` value;
+`training.alt.collect` absent → `active_only`; `training.alt.n_episodes_active_scale` absent → 2;
+`training.jt.K_V` 3 → 6; `training.jt.K_pi` 1 → 2. **No eval key moves.**
+
+**Run.** Seed 42, 40000/40000 steps, `halt_reason` null, `phase` done, wall **36 796.720 s**,
+`cuda_max_mem_mb` peak 6964.96 against ALTBLK's 6865.71 at matched steps (+99.3 MiB — the cost of the
+separated collection). 40 value blocks and 40 policy blocks. `best.pt` @ step **33750**, taken inside
+a **policy** block (`block_index` 33). In-loop peak cps 0.892962 — **a reading**, not the registered
+cell.
+
+**Scored** by `v293_coldstart_score.run_learned` — the same function that produced L356–L359 and
+ALTBLK, imported and not modified (`scripts/analysis/v293_altsep_score.py`, a minimal copy of
+`v293_alt_blocks_score.py` that differs only in label, output directory, launch record and the number
+of comparators). Registered cell, `eval.max_steps` 400, pool fullcb n 2000 ebs 2000. Two-clause
+infeasibility identity True, mismatch steps 0; union-vs-evaluator residual −6.9e−18; collision split
+residual 0.0.
+
+| field | L359 | ALTBLK | **ALTSEP** |
+|---|---:|---:|---:|
+| cps | 0.883110 | 0.886728 | **0.889918** |
+| cps CI | [0.858859, 0.905181] | [0.865187, 0.909454] | **[0.865196, 0.912096]** |
+| reach | 0.9595 | 0.9605 | **0.9625** |
+| collision | 0.0235 | 0.0240 | **0.0235** |
+| coll_obstacle | 0.0065 | 0.0070 | **0.0070** |
+| coll_band_lower | 0.0170 | 0.0170 | **0.0165** |
+| stuck | 0.0005 | 0.0005 | **0.0000** |
+| timeout | 0.0165 | 0.0150 | **0.0140** |
+| incomplete (stuck+timeout) | 0.0170 | 0.0155 | **0.0140** |
+| infeasibility | 0.068799 | 0.059241 | **0.061939** |
+| SINGULAR_episode_frac | 0.1115 | 0.0795 | **0.0870** |
+| EMPTY_episode_frac | 0.5095 | 0.4875 | **0.4875** |
+| saturation_rate | 0.419916 | 0.389479 | **0.393078** |
+
+**Paired**, identical pool in identical order, scene bootstrap, 10000 resamples, percentile,
+generator seed 20292, floor 0.0083:
+
+| contrast | delta | CI | floor units | inside floor | CI excludes 0 | episodes changed |
+|---|---:|---|---:|---|---|---:|
+| ALTSEP − **L359** | **+0.006808** | [−0.005259, +0.018825] | 0.82× | **yes** | **no** | 1279 |
+| ALTSEP − **ALTBLK** | **+0.003191** | [−0.008837, +0.015361] | 0.38× | **yes** | **no** | 1233 |
+
+**Freezes and the collection gate — 0 violations, in every direction checked.**
+`freeze_verify.json` (first cycle) and `freeze_verify_last_cycle.json` (last cycle) both return
+**BOTH FREEZES HOLD**, `total_violations` 0. Method 2 over the last-cycle run covers **all 1995
+metrics rows**: `grad_leak_pi_from_LV` nonzero rows 0, `grad_leak_VS_from_Lpi` nonzero rows 0,
+`held_param_drift` nonzero rows 0, `k_v_active` {6.0} in value rows and {0.0} in policy rows,
+`k_pi_active` {0.0} and {2.0} respectively. `freeze_verify_boundaries.json` adds the direction the
+script's own non-vacuity block does not cover: across the **policy→value** boundary (900 → 1050) the
+value net moves again — 16 tensors differing, max abs 0.11457, and its Polyak target likewise
+(16 tensors, 0.05060) — so the policy-block value freeze is non-vacuous; across the **value→policy**
+boundary (450 → 600) the policy moves, 6 tensors, max abs 0.02956. The collection gate over all
+**4002** `alt_collect.csv` rows: 2001 value rows and 2001 policy rows, **0** D_π episodes in value
+rows and **0** D_V episodes in policy rows against 400 200 into each buffer on its own side, 0 rows
+with the wrong `*_ran` flag, `collect_mode` `active_only` on every row, `sigma_v_held` violated on 0
+policy rows, `sigma_pi_source_is_schedule` violated on 0 rows.
+
+**Signature series — nothing fires.** `signature_series.json`, 40 value-block ends screened on the
+thresholds registered before launch (`degenerate_probe.md` §2): **0 saturated, 0 flat**, first firing
+`null`, `blocks_csv_vs_metrics_block_column_mismatches` empty. Ranges over the 40 ends:
+`probe_h_min` [−0.844759, −0.426361], `probe_h_max` [0.658388, 1.120270], `label_mean`
+[−0.437622, +0.452601], `rho_unsafe_label` [0.084106, 0.610311]. The interleaved control screened on
+the identical step grid fires **once** (step 500, `label_mean > 0.5`), so on this axis ALTSEP is
+cleaner than its own control.
+
+**The three registered predictions — all FALSIFIED**
+(`predictions_registered.json`, `registered_at_utc` 2026-08-22T14:46:41Z,
+`registered_before_launch: true`; verdicts in `verdicts__ALTSEP.json`):
+
+- **P-C1** *"cps falls below L359 (0.883110) by more than 0.0083."* → **FALSIFIED**, sign opposite:
+  +0.006808.
+- **P-C2** *"a flat or saturated signature fires at some value-block end, OR the run halts."* →
+  **FALSIFIED**: 40 ends, neither signature, no halt.
+- **P-C3** *"cps falls below ALTBLK's (0.886728) by more than 0.0083."* → **FALSIFIED**, sign
+  opposite: +0.003191.
+
+**The reading: a MATCH, not a beat, against both comparators.** ALTSEP carries the highest point
+estimate of the three, and on every outcome share it is at least as good — reach 0.9625 the highest,
+incomplete 0.0140 the lowest, collision tied with L359 at 0.0235. But both paired gaps are **inside**
+the 0.0083 floor (0.82× and 0.38×) with intervals covering zero, on a **single seed**. Nothing here
+separates separated collection from shared collection, or either from the interleaved control. What
+the three rows do establish jointly is negative and useful: neither coarsening the alternation to
+500-step blocks nor cutting the inactive buffer's supply moves the registered cps off the interleaved
+control by a detectable amount.
+
+**Not bold, not promoted.** Single seed 42.
+
+---
+
+## v2.9.3 / quadrotor_3d / TWRX2 doubled per-rotor thrust (quadrotor_3d)
+
+**The first CI-separated beat in the v2.9.3 quadrotor_3d line, and it lands on the failure mode the
+atlas identified.** `docs/versions/v2.9.3/failure_atlas.md` found that **72 %** of L359's registered-pool
+collisions are floor contacts, from starts within 0.686 m of the floor at a median tilt of 132°,
+terminating at a median of step 5 with `contact_vz` negative on all 45 sampled. Doubling the actuator
+doubles the authority to arrest exactly that descent. P-X2 predicted floor contacts would fall; they
+fell by **71 %**.
+
+**TWO keys of 328**, off L359's persisted config, per the amendment of 2026-08-23 (option A):
+
+```
+env.bounds.quadrotor_3d.f_rotor_max   4.905      -> 9.81        (TWR 2.0 -> 4.0)
+loss.policy.sat_excess_threshold      [4.905]x4  -> "u_bounds"
+```
+
+The second key is not an extra: `sat_excess_threshold` is the actuator box written a second time by
+hand (`losses.py:42-51`). Left at 4.905 under a 9.81 box it sits at the box midpoint and penalises,
+quadratically at `lambda_sat` 1.0, exactly the authority the axis grants — turning a term identically
+zero across all 2000 of L359's metrics rows into the dominant one. The sentinel makes the threshold
+track the box. **Verified over the whole run: `L_satex` is 0.0 on all 2000 metrics rows**, and
+`abs_action_max` sits at 9.81 throughout, so the policy used the full new box and never paid a
+saturation penalty. The contrast isolates the actuator limit.
+
+**Run.** Seed 42, 40000/40000 steps, `halt_reason` null, `phase` done, wall **11.91 h**
+(42 960.801 s). `best.pt` @ step **24750**. Four pre-launch gates passed, including a check that the
+sentinel *resolves* to `[9.81, 9.81, 9.81, 9.81]` rather than merely that the config string is right.
+
+**Scored** by `v293_coldstart_score.run_learned`, the instrument that produced L356–L359 and every
+alternation row, on the registered cell: pool `eval_fullcb_quadrotor-3d-d2r_n2000_seed823456.pkl`,
+n 2000, ebs 2000, `eval.max_steps` 400. The doubled actuator travels with the checkpoint —
+`gate_overrides` replaces the filter block only — so the scored plant is the trained plant, asserted
+at scoring time rather than assumed.
+
+| field | L359 | **TWR×2** | delta |
+|---|---:|---:|---:|
+| cps | 0.883110 | **0.926611** | **+0.043501** |
+| reach | 0.9595 | **0.9695** | +0.0100 |
+| collision | 0.0235 | **0.0090** | −0.0145 |
+| coll_obstacle | 0.0065 | 0.0040 | −0.0025 |
+| **coll_band_lower** | **0.0170** | **0.0050** | **−0.0120** |
+| coll_band_upper | 0.0000 | 0.0000 | 0.0000 |
+| stuck / oob | 0.0005 / 0.0000 | 0.0005 / 0.0000 | — |
+| timeout | 0.0165 | 0.0210 | +0.0045 |
+| incomplete | 0.0170 | 0.0215 | +0.0045 |
+| infeasibility | 0.068799 | **0.046297** | −0.022502 |
+| saturation_rate | 0.419916 | 0.292100 | −0.127816 |
+| collision counts | obstacle 13, floor 34, total 47 | obstacle 8, floor **10**, total **18** | floor −24 |
+
+**Paired against L359** on the identical pool in identical order — scene bootstrap, 10000 resamples,
+percentile, generator seed 20292, floor 0.0083:
+
+| quantity | delta | CI | floor units | CI excludes 0 |
+|---|---:|---|---:|---|
+| **cps** | **+0.043501** | [+0.023292, +0.064763] | **5.24×** | **YES** |
+| **reach** | **+0.010000** | [+0.001500, +0.018500] | 1.20× | **YES** |
+| **floor contact** | **−0.012000** | [−0.017000, −0.007500] | −1.45× | **YES** |
+
+**Both registered predictions HELD** (`registration.json`, `registered_before_launch: true`,
+`registered_at_utc` 2026-08-22T08:40:00Z, amended 08:48 to option A with both predictions untouched):
+
+- **P-X1** — *"Doubled thrust raises reach against L359 beyond the admissibility floor."* Falsifier:
+  the paired reach gap's CI covers zero, or the gap is inside the floor. **HELD**: +0.0100, CI
+  [+0.0015, +0.0185], 1.20× the floor, interval excludes zero.
+- **P-X2** — *"Floor-contact collisions fall against L359."* Falsifier: the share is not lower.
+  **HELD**: 0.0170 → 0.0050, 34 episodes → 10.
+
+**The reading: a BEAT on this cell, and the only one in this line whose interval clears zero.** Every
+alternation row (L364, L365) and the ablation (L363) sat inside the 0.0083 floor with intervals
+covering zero. This does not, at 5.24× the floor on cps. **Single seed 42.**
+
+**Two things this is not.** It is **not a like-for-like comparison of methods**: the actuator is part
+of the plant, so TWR×2 is a different, easier problem — a quadrotor with twice the thrust-to-weight
+is more recoverable, and the result says the paper's failure mode is actuation-limited, not that the
+method improved. And **timeout rose** 0.0165 → 0.0210, so a fifth of the collision reduction is paid
+back as episodes that no longer crash but also no longer arrive.
+
+**SOTA classification is FLAGGED and NOT TAKEN.** cps 0.9266 exceeds every quadrotor_3d row on this
+cell, but the row sits on a different plant from the rows it would displace, and whether a
+different-plant row may hold a system's bold is a Researcher decision. **Not bold, not promoted.**
+
+---
+
+## v2.9.3 / quadrotor_3d / fullvia re-scoring (quadrotor_3d)
+
+**Nine rows, one cell, one axis.** Every quadrotor_3d cell this section covers is re-scored on
+`eval_fullvia_quadrotor-3d-d2r_n2000_seed823456` — the registered cell in every key except the pool
+— with **the checkpoint its existing ledger row names**. No cold checkpoint is substituted for a
+warm one and no row acquires a counterpart it lacks. Existing rows are untouched.
+
+**The pool.** Built by `scripts/analysis/v293_build_fullvia.py`, predicate
+`src/eval/viability_screen.py`, sha256 `d64212c5bf558cf5…`. The predicate is the doom certificate of
+`docs/versions/v2.9.3/doom_certificate.md` — floor, ceiling and horizontal legs — reused rather than
+reimplemented, and **proved bit-identical to the scored certificate on all 2000 registered scenes at
+both ω settings before any scene was drawn**. Rejection setting `omega_reject` = 8.005974 rad/s, read
+from `measured_rate.json`. **45 of 2045 attempts rejected, 2.200 %**, worst case 3 attempts against
+the 1000 cap. Gate: 2000 scenes, 0 flagged at both ω, second generation byte-identical by sha256.
+
+**These numbers are NOT paired against the fullcb rows.** The two pools share **no scene at all** —
+first divergence at index **0**, because `fullcb` is its predecessor screened and topped up rather
+than the raw seed-823456 sequence. The differences below are between-cell differences of two
+populations, not paired per-episode statistics, and no interval is quoted for them.
+
+| row re-scored | basis | ckpt | reach | collision | incomplete | cps | Δcps vs its fullcb row |
+|---|---|---:|---:|---:|---:|---:|---:|
+| nominal | warm | — | 0.4510 | 0.5490 | 0.0000 | −0.647000 | +0.000000 |
+| L321 OC-PNCBF | warm | 27450 | 0.8975 | 0.0560 | 0.0465 | 0.725676 | −0.007298 |
+| L328 warm JT | warm | 9450 | 0.9620 | 0.0245 | 0.0135 | 0.882989 | −0.002323 |
+| L359 COLD40K | cold | 32550 | 0.9605 | 0.0230 | 0.0165 | 0.885990 | +0.002879 |
+| L355 cold@10k | cold | 9600 | 0.9630 | 0.0270 | 0.0100 | 0.870485 | +0.001908 |
+| L363 COLDABL | cold | 31500 | 0.9620 | 0.0225 | 0.0155 | 0.890252 | +0.015939 |
+| L364 ALTBLK | cold | 32400 | 0.9600 | 0.0230 | 0.0170 | 0.888091 | +0.001364 |
+| L365 ALTSEP | cold | 33750 | 0.9620 | 0.0235 | 0.0145 | 0.888961 | −0.000958 |
+| **L366 TWRX2** | cold | 24750 | **0.9745** | **0.0075** | 0.0180 | **0.937603** | +0.010992 |
+
+**The screen moves almost nothing, and that is the finding.** Seven of the nine cps differences are
+inside the 0.0083 admissibility floor; only L363 (+0.0159) and L366 (+0.0110) exceed it, and both in
+the direction the screen predicts — removing certainly-lost scenes can only help a controller that
+was losing them. Floor-contact share falls on every learned row (L359 0.0170 → 0.0150, L364 0.0170 →
+0.0145, L365 0.0165 → 0.0140, L366 0.0050 → **0.0010**), which is the screen doing exactly what it
+was built to do. **The ordering of the learned rows is unchanged**: TWRX2 > COLDABL > ALTSEP > ALTBLK
+> COLD40K > cold@10k > warm JT > OC on both pools.
+
+**One coincidence, checked rather than reported as a bug.** The nominal is bit-identical across the
+two pools on every aggregate — reach 0.4510, collision 0.5490, cps −0.647000. That looked like the
+patched pointer not taking effect. It did: the artifact records
+`pool = eval_fullvia_…`, and **970 of 2000 nominal episodes differ episode-for-episode**. The goal
+count lands on exactly 902 on both populations by coincidence.
+
+**SOTA classification across the two pools is FLAGGED for the Researcher and NOT taken.** Nothing is
+bolded and no existing row is edited or un-bolded. Single seed 42 throughout.
+
+---
+
+## v2.9.3 / quadrotor_3d / PPOLAG fixed-penalty frontier (quadrotor_3d)
+
+**Seven rows, L390 to L396**, one per collision-penalty multiplier λ ∈ {0, 0.3, 0.5, 1, 2, 3, 10}.
+Registered **2026-08-30 by Researcher decision**, from evaluations **scored 2026-08-26**; the rows are
+diagnostic frontier points, not an axis result, and nothing is bolded or promoted.
+
+**What the cell is.** A certificate-free PPO agent trained with a **fixed** collision penalty — no
+dual variable, no certificate, and an identity filter, so `infeasibility` is **0 by construction** on
+every one of the seven rows and is not comparable with a filtered row's. Scored through the shipped
+PPO scoring path on pool `eval_fullvia_quadrotor-3d-d2r_n2000_seed823456.manifest.json` under
+`data/secured_data/pools/`, n 2000, `ebs` 2000, `eval.max_steps` 400, seed 42.
+
+**Which build-log documents this sweep.** `docs/versions/v2.9.3/ppo_dense_cost.md` §§1–2, which
+assembles the frontier and uses λ = 2 as the sparse incumbent its dense costs are measured against.
+**Not** `docs/versions/v2.9.3/ppo_lagrangian.md` — that file is the *adaptive-dual* run, which halted
+under its own stop condition 3 with the dual pinned at its bound for 938 iterations, reports no `cps`
+and registers no cell. The two must not be conflated: one is a λ sweep with λ held fixed per run, the
+other is a single run with λ adapted and abandoned.
+
+| ledger row | λ | `cps` | `cps_ci` | reach | collision | oob | stuck | timeout | ckpt step |
+|---|---:|---:|---|---:|---:|---:|---:|---:|---:|
+| L390 | 0 | −0.37500 | [−0.4375, −0.3070] | 0.5385 | 0.4520 | 0.0000 | 0.0095 | 0.0000 | 72204 |
+| L391 | 0.3 | −0.25200 | [−0.3153, −0.1907] | 0.5780 | 0.4085 | 0.0000 | 0.0125 | 0.0010 | 83836 |
+| L392 | 0.5 | 0.62500 | [+0.5800, +0.6690] | 0.8725 | 0.1200 | 0.0000 | 0.0075 | 0.0000 | 120740 |
+| L393 | 1 | 0.66750 | [+0.6245, +0.7078] | 0.8845 | 0.1030 | 0.0000 | 0.0095 | 0.0030 | 137040 |
+| **L394** | **2** | **0.71425** | [+0.6728, +0.7513] | **0.8955** | **0.0825** | 0.0000 | 0.0105 | 0.0115 | 158508 |
+| L395 | 3 | 0.61825 | [+0.5748, +0.6593] | 0.8520 | 0.1020 | 0.0010 | 0.0135 | 0.0315 | 192668 |
+| L396 | 10 | −0.63350 | [−0.6533, −0.6160] | 0.0000 | 0.0800 | 0.1195 | 0.0270 | 0.7735 | 271216 |
+
+**The frontier is single-peaked at λ = 2 and both ends fail differently.** Below λ = 0.5 the penalty
+is too weak to buy safety at all — collision 0.4520 and 0.4085, worse than the unfiltered nominal's
+0.5490 only because reach is also collapsing. Above λ = 3 the penalty dominates the return: at λ = 10
+the agent **never reaches a goal** — reach exactly 0.0000, timeout 0.7735, `oob` 0.1195 — while its
+collision, 0.0800, is the lowest of the seven. **A controller that avoids every obstacle by refusing
+to move is the degenerate solution the penalty route admits and the certificate route does not**, and
+λ = 10 is that solution reached.
+
+**The best point of the sweep is L394 at `cps` 0.71425**, against the joint pair's 0.89025 on the same
+pool and cap (L372). The gap is **0.176**, far outside the 0.0083 admissibility floor, and L394's
+interval [+0.6728, +0.7513] is disjoint from L372's [+0.86799, +0.91274]. **The manuscript's
+PPO-Lagrangian sentence rests on this sweep**, and L394 is the row it should cite.
+
+**No comparison against a filtered row may use `infeasibility`**, which is structurally 0 here rather
+than measured, and no `saturation_rate` on these rows is comparable with a filtered row's either.
+
+**Provenance note carried from the artifacts.** All seven score jsons were written without a `pool`
+field and had it **back-filled 2026-08-26** by the dense-cost dispatch, which re-scored each named
+checkpoint on this pool through the same producer and reproduced every count, every component and
+`cps` to the digit before writing the three pool fields. **No number in any of the seven files was
+changed.**
+
+Single seed 42 throughout. **NOT bold, nothing promoted.**

@@ -1,0 +1,38 @@
+{
+  "raster_dpi": 200,
+  "image_size_px": [
+    1400,
+    1372
+  ],
+  "legend_bbox_new_px": {
+    "x0": 270,
+    "x1": 1130,
+    "y0": 1292,
+    "y1": 1361
+  },
+  "legend_bbox_old_measured_px": {
+    "x0": 246,
+    "x1": 1151,
+    "y0": 1294,
+    "y1": 1350
+  },
+  "mask_applied_px": {
+    "x0": 244,
+    "x1": 1153,
+    "y0": 1290,
+    "y1": 1363,
+    "pad_px": 2,
+    "note": "union of the two legend boxes, padded 2 px for antialiasing"
+  },
+  "mask_applied_in": {
+    "x0": 1.22,
+    "x1": 5.765,
+    "y0": 6.45,
+    "y1": 6.815
+  },
+  "differing_pixels_outside_mask": 0,
+  "differing_pixels_inside_mask": 12212,
+  "differing_pixels_total": 12212,
+  "requirement": "zero differing pixels outside the mask",
+  "pass_": true
+}

@@ -1,0 +1,409 @@
+{
+  "figures": [
+    "fig1_teaser_one_scene.pdf",
+    "fig1_teaser_three_scenes.pdf"
+  ],
+  "column": "double",
+  "target_width_in": 7.0,
+  "column_choice_reason": "three arenas side by side; at the 3.40 in single-column target each panel would be 1.1 in wide (about 10 pt per metre of arena) and the 7 pt tick labels would dominate the trajectories the figure exists to show",
+  "panel_layout": {
+    "one_scene": "1 row x 3 columns, one controller per panel, one scene",
+    "three_scenes": "1 row x 3 columns, one scene per panel, all three controllers overlaid in every panel"
+  },
+  "font_pt": {
+    "label": 8.0,
+    "tick": 7.0,
+    "title": 8.0,
+    "legend": 7.0,
+    "smallest": 7.0
+  },
+  "cell": "v282_agree_gate.gate_overrides with eval.max_steps 400",
+  "eval_max_steps": 400,
+  "eval_batch_size": 2000,
+  "seed": 42,
+  "pool": "data/secured_data/pools/eval_fullcb_quadrotor-3d-d2r_n2000_seed823456.pkl",
+  "pool_sha8": "3682a4e3",
+  "n_pool": 2000,
+  "dt_ctrl_s": 0.05,
+  "world_lim": 4.0,
+  "band_collision_limit": 4.0,
+  "legend_canon": {
+    "nominal": "nominal (unfiltered)",
+    "oc": "OC-PNCBF",
+    "jt": "joint (ours)"
+  },
+  "conditions": {
+    "nominal": {
+      "label": "nominal (unfiltered)",
+      "what": "unfiltered LQR, no certificate, no filter",
+      "checkpoint": null,
+      "ledger_row": null
+    },
+    "oc": {
+      "label": "OC-PNCBF",
+      "what": "L321's checkpoint, LQR nominal + its certificate",
+      "checkpoint": "data/runs/v2.9.1/set__20260813-164148__seed42/v2.9.1__oc__20260813-164148__seed42/checkpoints/best.pt",
+      "checkpoint_step": 27450,
+      "ledger_row": "L321"
+    },
+    "jt": {
+      "label": "joint (ours)",
+      "what": "L328's checkpoint, jointly trained policy+certificate",
+      "checkpoint": "data/runs/v2.9.1/set__20260814-030107__seed42/v2.9.1__jt__20260814-030107__seed42/checkpoints/best.pt",
+      "checkpoint_step": 9450,
+      "ledger_row": "L328"
+    }
+  },
+  "selection_rule": "ascending pool index; the FIRST scene on which the unfiltered nominal COLLIDES and BOTH learned controllers REACH, read off the outcome vectors of the same cap-400 rollouts the trajectories are drawn from",
+  "n_scenes_satisfying": 902,
+  "n_pool_scenes": 2000,
+  "satisfying_indices_first20": [
+    0,
+    1,
+    3,
+    7,
+    9,
+    12,
+    14,
+    19,
+    23,
+    24,
+    26,
+    27,
+    28,
+    29,
+    31,
+    32,
+    35,
+    38,
+    41,
+    44
+  ],
+  "scene_index_one_scene": 0,
+  "scene_indices_three_scenes": [
+    0,
+    1,
+    3
+  ],
+  "intervention_threshold": {
+    "definition": "a step is intervening iff || u_safe(t) - u_nom(t) ||_2 > eps",
+    "eps": 0.001,
+    "units": "newtons (rotor thrust), the action space's own units",
+    "eps_as_fraction_of_action_box": 0.00020387359836901122,
+    "action_box_range_N": 4.905,
+    "source": "src/eval/rollout.py rollout_eval -> RolloutResult.intervention_mask; the mask drawn IS the mask the harness returns, not a second implementation",
+    "u_nom_is": "the policy's own proposal before projection (the learned policy for the joint pair, the LQR command for OC-PNCBF); the unfiltered nominal has no filter and no intervening step by construction",
+    "denominator": "the episode's ACTIVE steps, i.e. steps 0..event_step-1, the same steps the drawn path covers"
+  },
+  "intervention_shares_per_scene": {
+    "0": {
+      "nominal": {
+        "controller": "nominal (unfiltered)",
+        "outcome": "collision",
+        "collision_cause": "obstacle",
+        "event_step": 30,
+        "n_active_steps": 30,
+        "n_intervening_steps": 0,
+        "intervening_share": 0.0,
+        "has_filter": false,
+        "duration_s": 1.5,
+        "altitude_range_m": [
+          -0.4088457226753235,
+          1.1318540573120117
+        ],
+        "final_position_m": [
+          -0.628304123878479,
+          -1.5826822519302368,
+          -0.019317544996738434
+        ],
+        "final_distance_to_goal_m": 4.7980802311873685,
+        "max_disc_norm": null
+      },
+      "oc": {
+        "controller": "OC-PNCBF",
+        "outcome": "goal",
+        "collision_cause": null,
+        "event_step": 143,
+        "n_active_steps": 143,
+        "n_intervening_steps": 12,
+        "intervening_share": 0.08391608391608392,
+        "has_filter": true,
+        "duration_s": 7.15,
+        "altitude_range_m": [
+          -1.2288652658462524,
+          3.7476565837860107
+        ],
+        "final_position_m": [
+          -3.072100877761841,
+          -0.30541905760765076,
+          3.7476565837860107
+        ],
+        "final_distance_to_goal_m": 0.14557418682363865,
+        "max_disc_norm": 5.967442989349365
+      },
+      "jt": {
+        "controller": "joint (ours)",
+        "outcome": "goal",
+        "collision_cause": null,
+        "event_step": 79,
+        "n_active_steps": 79,
+        "n_intervening_steps": 68,
+        "intervening_share": 0.8607594936708861,
+        "has_filter": true,
+        "duration_s": 3.95,
+        "altitude_range_m": [
+          0.38795965909957886,
+          3.7300331592559814
+        ],
+        "final_position_m": [
+          -3.176701545715332,
+          -0.21600759029388428,
+          3.7300331592559814
+        ],
+        "final_distance_to_goal_m": 0.13754053957867654,
+        "max_disc_norm": 7.90715217590332
+      }
+    },
+    "1": {
+      "nominal": {
+        "controller": "nominal (unfiltered)",
+        "outcome": "collision",
+        "collision_cause": "obstacle",
+        "event_step": 22,
+        "n_active_steps": 22,
+        "n_intervening_steps": 0,
+        "intervening_share": 0.0,
+        "has_filter": false,
+        "duration_s": 1.1,
+        "altitude_range_m": [
+          -3.6583118438720703,
+          -2.7694952487945557
+        ],
+        "final_position_m": [
+          -0.3480275273323059,
+          0.673115611076355,
+          -2.7694952487945557
+        ],
+        "final_distance_to_goal_m": 7.356557639535584,
+        "max_disc_norm": null
+      },
+      "oc": {
+        "controller": "OC-PNCBF",
+        "outcome": "goal",
+        "collision_cause": null,
+        "event_step": 217,
+        "n_active_steps": 217,
+        "n_intervening_steps": 90,
+        "intervening_share": 0.4147465437788018,
+        "has_filter": true,
+        "duration_s": 10.85,
+        "altitude_range_m": [
+          -3.353189706802368,
+          3.285592794418335
+        ],
+        "final_position_m": [
+          -3.4384958744049072,
+          3.280703067779541,
+          3.285592794418335
+        ],
+        "final_distance_to_goal_m": 0.14706513044783137,
+        "max_disc_norm": 7.983713150024414
+      },
+      "jt": {
+        "controller": "joint (ours)",
+        "outcome": "goal",
+        "collision_cause": null,
+        "event_step": 286,
+        "n_active_steps": 286,
+        "n_intervening_steps": 223,
+        "intervening_share": 0.7797202797202797,
+        "has_filter": true,
+        "duration_s": 14.3,
+        "altitude_range_m": [
+          -3.3699450492858887,
+          3.3910107612609863
+        ],
+        "final_position_m": [
+          -3.4071028232574463,
+          3.312713623046875,
+          3.3541886806488037
+        ],
+        "final_distance_to_goal_m": 0.09102413002877087,
+        "max_disc_norm": 8.581047058105469
+      }
+    },
+    "3": {
+      "nominal": {
+        "controller": "nominal (unfiltered)",
+        "outcome": "collision",
+        "collision_cause": "obstacle",
+        "event_step": 34,
+        "n_active_steps": 34,
+        "n_intervening_steps": 0,
+        "intervening_share": 0.0,
+        "has_filter": false,
+        "duration_s": 1.7,
+        "altitude_range_m": [
+          -0.709574282169342,
+          -0.041601505130529404
+        ],
+        "final_position_m": [
+          0.30200913548469543,
+          -2.5855753421783447,
+          -0.29547685384750366
+        ],
+        "final_distance_to_goal_m": 3.2266116836647627,
+        "max_disc_norm": null
+      },
+      "oc": {
+        "controller": "OC-PNCBF",
+        "outcome": "goal",
+        "collision_cause": null,
+        "event_step": 194,
+        "n_active_steps": 194,
+        "n_intervening_steps": 80,
+        "intervening_share": 0.41237113402061853,
+        "has_filter": true,
+        "duration_s": 9.7,
+        "altitude_range_m": [
+          -0.6282252669334412,
+          1.235098123550415
+        ],
+        "final_position_m": [
+          3.076291561126709,
+          -2.418537139892578,
+          1.235098123550415
+        ],
+        "final_distance_to_goal_m": 0.14571265921068152,
+        "max_disc_norm": 6.062533855438232
+      },
+      "jt": {
+        "controller": "joint (ours)",
+        "outcome": "goal",
+        "collision_cause": null,
+        "event_step": 125,
+        "n_active_steps": 125,
+        "n_intervening_steps": 77,
+        "intervening_share": 0.616,
+        "has_filter": true,
+        "duration_s": 6.25,
+        "altitude_range_m": [
+          -0.3210030198097229,
+          1.7324670553207397
+        ],
+        "final_position_m": [
+          3.014244556427002,
+          -2.2834081649780273,
+          1.2804667949676514
+        ],
+        "final_distance_to_goal_m": 0.09184287168783252,
+        "max_disc_norm": 8.624441146850586
+      }
+    }
+  },
+  "intervention_share_pool_wide": {
+    "oc": {
+      "controller": "OC-PNCBF",
+      "n_intervening_steps": 57729,
+      "n_active_steps": 272034,
+      "share": 0.2122124440327312
+    },
+    "jt": {
+      "controller": "joint (ours)",
+      "n_intervening_steps": 53604,
+      "n_active_steps": 147680,
+      "share": 0.36297399783315276
+    }
+  },
+  "outcome_counts": {
+    "nominal": {
+      "goal": 902,
+      "collision": 1098,
+      "timeout": 0,
+      "oob": 0,
+      "stuck": 0
+    },
+    "oc": {
+      "goal": 1810,
+      "collision": 118,
+      "timeout": 50,
+      "oob": 0,
+      "stuck": 22
+    },
+    "jt": {
+      "goal": 1930,
+      "collision": 51,
+      "timeout": 18,
+      "oob": 0,
+      "stuck": 1
+    }
+  },
+  "colouring": {
+    "one_scene": "two-colour path: filter inactive #2b6cb0, filter active #e08214; the unfiltered nominal is one colour #555555",
+    "three_scenes": "controller identity is the line hue ({\"nominal\": \"#555555\", \"oc\": \"#2b6cb0\", \"jt\": \"#c1272d\"}); the intervening segments carry the SAME amber halo #e08214 in every panel, so the intervention colouring is common across controllers. EVERY halo is drawn before ANY hue line, so one controller's halo never buries another's path; where two paths coincide the higher-zorder hue (joint) still occludes the lower (OC), which is the unavoidable cost of overlaying three controllers on one arena and is the reason this variant is not recommended over the other"
+  },
+  "projection_caveat": "both variants draw the xy projection only. The obstacles are INFINITE vertical cylinders, so the xy projection is complete for obstacle avoidance -- no altitude change lets a path cross a drawn circle. What the projection hides is the floor/ceiling band at |p_z| = band_collision_limit and how much vertical motion each path carries; the per-episode altitude range is recorded beside each share, and it is large (several metres on every drawn episode), so a caption should not describe these as planar paths. Every drawn nominal collision has collision_cause 'obstacle', not a band collision, so no drawn termination is invisible in this projection.",
+  "measured": {
+    "fig1_teaser_one_scene.pdf": {
+      "pdf": "fig1_teaser_one_scene.pdf",
+      "pages": 1,
+      "mediabox_pt": [
+        0.0,
+        0.0,
+        504.0,
+        219.6
+      ],
+      "mediabox_width_pt": 504.0,
+      "mediabox_height_pt": 219.6,
+      "mediabox_width_in": 7.0,
+      "mediabox_height_in": 3.05,
+      "min_tf_pt": 7.0,
+      "max_tf_pt": 8.0,
+      "distinct_tf_pt": [
+        7.0,
+        8.0
+      ],
+      "n_text_ops": 56,
+      "all_text_ge_6pt": true,
+      "embedded_fonts": [
+        "BMQQDV+DejaVuSans"
+      ],
+      "n_image_xobjects": 0,
+      "rasterized_text_objects": 0,
+      "bytes": 27531,
+      "target_width_in": 7.0,
+      "width_err_pt": 0.0
+    },
+    "fig1_teaser_three_scenes.pdf": {
+      "pdf": "fig1_teaser_three_scenes.pdf",
+      "pages": 1,
+      "mediabox_pt": [
+        0.0,
+        0.0,
+        504.0,
+        219.6
+      ],
+      "mediabox_width_pt": 504.0,
+      "mediabox_height_pt": 219.6,
+      "mediabox_width_in": 7.0,
+      "mediabox_height_in": 3.05,
+      "min_tf_pt": 7.0,
+      "max_tf_pt": 8.0,
+      "distinct_tf_pt": [
+        7.0,
+        8.0
+      ],
+      "n_text_ops": 57,
+      "all_text_ge_6pt": true,
+      "embedded_fonts": [
+        "BMQQDV+DejaVuSans",
+        "EVICAO+DejaVuSans-Bold"
+      ],
+      "n_image_xobjects": 0,
+      "rasterized_text_objects": 0,
+      "bytes": 45824,
+      "target_width_in": 7.0,
+      "width_err_pt": 0.0
+    }
+  }
+}

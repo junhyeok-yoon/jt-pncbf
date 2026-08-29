@@ -2,7 +2,7 @@
 # Saved into data/<run_id>/config.yaml at run start as the effective configuration.
 
 run:
-  version: "v2.9.2"
+  version: "v2.9.3"
   seed: 42                          # per-experiment seed; multi-seed iterates this
   framework: jt_pncbf               # jt_pncbf | oc_pncbf
   system: quadrotor_planar          # double_integrator | unicycle | quadrotor_planar  (v2.6.0: direct-input planar quadrotor)
@@ -16,6 +16,9 @@ env:
   band_hazard:                      # h_star vertical branch psi_up/psi_lo +/- c_z v_z (quadrotor_3d only)
     enabled: false                  # Stage-2 run flips to true; psi_cap = obstacle r_max, c_z = pi/omega_max
     limit: 4.0                      # band surface |z| = 4.0 (= world_lim)
+    lead_terms: true                # v2.9.3: false DROPS both +/- c_z v_z leads, leaving max(psi_up, psi_lo).
+                                    # TRUE IS THE DEFAULT AND IS BIT-IDENTICAL to every run before v2.9.3; the
+                                    # key is absent from every persisted config so .get returns true there.
   obs_band_z: true                  # v2.7.6: append absolute p_z, v_z to the quadrotor_3d observation (32->34)
                                     # so the band branch is observable. Code default False -> a dim-32 checkpoint
                                     # (v2.7.4) whose config lacks this loads at its own dim.

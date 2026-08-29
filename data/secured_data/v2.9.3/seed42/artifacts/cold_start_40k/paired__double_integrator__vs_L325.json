@@ -1,0 +1,77 @@
+{
+  "system": "double_integrator",
+  "contrast": "warm",
+  "comparator_row": "L325",
+  "cold_label": "COLD40K_double_integrator",
+  "n": 2000,
+  "pool": "eval_full_di_n2000_seed123456.pkl",
+  "basis": "h400 on the registered cell",
+  "note": "warm comparator: joint run with training.jt.value_init_ckpt SET, 10000 steps; artifacts on disk are named by the original row L309 (stratification.md:36)",
+  "cps_comparator": 0.9055026015063512,
+  "cps_cold": 0.8934875245298094,
+  "cps_comparator_registered": 0.9055026015063512,
+  "cps_cold_reported": 0.8934875245298094,
+  "comparator_ci_registered": [
+    0.8860231096530459,
+    0.9231964278503514
+  ],
+  "comparator_ci_recomputed": [
+    0.8860273902713858,
+    0.9236839851152855
+  ],
+  "cold_ci_reported": [
+    0.8715551443926585,
+    0.9116583773892001
+  ],
+  "cold_ci_recomputed": [
+    0.8736974924820943,
+    0.9126069641342864
+  ],
+  "paired_delta_mean": -0.012015076976541689,
+  "paired_delta_ci": [
+    -0.031010695949153424,
+    0.00726841173800931
+  ],
+  "abs_delta": 0.012015076976541689,
+  "floor": 0.0083,
+  "inside_floor": false,
+  "delta_in_floor_units": -1.4475996357279144,
+  "delta_ci_excludes_zero": false,
+  "episodes_changed": 1208,
+  "bootstrap": {
+    "resamples": 10000,
+    "seed": 20292,
+    "method": "percentile",
+    "kind": "scene bootstrap"
+  },
+  "components_comparator": {
+    "reach": 0.9655,
+    "collision": 0.009,
+    "oob": 0.0,
+    "stuck": 0.0255,
+    "timeout": 0.0,
+    "infeasibility": 0.054991328312162704
+  },
+  "components_cold": {
+    "reach": 0.9575,
+    "collision": 0.006,
+    "oob": 0.0,
+    "stuck": 0.0365,
+    "timeout": 0.0,
+    "infeasibility": 0.05170825156730166
+  },
+  "counts_comparator": {
+    "goal": 1931,
+    "collision": 18,
+    "oob": 0,
+    "stuck": 51,
+    "timeout": 0
+  },
+  "counts_cold": {
+    "goal": 1915,
+    "collision": 12,
+    "oob": 0,
+    "stuck": 73,
+    "timeout": 0
+  }
+}

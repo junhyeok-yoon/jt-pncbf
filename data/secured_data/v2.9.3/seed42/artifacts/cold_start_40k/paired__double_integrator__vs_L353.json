@@ -1,0 +1,77 @@
+{
+  "system": "double_integrator",
+  "contrast": "cold@10k",
+  "comparator_row": "L353",
+  "cold_label": "COLD40K_double_integrator",
+  "n": 2000,
+  "pool": "eval_full_di_n2000_seed123456.pkl",
+  "basis": "h400 on the registered cell",
+  "note": "cold@10000 comparator: same value_init_ckpt null, 10000 steps, UNBOUNDED buffer_cap 1000000 -- the cap never bound at that budget, so this contrast is budget PLUS cap",
+  "cps_comparator": 0.8845232097212179,
+  "cps_cold": 0.8934875245298094,
+  "cps_comparator_registered": 0.8845232097212179,
+  "cps_cold_reported": 0.8934875245298094,
+  "comparator_ci_registered": [
+    0.8635280812331768,
+    0.9061498034968584
+  ],
+  "comparator_ci_recomputed": [
+    0.8630643479339389,
+    0.9049149009411327
+  ],
+  "cold_ci_reported": [
+    0.8715551443926585,
+    0.9116583773892001
+  ],
+  "cold_ci_recomputed": [
+    0.8736974924820943,
+    0.9126069641342864
+  ],
+  "paired_delta_mean": 0.008964314808591578,
+  "paired_delta_ci": [
+    -0.012596341650069521,
+    0.030641778032062958
+  ],
+  "abs_delta": 0.008964314808591578,
+  "floor": 0.0083,
+  "inside_floor": false,
+  "delta_in_floor_units": 1.0800379287459734,
+  "delta_ci_excludes_zero": false,
+  "episodes_changed": 1248,
+  "bootstrap": {
+    "resamples": 10000,
+    "seed": 20292,
+    "method": "percentile",
+    "kind": "scene bootstrap"
+  },
+  "components_comparator": {
+    "reach": 0.958,
+    "collision": 0.014,
+    "oob": 0.0,
+    "stuck": 0.028,
+    "timeout": 0.0,
+    "infeasibility": 0.05825596759594026
+  },
+  "components_cold": {
+    "reach": 0.9575,
+    "collision": 0.006,
+    "oob": 0.0,
+    "stuck": 0.0365,
+    "timeout": 0.0,
+    "infeasibility": 0.05170825156730166
+  },
+  "counts_comparator": {
+    "goal": 1916,
+    "collision": 28,
+    "oob": 0,
+    "stuck": 56,
+    "timeout": 0
+  },
+  "counts_cold": {
+    "goal": 1915,
+    "collision": 12,
+    "oob": 0,
+    "stuck": 73,
+    "timeout": 0
+  }
+}

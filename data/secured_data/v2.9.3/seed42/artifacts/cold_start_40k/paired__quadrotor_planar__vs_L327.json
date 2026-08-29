@@ -1,0 +1,77 @@
+{
+  "system": "quadrotor_planar",
+  "contrast": "warm",
+  "comparator_row": "L327",
+  "cold_label": "COLD40K_quadrotor_planar",
+  "n": 2000,
+  "pool": "eval_full_quadrotor-planar_n2000_seed23456.pkl",
+  "basis": "h400 on the registered cell",
+  "note": "warm comparator: joint run with training.jt.value_init_ckpt SET, 10000 steps; artifacts on disk are named by the original row L311 (stratification.md:36)",
+  "cps_comparator": 0.7893772164606112,
+  "cps_cold": 0.7634549530436215,
+  "cps_comparator_registered": 0.7893772164606112,
+  "cps_cold_reported": 0.7634549530436215,
+  "comparator_ci_registered": [
+    0.7561052032580508,
+    0.8194246792738212
+  ],
+  "comparator_ci_recomputed": [
+    0.7600486097250557,
+    0.8180066307939708
+  ],
+  "cold_ci_reported": [
+    0.7304691114196895,
+    0.7963116310877718
+  ],
+  "cold_ci_recomputed": [
+    0.7295549347779647,
+    0.7968633488931663
+  ],
+  "paired_delta_mean": -0.025922263416989756,
+  "paired_delta_ci": [
+    -0.06198979152232152,
+    0.009939812929461507
+  ],
+  "abs_delta": 0.025922263416989756,
+  "floor": 0.0083,
+  "inside_floor": false,
+  "delta_in_floor_units": -3.1231642671071995,
+  "delta_ci_excludes_zero": false,
+  "episodes_changed": 1034,
+  "bootstrap": {
+    "resamples": 10000,
+    "seed": 20292,
+    "method": "percentile",
+    "kind": "scene bootstrap"
+  },
+  "components_comparator": {
+    "reach": 0.911,
+    "collision": 0.0215,
+    "oob": 0.0,
+    "stuck": 0.06,
+    "timeout": 0.0075,
+    "infeasibility": 0.049575945131295714
+  },
+  "components_cold": {
+    "reach": 0.906,
+    "collision": 0.043,
+    "oob": 0.0,
+    "stuck": 0.042,
+    "timeout": 0.009,
+    "infeasibility": 0.03348348985459492
+  },
+  "counts_comparator": {
+    "goal": 1822,
+    "collision": 43,
+    "oob": 0,
+    "stuck": 120,
+    "timeout": 15
+  },
+  "counts_cold": {
+    "goal": 1812,
+    "collision": 86,
+    "oob": 0,
+    "stuck": 84,
+    "timeout": 18
+  }
+}

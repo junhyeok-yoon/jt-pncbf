@@ -923,10 +923,60 @@ def _pool_path(pool_name: str, config: Mapping[str, Any], system_name: str) -> P
 def _train_scene_sampler(config: Mapping[str, Any]) -> Any:
     distribution = obstacle_distribution_name(config)
     if distribution == "random":
-        return sample_train_scene
-    if distribution == "fixed_centered":
-        return sample_train_fixed_scene
-    raise ValueError(f"Unsupported obstacle distribution: {distribution!r}")
+        base = sample_train_scene
+    elif distribution == "fixed_centered":
+        base = sample_train_fixed_scene
+    else:
+        raise ValueError(f"Unsupported obstacle distribution: {distribution!r}")
+    if not bool((config.get("env", {}) or {}).get("fixed_obstacle_layout", False)):
+        return base
+    return _fixed_layout_sampler(base, config)
+
+
+# v2.9.2 item B -- FIXED-LAYOUT ABLATION. `env.fixed_obstacle_layout` (default false; absent key leaves
+# every existing run byte-identical) holds the OBSTACLE LAYOUT fixed for the whole of training: the first
+# scene the run's own sampler draws supplies (centers, radii, active), and every later episode reuses that
+# layout while start, goal and the initial condition keep being drawn from the unchanged training law. The
+# layout therefore comes from the TRAINING distribution -- no evaluation scene enters training -- and the
+# only thing removed is layout randomization, which is the quantity the ablation is about.
+#
+# Start/goal are redrawn until they satisfy the SAME clearance predicate the sampler itself enforces
+# (`_has_start_goal_clearance` with the split v2.9.1 floors), because a start/goal pair legal against the
+# scene it was drawn with need not be legal against the frozen layout. A run that cannot place a legal
+# pair against its own frozen layout raises rather than silently degrading the scene law.
+_FIXED_LAYOUT_RETRIES = 500
+
+
+def _fixed_layout_sampler(base: Any, config: Mapping[str, Any]) -> Any:
+    import dataclasses as _dc
+    from src.envs.scene_init import _has_start_goal_clearance, train_scene_law
+
+    law = train_scene_law(config)
+    base_floor = float(config["scene_train"]["start_goal_clearance"])
+    start_floor = law["start_obstacle_clearance"]
+    goal_floor = law["goal_obstacle_clearance"]
+    start_floor = base_floor if start_floor is None else float(start_floor)
+    goal_floor = base_floor if goal_floor is None else float(goal_floor)
+    held: dict[str, Any] = {}
+
+    def sampler(rng, cfg, system):
+        scene = base(rng, cfg, system)
+        if "layout" not in held:
+            held["layout"] = (scene.obstacle_centers.copy(), scene.obstacle_radii.copy(),
+                              scene.obstacle_active.copy())
+            return scene
+        centers, radii, active = held["layout"]
+        for _ in range(_FIXED_LAYOUT_RETRIES):
+            candidate = _dc.replace(scene, obstacle_centers=centers.copy(),
+                                    obstacle_radii=radii.copy(), obstacle_active=active.copy())
+            if _has_start_goal_clearance(candidate, start_floor, goal_floor):
+                return candidate
+            scene = base(rng, cfg, system)
+        raise RuntimeError(
+            "env.fixed_obstacle_layout: no start/goal pair satisfied the training clearance floors "
+            f"({start_floor}, {goal_floor}) against the held layout in {_FIXED_LAYOUT_RETRIES} draws.")
+
+    return sampler
 
 
 def _write_status(

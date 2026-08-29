@@ -1,0 +1,203 @@
+{
+  "figure": "fig4_certificate_zero_level.pdf",
+  "column": "double",
+  "target_width_in": 7.0,
+  "target_height_in": 2.38,
+  "panel_layout": "1 row x 4 columns, shared colorbar at the right",
+  "panels_are": "(a)(b)(c) horizontal xy sections at hover, z = 0, v_x in {-1.5, 0, +1.5} m/s; (d) vertical yz section at p_x = 0, hover, v_z = -1.5 m/s",
+  "grid_resolution": 241,
+  "contour_raster_dpi": 600,
+  "font_pt": {
+    "label": 8.0,
+    "tick": 7.0,
+    "legend": 7.0,
+    "panel_letter": 8.0,
+    "panel_tag": 6.5,
+    "smallest": 6.5
+  },
+  "cell": "v282_agree_gate.gate_overrides with eval.max_steps 400",
+  "eval_max_steps": 400,
+  "pool": "data/secured_data/pools/eval_fullcb_quadrotor-3d-d2r_n2000_seed823456.pkl",
+  "pool_sha8": "3682a4e3",
+  "checkpoint": "data/runs/v2.9.1/set__20260814-030107__seed42/v2.9.1__jt__20260814-030107__seed42/checkpoints/best.pt",
+  "checkpoint_step": 9450,
+  "ledger_row": "L328",
+  "scene_selection_rule": "from the 24-scene certificate probe on disk (data/runs/v2.9.2/cert_probes/cert_probes.json, item_c.conditions.jt_L328.per_scene), the scene whose vhat_min sits at the MEDIAN of that population; n = 24 is even so the rank-12 and rank-13 scenes are equidistant from the median by construction and the tie is broken by the smaller pool index; scene 0 excluded by dispatch; if the chosen scene has no active cylinder intersecting p_x = 0, take the next scene toward the median",
+  "scene_index": 4,
+  "scene_vhat_min": -0.7156981229782104,
+  "scene_rank_ascending_deepest_first": 13,
+  "scene_rank_note": "rank 13 of 24 with rank 1 the DEEPEST (most negative) vhat_min",
+  "population_median_vhat_min": -0.7593271732330322,
+  "candidate_order_after_exclusion": [
+    4,
+    15,
+    21,
+    23,
+    7,
+    17
+  ],
+  "substitutions": [],
+  "excluded_scenes": [
+    0
+  ],
+  "n_active_cylinders": 12,
+  "cylinders_intersecting_px0": [
+    7
+  ],
+  "speed_used_mps": 1.5,
+  "speed_justification": "1.5 m/s is (i) the speed 04_eval s3b fixes for this system's moving column, (ii) 60 % of the plant's v_max = 2.5 m/s, and (iii) the registered pool's own spawn-speed ceiling (max initial speed over the 2000 scenes is 1.499 m/s), so it is inside the operating range and representative of what the deployed controller actually sees",
+  "v_max_mps": 2.5,
+  "world_lim": 4.0,
+  "band_collision_limit": 4.0,
+  "c_z": 0.7853981633974483,
+  "z_view_padding_m": 0.3,
+  "z_view_note": "the field is swept over [-world_lim, world_lim]^2 exactly as 04_eval s3b requires; the yz panel's y AXIS is padded by 0.45 m for VIEW only, so the band boundaries at |p_z| = 4 are drawn inside the frame instead of on it. The padded strip carries no sampled data and is shaded as outside the arena.",
+  "band_zero_offset_source": "src.eval.plotting.plot_quadrotor3d_yz_contour (frozen renderer, resolution 61), called on THIS scene and THIS plane for its return value only",
+  "band_zero_offset_all": {
+    "row0_vz-1.5": 0.5144365194917082,
+    "row0_vz+1.5": 0.04164775131133469,
+    "row0_tilt120_vz-1.5": 1.0609594183869127,
+    "row0_tilt120_vz+1.5": -0.6376481388281858
+  },
+  "frozen_renderer_grid_spacing_m": 0.13333333333333333,
+  "readout_py_m": 3.5999999999999996,
+  "readout_column_rule": "the frozen renderer's own rule: among p_y columns strictly inside the sampled support (|p_y| <= world_lim - 0.3 = 3.7 m) take the one with the largest clearance to every active cylinder chord at p_x = 0",
+  "colour_scale": "shared TwoSlopeNorm(-1, 0, +1), NOT renormalized per panel",
+  "directional_growth": {
+    "a": {
+      "v_x_mps": -1.5,
+      "n_added_cells": 4243,
+      "n_removed_cells": 979,
+      "added_mean_signed_dx_from_nearest_obstacle_m": 0.19004979716397935,
+      "removed_mean_signed_dx_from_nearest_obstacle_m": -0.44911271316270096
+    },
+    "c": {
+      "v_x_mps": 1.5,
+      "n_added_cells": 3442,
+      "n_removed_cells": 816,
+      "added_mean_signed_dx_from_nearest_obstacle_m": -0.3576816250053729,
+      "removed_mean_signed_dx_from_nearest_obstacle_m": 0.36336601511471184
+    }
+  },
+  "directional_growth_definition": "cells the motion ADDS to the unsafe set relative to the at-rest panel, each assigned to the nearest ACTIVE cylinder axis; the reported number is the mean signed x offset from that axis. Negative = added mass sits at smaller x than the obstacle it belongs to.",
+  "legend_canon_used": false,
+  "legend_note": "no controller appears in this figure, so the paper's controller legend canon does not apply here",
+  "panels": [
+    {
+      "panel": "a",
+      "section": "xy",
+      "velocity": [
+        -1.5,
+        0.0,
+        0.0
+      ],
+      "attitude": "hover (q = [1, 0, 0, 0])",
+      "vhat_min": -0.5553030967712402,
+      "vhat_max": 1.2999999523162842,
+      "unsafe_area_fraction": 0.2697611955717016,
+      "unsafe_centroid_horizontal_m": -0.08459280061271379,
+      "unsafe_centroid_vertical_m": 0.47102161518168667,
+      "n_active_cylinders_drawn": 12
+    },
+    {
+      "panel": "b",
+      "section": "xy",
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "attitude": "hover (q = [1, 0, 0, 0])",
+      "vhat_min": -0.7156982421875,
+      "vhat_max": 1.2999999523162842,
+      "unsafe_area_fraction": 0.21356381604999913,
+      "unsafe_centroid_horizontal_m": 0.12448941201762853,
+      "unsafe_centroid_vertical_m": 0.5784908094163174,
+      "n_active_cylinders_drawn": 12
+    },
+    {
+      "panel": "c",
+      "section": "xy",
+      "velocity": [
+        1.5,
+        0.0,
+        0.0
+      ],
+      "attitude": "hover (q = [1, 0, 0, 0])",
+      "vhat_min": -0.7373874187469482,
+      "vhat_max": 1.2999999523162842,
+      "unsafe_area_fraction": 0.2587765362166629,
+      "unsafe_centroid_horizontal_m": -0.03554668440896002,
+      "unsafe_centroid_vertical_m": 0.5721091151031268,
+      "n_active_cylinders_drawn": 12
+    },
+    {
+      "panel": "d",
+      "section": "yz",
+      "velocity": [
+        0.0,
+        0.0,
+        -1.5
+      ],
+      "attitude": "hover (q = [1, 0, 0, 0])",
+      "vhat_min": -0.510943591594696,
+      "vhat_max": 1.2999999523162842,
+      "unsafe_area_fraction": 0.3582755117852654,
+      "unsafe_centroid_horizontal_m": -0.43329969404264185,
+      "unsafe_centroid_vertical_m": -1.421386579524885,
+      "plane_px": 0.0,
+      "readout_py_m": 3.5999999999999996,
+      "readout_column_node_on_drawn_grid_m": 3.5999999999999996,
+      "readout_inside_support": true,
+      "sampled_support_half_width_m": 3.7,
+      "analytic_hstar_zero_floor_m": -2.8219027549038276,
+      "analytic_hstar_zero_ceiling_m": 5.178097245096172,
+      "band_zero_offset_frozen_renderer_m": 0.5144365194917082,
+      "frozen_renderer_resolution": 61,
+      "frozen_renderer_grid_spacing_m": 0.13333333333333333,
+      "band_zero_offset_on_drawn_grid_m": 0.5129590425682333,
+      "vhat_zero_crossing_pz_on_drawn_grid_m": -2.3089437123355943,
+      "drawn_grid_spacing_m": 0.03333333333333333,
+      "cylinders_intersecting_plane": [
+        7
+      ]
+    }
+  ],
+  "measured": {
+    "pdf": "fig4_certificate_zero_level.pdf",
+    "pages": 1,
+    "mediabox_pt": [
+      0.0,
+      0.0,
+      504.0,
+      171.36
+    ],
+    "mediabox_width_pt": 504.0,
+    "mediabox_height_pt": 171.36,
+    "mediabox_width_in": 7.0,
+    "mediabox_height_in": 2.38,
+    "min_tf_pt": 6.5,
+    "max_tf_pt": 8.0,
+    "distinct_tf_pt": [
+      6.5,
+      7.0,
+      8.0
+    ],
+    "n_text_ops": 64,
+    "all_text_ge_6pt": true,
+    "embedded_fonts": [
+      "BMQQDV+DejaVuSans",
+      "EVICAO+DejaVuSans-Bold"
+    ],
+    "n_image_xobjects": 5,
+    "rasterized_text_objects": 0,
+    "bytes": 251664,
+    "target_width_in": 7.0,
+    "width_err_pt": 0.0
+  },
+  "measured_type_size_floor_pt": 6.5,
+  "measured_canvas_in": [
+    7.0,
+    2.38
+  ]
+}

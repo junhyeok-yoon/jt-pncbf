@@ -1,0 +1,281 @@
+{
+  "reference": {
+    "nominal": "data/runs/v2.9.2/horizon400_tableI/perepisode__NOM_quadrotor_3d_h400.npz",
+    "cert": "data/runs/v2.9.2/horizon400_tableI/perepisode__L305_h400.npz",
+    "pair": "data/runs/v2.9.2/horizon400_tableI/perepisode__L312_h400.npz"
+  },
+  "note": "manifest_nine.json carries no per-scene outcome or termination time; the registered per-episode vectors of the same cells at cap 400 are used instead",
+  "cap": 400,
+  "per_condition": {
+    "nominal": {
+      "n": 2000,
+      "reference_time_field": "event_step (-1 -> cap)",
+      "outcome_mismatches_full_pool": 0,
+      "termination_time_mismatches_full_pool": 0,
+      "nine_scene_outcome_mismatches": 0,
+      "nine_scene_time_mismatches": 0
+    },
+    "cert": {
+      "n": 2000,
+      "reference_time_field": "n_steps",
+      "outcome_mismatches_full_pool": 0,
+      "termination_time_mismatches_full_pool": 0,
+      "nine_scene_outcome_mismatches": 0,
+      "nine_scene_time_mismatches": 0
+    },
+    "pair": {
+      "n": 2000,
+      "reference_time_field": "n_steps",
+      "outcome_mismatches_full_pool": 0,
+      "termination_time_mismatches_full_pool": 0,
+      "nine_scene_outcome_mismatches": 0,
+      "nine_scene_time_mismatches": 0
+    }
+  },
+  "nine_scene_detail": [
+    {
+      "scene": 16,
+      "condition": "nominal",
+      "outcome_reference": "collision",
+      "outcome_resimulated": "collision",
+      "termination_step_reference": 71,
+      "termination_step_resimulated": 71,
+      "match": true
+    },
+    {
+      "scene": 328,
+      "condition": "nominal",
+      "outcome_reference": "collision",
+      "outcome_resimulated": "collision",
+      "termination_step_reference": 22,
+      "termination_step_resimulated": 22,
+      "match": true
+    },
+    {
+      "scene": 347,
+      "condition": "nominal",
+      "outcome_reference": "collision",
+      "outcome_resimulated": "collision",
+      "termination_step_reference": 29,
+      "termination_step_resimulated": 29,
+      "match": true
+    },
+    {
+      "scene": 755,
+      "condition": "nominal",
+      "outcome_reference": "collision",
+      "outcome_resimulated": "collision",
+      "termination_step_reference": 36,
+      "termination_step_resimulated": 36,
+      "match": true
+    },
+    {
+      "scene": 756,
+      "condition": "nominal",
+      "outcome_reference": "collision",
+      "outcome_resimulated": "collision",
+      "termination_step_reference": 40,
+      "termination_step_resimulated": 40,
+      "match": true
+    },
+    {
+      "scene": 12,
+      "condition": "nominal",
+      "outcome_reference": "collision",
+      "outcome_resimulated": "collision",
+      "termination_step_reference": 22,
+      "termination_step_resimulated": 22,
+      "match": true
+    },
+    {
+      "scene": 0,
+      "condition": "nominal",
+      "outcome_reference": "collision",
+      "outcome_resimulated": "collision",
+      "termination_step_reference": 30,
+      "termination_step_resimulated": 30,
+      "match": true
+    },
+    {
+      "scene": 32,
+      "condition": "nominal",
+      "outcome_reference": "collision",
+      "outcome_resimulated": "collision",
+      "termination_step_reference": 19,
+      "termination_step_resimulated": 19,
+      "match": true
+    },
+    {
+      "scene": 70,
+      "condition": "nominal",
+      "outcome_reference": "collision",
+      "outcome_resimulated": "collision",
+      "termination_step_reference": 26,
+      "termination_step_resimulated": 26,
+      "match": true
+    },
+    {
+      "scene": 16,
+      "condition": "cert",
+      "outcome_reference": "timeout",
+      "outcome_resimulated": "timeout",
+      "termination_step_reference": 400,
+      "termination_step_resimulated": 400,
+      "match": true
+    },
+    {
+      "scene": 328,
+      "condition": "cert",
+      "outcome_reference": "timeout",
+      "outcome_resimulated": "timeout",
+      "termination_step_reference": 400,
+      "termination_step_resimulated": 400,
+      "match": true
+    },
+    {
+      "scene": 347,
+      "condition": "cert",
+      "outcome_reference": "timeout",
+      "outcome_resimulated": "timeout",
+      "termination_step_reference": 400,
+      "termination_step_resimulated": 400,
+      "match": true
+    },
+    {
+      "scene": 755,
+      "condition": "cert",
+      "outcome_reference": "timeout",
+      "outcome_resimulated": "timeout",
+      "termination_step_reference": 400,
+      "termination_step_resimulated": 400,
+      "match": true
+    },
+    {
+      "scene": 756,
+      "condition": "cert",
+      "outcome_reference": "timeout",
+      "outcome_resimulated": "timeout",
+      "termination_step_reference": 400,
+      "termination_step_resimulated": 400,
+      "match": true
+    },
+    {
+      "scene": 12,
+      "condition": "cert",
+      "outcome_reference": "goal",
+      "outcome_resimulated": "goal",
+      "termination_step_reference": 180,
+      "termination_step_resimulated": 180,
+      "match": true
+    },
+    {
+      "scene": 0,
+      "condition": "cert",
+      "outcome_reference": "goal",
+      "outcome_resimulated": "goal",
+      "termination_step_reference": 143,
+      "termination_step_resimulated": 143,
+      "match": true
+    },
+    {
+      "scene": 32,
+      "condition": "cert",
+      "outcome_reference": "goal",
+      "outcome_resimulated": "goal",
+      "termination_step_reference": 128,
+      "termination_step_resimulated": 128,
+      "match": true
+    },
+    {
+      "scene": 70,
+      "condition": "cert",
+      "outcome_reference": "goal",
+      "outcome_resimulated": "goal",
+      "termination_step_reference": 131,
+      "termination_step_resimulated": 131,
+      "match": true
+    },
+    {
+      "scene": 16,
+      "condition": "pair",
+      "outcome_reference": "goal",
+      "outcome_resimulated": "goal",
+      "termination_step_reference": 108,
+      "termination_step_resimulated": 108,
+      "match": true
+    },
+    {
+      "scene": 328,
+      "condition": "pair",
+      "outcome_reference": "goal",
+      "outcome_resimulated": "goal",
+      "termination_step_reference": 122,
+      "termination_step_resimulated": 122,
+      "match": true
+    },
+    {
+      "scene": 347,
+      "condition": "pair",
+      "outcome_reference": "goal",
+      "outcome_resimulated": "goal",
+      "termination_step_reference": 88,
+      "termination_step_resimulated": 88,
+      "match": true
+    },
+    {
+      "scene": 755,
+      "condition": "pair",
+      "outcome_reference": "goal",
+      "outcome_resimulated": "goal",
+      "termination_step_reference": 100,
+      "termination_step_resimulated": 100,
+      "match": true
+    },
+    {
+      "scene": 756,
+      "condition": "pair",
+      "outcome_reference": "goal",
+      "outcome_resimulated": "goal",
+      "termination_step_reference": 118,
+      "termination_step_resimulated": 118,
+      "match": true
+    },
+    {
+      "scene": 12,
+      "condition": "pair",
+      "outcome_reference": "goal",
+      "outcome_resimulated": "goal",
+      "termination_step_reference": 89,
+      "termination_step_resimulated": 89,
+      "match": true
+    },
+    {
+      "scene": 0,
+      "condition": "pair",
+      "outcome_reference": "goal",
+      "outcome_resimulated": "goal",
+      "termination_step_reference": 79,
+      "termination_step_resimulated": 79,
+      "match": true
+    },
+    {
+      "scene": 32,
+      "condition": "pair",
+      "outcome_reference": "goal",
+      "outcome_resimulated": "goal",
+      "termination_step_reference": 68,
+      "termination_step_resimulated": 68,
+      "match": true
+    },
+    {
+      "scene": 70,
+      "condition": "pair",
+      "outcome_reference": "goal",
+      "outcome_resimulated": "goal",
+      "termination_step_reference": 67,
+      "termination_step_resimulated": 67,
+      "match": true
+    }
+  ],
+  "pass": true
+}

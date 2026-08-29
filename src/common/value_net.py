@@ -1,11 +1,36 @@
 from __future__ import annotations
 
+import os
 from typing import Any, Callable, Mapping
 
 import torch
 from torch import nn
 
 from src.common.system import System
+
+# v2.9.3: READ-TIME ensemble reduction for the DEPLOYED certificate. `mean` is the default and the
+# shipped behaviour; the switch exists so the member-wise MAX can be scored as a deploy-time axis
+# without a second checkpoint. UNSET => byte-identical to every run before v2.9.3, because
+# `deployed_h` then takes exactly the `self.value(obs)` branch it always took.
+#
+# TRAINING IS NOT TOUCHED. The value loss reads `value_all` and `target_h` (the member-wise MIN);
+# neither consults this switch, so no gradient, target or checkpoint is affected. Only the
+# certificate the FILTER differentiates at deploy time moves.
+DEPLOY_REDUCE_ENV = "JT_DEPLOY_ENSEMBLE_REDUCE"
+_DEPLOY_REDUCTIONS = ("mean", "max")
+
+
+def deploy_reduction() -> str:
+    """The deployed ensemble reduction, read from the environment at call time.
+
+    Read-time rather than import-time so a driver can set it after the module is already imported,
+    and so the value recorded in an artifact is the value that was actually in force.
+    """
+    r = (os.environ.get(DEPLOY_REDUCE_ENV) or "mean").strip().lower()
+    if r not in _DEPLOY_REDUCTIONS:
+        raise ValueError(
+            f"{DEPLOY_REDUCE_ENV} must be one of {_DEPLOY_REDUCTIONS}, got {r!r}.")
+    return r
 
 
 Tensor = torch.Tensor
@@ -44,6 +69,9 @@ class ValueNetEnsemble(nn.Module):
         return torch.min(self.value_all(obs), dim=1).values
 
     def deployed_h(self, obs: Tensor) -> Tensor:
+        # v2.9.3: `mean` is the default and returns self.value(obs) verbatim -- the untouched path.
+        if deploy_reduction() == "max":
+            return torch.max(self.value_all(obs), dim=1).values
         return self.value(obs)
 
 

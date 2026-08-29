@@ -62,7 +62,7 @@ PROSE_COLUMNS = ("verdict", "eval_source")
 # Pool stems a row's eval_source may name. Used by rule 10: an alias may repeat within a version
 # block when the SAME run/cell was scored on DIFFERENT pools -- that is one run owning several rows,
 # not a duplicate -- so uniqueness is checked on (alias, pool stem).
-POOL_STEMS = ("fullcb", "fullscr41", "fullscr40", "inloopv2", "navconescr40", "navcone", "mixed")
+POOL_STEMS = ("fullvia", "fullcb", "fullscr41", "fullscr40", "inloopv2", "navconescr40", "navcone", "mixed")
 
 TS_RE = re.compile(r"(\d{8})-(\d{6})")
 ARTIFACT_RE = re.compile(r"[A-Za-z0-9_.\-/]+\.(?:json|npz|npy|pt)")

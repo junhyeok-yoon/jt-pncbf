@@ -424,6 +424,8 @@ infeasibility_ci_lo, infeasibility_ci_hi
 
 `mode` $\in$ {`in_loop`, `final`, `final_insertion_lqr`, `final_insertion_frozen`, `final_insertion_live`, `final_alpha_sweep`}. `saturation_rate` is the episode-mean of the per-step saturation flag (`02_control` §4.1), a diagnostic outside `cps`. The six `stuck_bin_<lo>_<hi>` columns are fractions of episodes whose `min_window_displacement` falls in each $0.05$ m bin from $[0.00, 0.05)$ to $[0.25, 0.30)$ — diagnostic per §1.1, not part of `cps`. Episodes with `min_window_displacement > 0.30` m are not counted in any bin.
 
+Every score artifact carries the interval columns, including artifacts of analytic and nominal conditions: an interval is a property of the cell, not of the controller, and a ledger row whose artifact persists none is flagged by `check_ledger.py`.
+
 During the infeasibility-definition transition (§1 History note), evaluation outputs additionally carry `cps_v2` / `infeasibility_v2` fields alongside the legacy columns; when the transition closes, the v2 semantics are carried by the canonical `cps` / `infeasibility` columns themselves and the `_v2` fields are retired.
 
 **`eval_episodes.csv`** — one row per (eval, episode). Columns:
@@ -494,7 +496,9 @@ data/secured_data/<version>/seed<N>/
 ```
 
 The bulky per-step `metrics.csv` is excluded; the full training curve stays in the gitignored original
-run directory. `ADOPTED.md` is the identity record and the only file in the set that carries digests
+run directory. A member of this set that exceeds the hosting limit for a single tracked file is
+excluded and recorded in `ADOPTED.md` by its source path, byte size and digest; the digest keeps the excluded file
+verifiable against the original. `ADOPTED.md` is the identity record and the only file in the set that carries digests
 (`06_workflow` §6.1). This file set is the definition; `06_workflow` §6.3 governs when a snapshot is
 created and does not restate its contents.
 

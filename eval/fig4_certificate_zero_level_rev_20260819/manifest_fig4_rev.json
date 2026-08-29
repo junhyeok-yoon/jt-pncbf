@@ -1,0 +1,704 @@
+{
+  "figure": "fig4_certificate_zero_level.pdf",
+  "companion_figure": "fig4b_goal_dependence.pdf",
+  "revises": "eval/fig4_certificate_zero_level_20260819/fig4_certificate_zero_level.pdf (left untouched; this directory contains the revision only)",
+  "column": "double",
+  "target_width_in": 7.0,
+  "target_height_in": 1.9,
+  "companion_target_height_in": 2.62,
+  "panel_layout": "1 row x 5 columns, shared colorbar at the right",
+  "panels_are": "(a)(b)(c) horizontal xy sections at hover, z = 0, v_x in {-1.5, 0, +1.5} m/s; (d)(e) vertical yz sections at p_x = 0, hover, v_z in {-1.5, +1.5} m/s",
+  "revision_items": {
+    "a_goal_marked": "the goal is drawn on every panel with the paper's canonical marker (red star '*', color #d62728, ms 9, black edge mew 0.4, scripts/analysis/v292_fig_rollouts.py:148) and carries the legend entry 'goal'. Every panel is a 2-D section and the goal is a 3-D point, so what is drawn is the ORTHOGONAL PROJECTION onto the drawn plane -- the same convention the rollout figures use. The out-of-plane distance is recorded per panel as goal_out_of_plane_distance_m.",
+    "b_goal_dependence": "measured; see goal_dependence below and the companion figure",
+    "c_velocity_annotations_moved": "each panel's velocity is now its RIGHT title at 7 pt and the panel letter its LEFT title at 8 pt bold. NO text object is drawn inside any axes on either figure; the former in-axes 'outside arena' label is now a legend patch.",
+    "d_clamped_dropped": "the colorbar label is 'certificate value'. The clamp itself is unchanged -- see colour_clamp.",
+    "e_readout_column_removed": "the green dotted offset-readout column and its legend entry are gone from the drawing. The measurement is kept in this manifest (band_zero_offset_all, and per-panel band_zero_offset_frozen_renderer_m / band_zero_offset_on_drawn_grid_m).",
+    "f_second_vertical_panel": "ADDED a fifth panel (e) at v_z = +1.5 m/s. See band_boundary_visibility for why one panel can never show both boundaries."
+  },
+  "colour_clamp": "the FILL is drawn on np.clip(V_hat, -1, +1) under a shared TwoSlopeNorm(-1, 0, +1) with extend='both'; the black zero level and every number in this manifest are computed on the UNCLIPPED V_hat. The measured V_hat range per panel is in panels[].vhat_min / vhat_max.",
+  "grid_resolution": 241,
+  "contour_raster_dpi": 600,
+  "font_pt": {
+    "label": 8.0,
+    "tick": 7.0,
+    "legend": 7.0,
+    "panel_letter": 8.0,
+    "panel_velocity_title": 7.0,
+    "smallest": 7.0
+  },
+  "cell": "v282_agree_gate.gate_overrides with eval.max_steps 400",
+  "eval_max_steps": 400,
+  "pool": "data/secured_data/pools/eval_fullcb_quadrotor-3d-d2r_n2000_seed823456.pkl",
+  "pool_sha8": "3682a4e3",
+  "checkpoint": "data/runs/v2.9.1/set__20260814-030107__seed42/v2.9.1__jt__20260814-030107__seed42/checkpoints/best.pt",
+  "checkpoint_step": 9450,
+  "ledger_row": "L328",
+  "scene_selection_rule": "unchanged from the original producer: from the 24-scene certificate probe on disk (data/runs/v2.9.2/cert_probes/cert_probes.json, item_c.conditions.jt_L328.per_scene), the scene whose vhat_min sits at the MEDIAN of that population; n = 24 is even so the rank-12 and rank-13 scenes are equidistant from the median by construction and the tie is broken by the smaller pool index; scene 0 excluded by dispatch; if the chosen scene has no active cylinder intersecting p_x = 0, take the next scene toward the median",
+  "scene_index": 4,
+  "scene_vhat_min": -0.7156981229782104,
+  "scene_rank_ascending_deepest_first": 13,
+  "scene_rank_note": "rank 13 of 24 with rank 1 the DEEPEST (most negative) vhat_min",
+  "population_median_vhat_min": -0.7593271732330322,
+  "candidate_order_after_exclusion": [
+    4,
+    15,
+    21,
+    23,
+    7,
+    17
+  ],
+  "substitutions": [],
+  "excluded_scenes": [
+    0
+  ],
+  "n_active_cylinders": 12,
+  "cylinders_intersecting_px0": [
+    7
+  ],
+  "scene_goal_m": [
+    3.4603939066950877,
+    -2.5642863315368034,
+    -2.0524107290984395
+  ],
+  "speed_used_mps": 1.5,
+  "speed_justification": "1.5 m/s is (i) the speed 04_eval s3b fixes for this system's moving column, (ii) 60 % of the plant's v_max = 2.5 m/s, and (iii) the registered pool's own spawn-speed ceiling (max initial speed over the 2000 scenes is 1.499 m/s), so it is inside the operating range and representative of what the deployed controller actually sees",
+  "v_max_mps": 2.5,
+  "world_lim": 4.0,
+  "band_hazard_enabled": true,
+  "band_hazard_limit": 4.0,
+  "band_collision_limit": 4.0,
+  "psi_cap_m": 0.8,
+  "omega_max_rad_s": 4.0,
+  "c_z": 0.7853981633974483,
+  "z_view_padding_m": 0.3,
+  "z_view_note": "the field is swept over [-world_lim, world_lim]^2 exactly as 04_eval s3b requires; the yz panels' y AXIS is padded by 0.30 m on each side for VIEW only, so the band surfaces at |p_z| = 4 are drawn inside the frame instead of on it. The padded strip carries no sampled data and is shaded; it is labelled 'outside arena' in the LEGEND, not inside the axes.",
+  "analytic_hazard_line": {
+    "what_is_drawn": "the zero of ONE BRANCH of the analytic hazard's vertical band term, from src/common/quadrotor_barrier.py:value_target_barrier: psi_up = clamp(z - limit, max = psi_cap), psi_lo = clamp(-z - limit, max = psi_cap), and h = max(h_horizontal, max(psi_up + c_z v_z, psi_lo - c_z v_z)). The magenta line is where the relevant band branch is zero.",
+    "depends_on": [
+      "p_z (the drawn vertical coordinate)",
+      "v_z, the WORLD vertical velocity, x[..., 9]",
+      "the constant limit = env.band_hazard.limit = 4.0 m",
+      "the constant c_z = pi / env.bounds.quadrotor_3d.omega_max = 0.7853981634 s (omega_max = 4.0 rad/s)",
+      "the constant psi_cap = obstacle.per_system.quadrotor_3d.r_max = 0.8 m, which decides whether the branch has a zero AT ALL"
+    ],
+    "independent_of": [
+      "attitude q",
+      "body rate omega",
+      "horizontal position and velocity",
+      "the obstacles",
+      "the goal",
+      "the checkpoint and anything learned -- the line is analytic"
+    ],
+    "correction_to_the_dispatch_statement": "The dispatch's statement is CORRECT as far as it goes but incomplete on three points, all verified against the code. (1) 'fixed by the vertical velocity alone' -- it is fixed by v_z AND by three configuration constants (limit, c_z, psi_cap); at v_z = 0 the line coincides with the band surface and the offset from it is exactly c_z |v_z| = 1.1781 m at |v_z| = 1.5 m/s. (2) 'independent of attitude and body rate' is true, but it is not a property of THIS panel: the WHOLE quadrotor_3d value_target_barrier is independent of attitude and body rate -- phi reads system.position(x)[..., :2], the approach term reads x[..., :2] and x[..., 7:9], and the band branch reads position z and x[..., 9]; q (x[3:7]) and omega (x[10:13]) enter none of them. The LEARNED certificate is NOT attitude-independent, which is exactly why the frozen renderer's band_zero_offset differs between hover and tilt 120 deg (see band_zero_offset_all). (3) The line is the zero of the BAND BRANCH, not of the full analytic hazard h: h is a max, so wherever the horizontal term is positive (inside and just outside the cylinder chord) h is already positive and the band branch's zero is not the boundary of the hazard set there. Additionally, the psi_cap clamp can delete the zero entirely -- see band_boundary_visibility.",
+    "coefficient_and_authority": "c_z = pi / omega_max is the time to rotate the thrust axis through pi at the plant's body-rate limit, i.e. a LEAD TIME set by the rate limit, not the rate limit itself. Its role in authority is that d(band branch)/d v_z = +/- c_z != 0 everywhere, INCLUDING inside the cap (the clamp is on z, never on v_z), so the vertical channel keeps relative degree 1 and L_g is supported on the thrust channel c_z (R e)_z / m (the code comment at src/common/quadrotor_barrier.py, value_target_barrier). That is what ties the constant to authority; the dispatch's clause on this point is right.",
+    "numerical_verification": {
+      "n_states": 4096,
+      "max_abs_dh_over_random_attitude_and_body_rate": 0.0,
+      "max_abs_dh_over_horizontal_velocity_control": 0.44999992847442627,
+      "attitude_and_body_rate_independent": true,
+      "dh_dvz": {
+        "clamp_inactive_z=-3.0": {
+          "numerical_dh_dvz": -0.7854103446006775,
+          "expected_minus_c_z": -0.7853981633974483,
+          "psi_lo_clamped": false
+        },
+        "clamp_active_z=-6.0": {
+          "numerical_dh_dvz": -0.7854699492454529,
+          "expected_minus_c_z": -0.7853981633974483,
+          "psi_lo_clamped": true
+        }
+      },
+      "h_zero_on_the_clear_column_m": -2.8219027544910182,
+      "analytic_band_branch_zero_m": -2.8219027549038276,
+      "h_zero_minus_analytic_m": 4.128093422650636e-10,
+      "h_on_the_line_inside_the_cylinder_chord": [
+        {
+          "cylinder": 7,
+          "p_y_m": -1.1440697675475189,
+          "p_z_m": -2.8219027549038276,
+          "h": 1.0
+        }
+      ],
+      "reading": "max_abs_dh_over_random_attitude_and_body_rate = 0 proves the analytic hazard is attitude- and body-rate-independent EVERYWHERE, not merely on the drawn plane; the horizontal-velocity control is non-zero, so h is not simply velocity-independent. On a column clear of every cylinder the zero of h IS the band-branch zero; on a column through a cylinder chord h is already positive on that line, so the line is not the hazard boundary there."
+    },
+    "not_the_zero_of_h": "on the cylinder chord at p_y in [[-1.8414712497237486, -0.4466682853712891]] m the horizontal term already makes h positive, so the magenta line there is not the hazard boundary"
+  },
+  "band_boundary_visibility": {
+    "claim": "a single vertical panel can never show both band boundaries",
+    "proof": "the ceiling branch has a zero only if -c_z v_z <= psi_cap, i.e. v_z >= -psi_cap/c_z = -1.0186 m/s, and it then sits at z = limit - c_z v_z, which is <= world_lim only if v_z >= 0; the floor branch has a zero only if c_z v_z <= psi_cap, i.e. v_z <= 1.0186 m/s, and it then sits at z = -limit - c_z v_z, which is >= -world_lim only if v_z <= 0. The two in-frame conditions intersect only at v_z = 0, where both lines coincide with the band surfaces |p_z| = limit themselves.",
+    "at_descending_vz": {
+      "v_z": -1.5,
+      "ceiling": "no zero: the ceiling branch needs psi_up = 1.1781 m > psi_cap = 0.8000 m, which the clamp forbids",
+      "floor": "zero at z = -limit - c_z v_z"
+    },
+    "at_ascending_vz": {
+      "v_z": 1.5,
+      "ceiling": "zero at z = limit - c_z v_z",
+      "floor": "no zero: the floor branch needs psi_lo = 1.1781 m > psi_cap = 0.8000 m, which the clamp forbids"
+    },
+    "choice": "ADDED the ascending panel (e). It is the only way to put the ceiling boundary in the figure at all, it costs one column of width, and it makes the caption able to say 'band boundaries' honestly: (d) carries the floor, (e) the ceiling. The caption must still not claim that either panel shows both.",
+    "caption_constraint": "panel (d) shows the FLOOR boundary only and panel (e) the CEILING boundary only; no single panel shows both"
+  },
+  "band_zero_offset_source": "src.eval.plotting.plot_quadrotor3d_yz_contour (frozen renderer, resolution 61), called on THIS scene and THIS plane for its return value only",
+  "band_zero_offset_all": {
+    "row0_vz-1.5": 0.5144365194917082,
+    "row0_vz+1.5": 0.04164775131133469,
+    "row0_tilt120_vz-1.5": 1.0609594183869127,
+    "row0_tilt120_vz+1.5": -0.6376481388281858
+  },
+  "frozen_renderer_grid_spacing_m": 0.13333333333333333,
+  "readout_py_m": 3.5999999999999996,
+  "readout_column_rule": "the frozen renderer's own rule: among p_y columns strictly inside the sampled support (|p_y| <= world_lim - 0.3 = 3.7 m) take the one with the largest clearance to every active cylinder chord at p_x = 0. The column is NO LONGER DRAWN (revision item e); the rule is recorded because the number below is defined by it.",
+  "colour_scale": "shared TwoSlopeNorm(-1, 0, +1), NOT renormalized per panel; the companion figure uses the same scale",
+  "directional_growth": {
+    "a": {
+      "v_x_mps": -1.5,
+      "n_added_cells": 4243,
+      "n_removed_cells": 979,
+      "added_mean_signed_dx_from_nearest_obstacle_m": 0.19004979716397935,
+      "removed_mean_signed_dx_from_nearest_obstacle_m": -0.44911271316270096
+    },
+    "c": {
+      "v_x_mps": 1.5,
+      "n_added_cells": 3442,
+      "n_removed_cells": 816,
+      "added_mean_signed_dx_from_nearest_obstacle_m": -0.3576816250053729,
+      "removed_mean_signed_dx_from_nearest_obstacle_m": 0.36336601511471184
+    }
+  },
+  "directional_growth_definition": "cells the motion ADDS to the unsafe set relative to the at-rest panel, each assigned to the nearest ACTIVE cylinder axis; the reported number is the mean signed x offset from that axis. Negative = added mass sits at smaller x than the obstacle it belongs to.",
+  "goal_dependence": {
+    "question": "does the certificate's zero level set visibly depend on where the goal is?",
+    "why_it_could": "the certificate is a policy value function and the policy is goal-conditioned; the goal enters the observation as the body-frame vector goal_b = R(q)^T (goal - p) (src/envs/quadrotor_3d.py, observation()), so V_hat is a function of the goal",
+    "section_redrawn": "panel (b)'s section: xy at hover, z = 0, at rest",
+    "alternate_goal_rule": "the images of the scene's own goal under the two sign flips that keep it inside the SAME arena box: G1 = (-g_x, -g_y, +g_z), the horizontal point reflection through the arena's vertical axis, and G2 = (+g_x, +g_y, -g_z), the reflection through the horizontal mid-plane. Both are inside [-world_lim, world_lim]^3 by construction because the true goal is; both were checked clear of every active cylinder (clearances below). Between them they separate a purely HORIZONTAL change of the goal from a purely VERTICAL one, which is the cleanest two-point probe of the dependence. Everything else -- scene, checkpoint, cell, attitude, velocity, grid -- is identical.",
+    "goal_clearances_m": {
+      "reference": {
+        "min_surface_clearance_m": 2.7042770280540998,
+        "nearest_active_cylinder": 7,
+        "goal_m": [
+          3.4603939066950877,
+          -2.5642863315368034,
+          -2.0524107290984395
+        ]
+      },
+      "G1": {
+        "min_surface_clearance_m": 0.5249564054826172,
+        "nearest_active_cylinder": 3,
+        "goal_m": [
+          -3.4603939066950877,
+          2.5642863315368034,
+          -2.0524107290984395
+        ]
+      },
+      "G2": {
+        "min_surface_clearance_m": 2.7042770280540998,
+        "nearest_active_cylinder": 7,
+        "goal_m": [
+          3.4603939066950877,
+          -2.5642863315368034,
+          2.0524107290984395
+        ]
+      }
+    },
+    "shift_definition": "for every vertex of the alternate V_hat = 0 contour the distance to the nearest vertex of the reference V_hat = 0 contour and vice versa, summarized over the union; contours taken from the same 241-node grid (spacing 0.033333 m)",
+    "measurements": {
+      "reference_goal_m": [
+        3.4603939066950877,
+        -2.5642863315368034,
+        -2.0524107290984395
+      ],
+      "G1": {
+        "n_ref": 1340,
+        "n_alt": 1388,
+        "median_shift_m": 0.032010655455203416,
+        "mean_shift_m": 0.05368932424202216,
+        "p90_shift_m": 0.1212393767132363,
+        "hausdorff_m": 0.4198664642128786,
+        "goal_m": [
+          -3.4603939066950877,
+          2.5642863315368034,
+          -2.0524107290984395
+        ],
+        "goal_displacement_from_reference_m": 8.613916735051244,
+        "unsafe_area_fraction_reference": 0.21356381604999913,
+        "unsafe_area_fraction_variant": 0.22442795406415178,
+        "unsafe_symmetric_difference_fraction": 0.026187565641087446,
+        "unsafe_symmetric_difference_area_m2": 1.69,
+        "max_abs_delta_vhat": 0.6276649236679077,
+        "mean_abs_delta_vhat": 0.1846371293067932,
+        "p99_abs_delta_vhat": 0.5763474702835083
+      },
+      "G2": {
+        "n_ref": 1340,
+        "n_alt": 1359,
+        "median_shift_m": 0.014639152099874764,
+        "mean_shift_m": 0.019542017080864733,
+        "p90_shift_m": 0.0345705473653407,
+        "hausdorff_m": 0.22065573247430814,
+        "goal_m": [
+          3.4603939066950877,
+          -2.5642863315368034,
+          2.0524107290984395
+        ],
+        "goal_displacement_from_reference_m": 4.104821458196879,
+        "unsafe_area_fraction_reference": 0.21356381604999913,
+        "unsafe_area_fraction_variant": 0.2185051910263253,
+        "unsafe_symmetric_difference_fraction": 0.009486751261169745,
+        "unsafe_symmetric_difference_area_m2": 0.6122222222222222,
+        "max_abs_delta_vhat": 0.278983473777771,
+        "mean_abs_delta_vhat": 0.05644320324063301,
+        "p99_abs_delta_vhat": 0.20181846618652344
+      }
+    },
+    "shift_metric_bias": "the shift is vertex-to-vertex, so it overstates the true point-to-curve distance by at most half the contour vertex spacing, about 0.0167 m",
+    "verdict": "YES, the zero level set depends on the goal, but weakly and locally. Moving the goal 8.61 m (G1, the largest move the arena allows under this rule) shifts the zero level by a MEDIAN of 0.0320 m -- about one grid cell (0.0333 m) -- with p90 0.1212 m and a worst case (Hausdorff) of 0.4199 m, i.e. 4.9 % of the goal displacement. The unsafe fraction of the slice moves from 0.2136 to 0.2244 (symmetric difference 0.0262 of the slice) and max |dV_hat| reaches 0.6277. The purely VERTICAL move (G2, 4.11 m) does about half as much: median 0.0146 m, Hausdorff 0.2207 m, symmetric difference 0.0095. The movement is NOT uniform: most of the contour is within a cell of where it was and the change concentrates on a few obstacle boundaries, which is what the companion figure's grey reference contour shows. So the goal matters enough that the figure must mark it, and not enough to change how the panel reads.",
+    "panels": [
+      {
+        "panel": "a",
+        "section": "xy",
+        "velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "attitude": "hover (q = [1, 0, 0, 0])",
+        "vhat_min": -0.7156982421875,
+        "vhat_max": 1.2999999523162842,
+        "unsafe_area_fraction": 0.21356381604999913,
+        "unsafe_centroid_horizontal_m": 0.12448941201762853,
+        "unsafe_centroid_vertical_m": 0.5784908094163174,
+        "n_active_cylinders_drawn": 12,
+        "goal_marker_drawn_at_m": [
+          3.4603939066950877,
+          -2.5642863315368034
+        ],
+        "goal_out_of_plane_distance_m": 2.0524107290984395,
+        "goal_out_of_plane_axis": "z (the section is the plane z = 0)",
+        "goal_variant": "reference",
+        "goal_m": [
+          3.4603939066950877,
+          -2.5642863315368034,
+          -2.0524107290984395
+        ],
+        "goal_inside_arena": true,
+        "goal_min_surface_clearance_m": 2.7042770280540998,
+        "goal_nearest_active_cylinder": 7
+      },
+      {
+        "panel": "b",
+        "section": "xy",
+        "velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "attitude": "hover (q = [1, 0, 0, 0])",
+        "vhat_min": -0.658623218536377,
+        "vhat_max": 1.2999999523162842,
+        "unsafe_area_fraction": 0.22442795406415178,
+        "unsafe_centroid_horizontal_m": 0.239603631249201,
+        "unsafe_centroid_vertical_m": 0.5342692750287688,
+        "n_active_cylinders_drawn": 12,
+        "goal_marker_drawn_at_m": [
+          -3.4603939066950877,
+          2.5642863315368034
+        ],
+        "goal_out_of_plane_distance_m": 2.0524107290984395,
+        "goal_out_of_plane_axis": "z (the section is the plane z = 0)",
+        "goal_variant": "G1",
+        "goal_m": [
+          -3.4603939066950877,
+          2.5642863315368034,
+          -2.0524107290984395
+        ],
+        "goal_inside_arena": true,
+        "goal_min_surface_clearance_m": 0.5249564054826172,
+        "goal_nearest_active_cylinder": 3
+      },
+      {
+        "panel": "c",
+        "section": "xy",
+        "velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "attitude": "hover (q = [1, 0, 0, 0])",
+        "vhat_min": -0.8281840682029724,
+        "vhat_max": 1.2999999523162842,
+        "unsafe_area_fraction": 0.2185051910263253,
+        "unsafe_centroid_horizontal_m": 0.09361227116329142,
+        "unsafe_centroid_vertical_m": 0.5820161269140861,
+        "n_active_cylinders_drawn": 12,
+        "goal_marker_drawn_at_m": [
+          3.4603939066950877,
+          -2.5642863315368034
+        ],
+        "goal_out_of_plane_distance_m": 2.0524107290984395,
+        "goal_out_of_plane_axis": "z (the section is the plane z = 0)",
+        "goal_variant": "G2",
+        "goal_m": [
+          3.4603939066950877,
+          -2.5642863315368034,
+          2.0524107290984395
+        ],
+        "goal_inside_arena": true,
+        "goal_min_surface_clearance_m": 2.7042770280540998,
+        "goal_nearest_active_cylinder": 7
+      }
+    ]
+  },
+  "legend_canon_used": false,
+  "legend_note": "no controller appears in this figure, so the paper's controller legend canon does not apply; the goal marker follows the paper's start/goal canon (scripts/analysis/v292_fig_rollouts.py)",
+  "clamped_label_audit": {
+    "fixed_here": [
+      "eval/fig4_certificate_zero_level_rev_20260819/make_fig4_rev.py (this producer): 'certificate value'"
+    ],
+    "still_carrying_the_label": [
+      {
+        "producer": "scripts/analysis/v292_fig_certificate.py:182",
+        "label": "certificate value (clamped to [-1, 1])",
+        "asset": "data/runs/v2.9.2/paper_figures/fig_certificate_sections.pdf"
+      },
+      {
+        "producer": "scripts/analysis/v292_fig_certificate2.py:232",
+        "label": "certificate value (clamped to [-1, 1])",
+        "asset": "data/runs/v2.9.2/paper_figures/fig_certificate_sections.pdf",
+        "note": "the two certificate producers write the SAME path; the file on disk (471480 bytes, the size v2.9.2_results.md line 1369 records) is certificate2's -- data/runs/v2.9.2/paper_figures/manifest_certificate.json carries the 'column' key that only certificate2 writes. So certificate2 is the producer of record and certificate.py is the superseded one; both still carry the label."
+      },
+      {
+        "producer": "scripts/analysis/v292_fig_nine.py:316",
+        "label": "certificate value (clamped to [-1, 1])",
+        "asset": "data/runs/v2.9.2/paper_figures/fig_rollout_nine_certificate.pdf"
+      },
+      {
+        "producer": "scripts/deck/fig_cbf_contour_xy.py:54",
+        "label": "V-hat (clamped [-1,1])",
+        "asset": "deck fig_cbf_contour_xy.png"
+      },
+      {
+        "producer": "scripts/deck/fig_cbf_contour_yz.py:83",
+        "label": "V-hat (clamped [-1,1])",
+        "asset": "deck fig_cbf_contour_yz.png"
+      },
+      {
+        "producer": "scripts/analysis/quadrotor_cbf_contour.py:98",
+        "label": "h(x) = V_hat  (clamped [-1,1])",
+        "asset": "<run_dir>/figures/cbf_contour_m6.png"
+      }
+    ],
+    "not_rebuilt_because": "those are registered assets cited by docs/versions/v2.9.2_results.md (the certificate/nine figures at 7.11); regenerating them is not this dispatch's to do and would overwrite artifacts other rows point at. Reported for the Researcher to schedule."
+  },
+  "axes_geometry_in": [
+    {
+      "panel": "a",
+      "axes_width_in": 0.9965615751522431,
+      "axes_height_in": 0.9965615751522432
+    },
+    {
+      "panel": "b",
+      "axes_width_in": 0.9965615751522438,
+      "axes_height_in": 0.9965615751522442
+    },
+    {
+      "panel": "c",
+      "axes_width_in": 0.996561575152245,
+      "axes_height_in": 0.996561575152245
+    },
+    {
+      "panel": "d",
+      "axes_width_in": 0.9965615751522399,
+      "axes_height_in": 1.0713036932886575
+    },
+    {
+      "panel": "e",
+      "axes_width_in": 0.9965615751522477,
+      "axes_height_in": 1.0713036932886666
+    }
+  ],
+  "companion_axes_geometry_in": [
+    {
+      "panel": "a",
+      "axes_width_in": 1.8784923757932348,
+      "axes_height_in": 1.8784923757932352
+    },
+    {
+      "panel": "b",
+      "axes_width_in": 1.8784923757932324,
+      "axes_height_in": 1.878492375793233
+    },
+    {
+      "panel": "c",
+      "axes_width_in": 1.878492375793236,
+      "axes_height_in": 1.8784923757932352
+    }
+  ],
+  "title_fit_in": [
+    {
+      "panel": "a",
+      "axes_width_in": 0.9992279915700092,
+      "left_title_width_in": 0.1775,
+      "right_title_width_in": 0.6575,
+      "slack_in": 0.16422799157000922
+    },
+    {
+      "panel": "b",
+      "axes_width_in": 0.9992279915700101,
+      "left_title_width_in": 0.18125,
+      "right_title_width_in": 0.3175,
+      "slack_in": 0.50047799157001
+    },
+    {
+      "panel": "c",
+      "axes_width_in": 0.9992279915700135,
+      "left_title_width_in": 0.16875,
+      "right_title_width_in": 0.7025,
+      "slack_in": 0.12797799157001355
+    },
+    {
+      "panel": "d",
+      "axes_width_in": 0.9992279915700033,
+      "left_title_width_in": 0.18125,
+      "right_title_width_in": 0.65,
+      "slack_in": 0.16797799157000326
+    },
+    {
+      "panel": "e",
+      "axes_width_in": 0.9992279915700157,
+      "left_title_width_in": 0.1775,
+      "right_title_width_in": 0.695,
+      "slack_in": 0.1267279915700158
+    }
+  ],
+  "panels": [
+    {
+      "panel": "a",
+      "section": "xy",
+      "velocity": [
+        -1.5,
+        0.0,
+        0.0
+      ],
+      "attitude": "hover (q = [1, 0, 0, 0])",
+      "vhat_min": -0.5553030967712402,
+      "vhat_max": 1.2999999523162842,
+      "unsafe_area_fraction": 0.2697611955717016,
+      "unsafe_centroid_horizontal_m": -0.08459280061271379,
+      "unsafe_centroid_vertical_m": 0.47102161518168667,
+      "n_active_cylinders_drawn": 12,
+      "goal_marker_drawn_at_m": [
+        3.4603939066950877,
+        -2.5642863315368034
+      ],
+      "goal_out_of_plane_distance_m": 2.0524107290984395,
+      "goal_out_of_plane_axis": "z (the section is the plane z = 0)"
+    },
+    {
+      "panel": "b",
+      "section": "xy",
+      "velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "attitude": "hover (q = [1, 0, 0, 0])",
+      "vhat_min": -0.7156982421875,
+      "vhat_max": 1.2999999523162842,
+      "unsafe_area_fraction": 0.21356381604999913,
+      "unsafe_centroid_horizontal_m": 0.12448941201762853,
+      "unsafe_centroid_vertical_m": 0.5784908094163174,
+      "n_active_cylinders_drawn": 12,
+      "goal_marker_drawn_at_m": [
+        3.4603939066950877,
+        -2.5642863315368034
+      ],
+      "goal_out_of_plane_distance_m": 2.0524107290984395,
+      "goal_out_of_plane_axis": "z (the section is the plane z = 0)"
+    },
+    {
+      "panel": "c",
+      "section": "xy",
+      "velocity": [
+        1.5,
+        0.0,
+        0.0
+      ],
+      "attitude": "hover (q = [1, 0, 0, 0])",
+      "vhat_min": -0.7373874187469482,
+      "vhat_max": 1.2999999523162842,
+      "unsafe_area_fraction": 0.2587765362166629,
+      "unsafe_centroid_horizontal_m": -0.03554668440896002,
+      "unsafe_centroid_vertical_m": 0.5721091151031268,
+      "n_active_cylinders_drawn": 12,
+      "goal_marker_drawn_at_m": [
+        3.4603939066950877,
+        -2.5642863315368034
+      ],
+      "goal_out_of_plane_distance_m": 2.0524107290984395,
+      "goal_out_of_plane_axis": "z (the section is the plane z = 0)"
+    },
+    {
+      "panel": "d",
+      "section": "yz",
+      "velocity": [
+        0.0,
+        0.0,
+        -1.5
+      ],
+      "attitude": "hover (q = [1, 0, 0, 0])",
+      "vhat_min": -0.510943591594696,
+      "vhat_max": 1.2999999523162842,
+      "unsafe_area_fraction": 0.3582755117852654,
+      "unsafe_centroid_horizontal_m": -0.43329969404264185,
+      "unsafe_centroid_vertical_m": -1.421386579524885,
+      "plane_px": 0.0,
+      "goal_marker_drawn_at_m": [
+        -2.5642863315368034,
+        -2.0524107290984395
+      ],
+      "goal_out_of_plane_distance_m": 3.4603939066950877,
+      "goal_out_of_plane_axis": "x (the section is the plane p_x = 0)",
+      "analytic_band_zero_floor_m": -2.8219027549038276,
+      "analytic_band_zero_floor_reason": "zero at z = -limit - c_z v_z",
+      "analytic_band_zero_ceiling_m": null,
+      "analytic_band_zero_ceiling_reason": "no zero: the ceiling branch needs psi_up = 1.1781 m > psi_cap = 0.8000 m, which the clamp forbids",
+      "analytic_band_zero_floor_numeric_check_m": -2.8219027549038276,
+      "analytic_band_zero_ceiling_numeric_check_m": null,
+      "analytic_lines_drawn_m": [
+        -2.8219027549038276
+      ],
+      "drawn_grid_spacing_m": 0.03333333333333333,
+      "cylinders_intersecting_plane": [
+        7
+      ],
+      "readout_py_m": 3.5999999999999996,
+      "readout_column_node_on_drawn_grid_m": 3.5999999999999996,
+      "readout_inside_support": true,
+      "sampled_support_half_width_m": 3.7,
+      "band_zero_offset_frozen_renderer_m": 0.5144365194917082,
+      "frozen_renderer_resolution": 61,
+      "frozen_renderer_grid_spacing_m": 0.13333333333333333,
+      "band_zero_offset_on_drawn_grid_m": 0.5129590425682333,
+      "vhat_zero_crossing_pz_on_drawn_grid_m": -2.3089437123355943,
+      "band_zero_offset_note": "the readout COLUMN is no longer drawn (revision item e); the measurement is kept here unchanged"
+    },
+    {
+      "panel": "e",
+      "section": "yz",
+      "velocity": [
+        0.0,
+        0.0,
+        1.5
+      ],
+      "attitude": "hover (q = [1, 0, 0, 0])",
+      "vhat_min": -0.5092480778694153,
+      "vhat_max": 1.2999999523162842,
+      "unsafe_area_fraction": 0.30505673111688847,
+      "unsafe_centroid_horizontal_m": -0.6127704406065395,
+      "unsafe_centroid_vertical_m": 1.17438386574858,
+      "plane_px": 0.0,
+      "goal_marker_drawn_at_m": [
+        -2.5642863315368034,
+        -2.0524107290984395
+      ],
+      "goal_out_of_plane_distance_m": 3.4603939066950877,
+      "goal_out_of_plane_axis": "x (the section is the plane p_x = 0)",
+      "analytic_band_zero_floor_m": null,
+      "analytic_band_zero_floor_reason": "no zero: the floor branch needs psi_lo = 1.1781 m > psi_cap = 0.8000 m, which the clamp forbids",
+      "analytic_band_zero_ceiling_m": 2.8219027549038276,
+      "analytic_band_zero_ceiling_reason": "zero at z = limit - c_z v_z",
+      "analytic_band_zero_floor_numeric_check_m": null,
+      "analytic_band_zero_ceiling_numeric_check_m": 2.8219027549038276,
+      "analytic_lines_drawn_m": [
+        2.8219027549038276
+      ],
+      "drawn_grid_spacing_m": 0.03333333333333333,
+      "cylinders_intersecting_plane": [
+        7
+      ],
+      "readout_py_m": 3.5999999999999996,
+      "readout_column_node_on_drawn_grid_m": 3.5999999999999996,
+      "readout_inside_support": true,
+      "sampled_support_half_width_m": 3.7,
+      "band_zero_offset_frozen_renderer_m": 0.04164775131133469,
+      "frozen_renderer_resolution": 61,
+      "frozen_renderer_grid_spacing_m": 0.13333333333333333,
+      "band_zero_offset_on_drawn_grid_m": 0.04297578347226105,
+      "vhat_zero_crossing_pz_on_drawn_grid_m": 2.8648785383760886,
+      "band_zero_offset_note": "the readout COLUMN is no longer drawn (revision item e); the measurement is kept here unchanged"
+    }
+  ],
+  "measured": {
+    "pdf": "fig4_certificate_zero_level.pdf",
+    "pages": 1,
+    "mediabox_pt": [
+      0.0,
+      0.0,
+      504.0,
+      136.8
+    ],
+    "mediabox_width_pt": 504.0,
+    "mediabox_height_pt": 136.8,
+    "mediabox_width_in": 7.0,
+    "mediabox_height_in": 1.9,
+    "min_tf_pt": 7.0,
+    "max_tf_pt": 8.0,
+    "distinct_tf_pt": [
+      7.0,
+      8.0
+    ],
+    "n_text_ops": 62,
+    "all_text_ge_6pt": true,
+    "embedded_fonts": [
+      "BMQQDV+DejaVuSans",
+      "EVICAO+DejaVuSans-Bold"
+    ],
+    "n_image_xobjects": 6,
+    "rasterized_text_objects": 0,
+    "bytes": 227830,
+    "target_width_in": 7.0,
+    "width_err_pt": 0.0
+  },
+  "measured_companion": {
+    "pdf": "fig4b_goal_dependence.pdf",
+    "pages": 1,
+    "mediabox_pt": [
+      0.0,
+      0.0,
+      504.0,
+      188.64
+    ],
+    "mediabox_width_pt": 504.0,
+    "mediabox_height_pt": 188.64,
+    "mediabox_width_in": 7.0,
+    "mediabox_height_in": 2.62,
+    "min_tf_pt": 7.0,
+    "max_tf_pt": 8.0,
+    "distinct_tf_pt": [
+      7.0,
+      8.0
+    ],
+    "n_text_ops": 38,
+    "all_text_ge_6pt": true,
+    "embedded_fonts": [
+      "BMQQDV+DejaVuSans",
+      "EVICAO+DejaVuSans-Bold"
+    ],
+    "n_image_xobjects": 4,
+    "rasterized_text_objects": 0,
+    "bytes": 344300,
+    "target_width_in": 7.0,
+    "width_err_pt": 0.0
+  },
+  "measured_type_size_floor_pt": 7.0,
+  "measured_canvas_in": [
+    7.0,
+    1.9
+  ],
+  "measured_companion_canvas_in": [
+    7.0,
+    2.62
+  ]
+}

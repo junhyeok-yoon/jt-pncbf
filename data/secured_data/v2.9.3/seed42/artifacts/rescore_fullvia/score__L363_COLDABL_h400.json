@@ -1,0 +1,139 @@
+{
+  "label": "L363_COLDABL",
+  "kind": "learned",
+  "system": "quadrotor_3d",
+  "framework": "jt_pncbf",
+  "cap": 400,
+  "n": 2000,
+  "wall_s": 7.9,
+  "ckpt": "data/runs/v2.9.3/set__20260820-215728__seed42/v2.9.3__jt__20260820-215728__seed42/checkpoints/best.pt",
+  "ckpt_step": 31500,
+  "pool": "eval_fullvia_quadrotor-3d-d2r_n2000_seed823456.pkl",
+  "cell": {
+    "producer": "v282_agree_gate.gate_overrides",
+    "filter_class": "HardNetFilter",
+    "projection": "dual_solve",
+    "empty_fallback": [
+      "kstep",
+      1,
+      3
+    ],
+    "alpha": [
+      2.0,
+      100.0
+    ],
+    "terminal": [
+      0.15,
+      0.3,
+      0.3
+    ],
+    "eval_batch_size": 2000,
+    "max_steps": 400,
+    "dt": 0.05,
+    "box_klamp_enabled": false
+  },
+  "counts": {
+    "goal": 1924,
+    "collision": 45,
+    "oob": 0,
+    "stuck": 0,
+    "timeout": 31
+  },
+  "incomplete_count": 31,
+  "incomplete_frac": 0.0155,
+  "components": {
+    "reach": 0.962,
+    "collision": 0.0225,
+    "oob": 0.0,
+    "stuck": 0.0,
+    "timeout": 0.0155,
+    "infeasibility": 0.06332608352153614
+  },
+  "cps_evaluator": 0.8902521749435393,
+  "cps_ci": [
+    0.8679909022589972,
+    0.912742582214745
+  ],
+  "saturation_rate": 0.39405117192585226,
+  "collision_counts": {
+    "obstacle": 17,
+    "band_lower": 28,
+    "band_upper": 0,
+    "unattributed": 0,
+    "total": 45
+  },
+  "collision_split": {
+    "coll_obstacle": 0.0085,
+    "coll_band_lower": 0.014,
+    "coll_band_upper": 0.0
+  },
+  "split_residual": 0.0,
+  "infeas_clauses": {
+    "identity_two_clauses_compose_flag": true,
+    "identity_mismatch_steps": 0,
+    "mass_empty": 0.05590716681435653,
+    "mass_singular": 0.007743916707179613,
+    "mass_sing_violated": 0.000325,
+    "mass_sing_satisfied": 0.007418916707179612,
+    "mass_both": 0.000325,
+    "mass_union": 0.06332608352153614,
+    "mass_protocol_empty_or_sing_violated": 0.05590716681435653,
+    "sing_violated_subsumed_by_empty": true,
+    "union_vs_evaluator_residual": 0.0,
+    "EMPTY_episode_frac": 0.518,
+    "SINGULAR_episode_frac": 0.091,
+    "SINGVIOL_episode_frac": 0.001,
+    "empty_source": "last_empty"
+  },
+  "cps_under_protocol_infeas": 0.8924778499556929,
+  "active_by_class": {
+    "goal": {
+      "n": 1924,
+      "mean_active": 71.4454261954262,
+      "mean_infeas_steps": 3.5514553014553014,
+      "frac": 0.03928776873340555
+    },
+    "collision": {
+      "n": 45,
+      "mean_active": 6.5777777777777775,
+      "mean_infeas_steps": 5.955555555555556,
+      "frac": 0.9875555555555555
+    },
+    "oob": {
+      "n": 0,
+      "mean_active": null,
+      "mean_infeas_steps": null,
+      "frac": null
+    },
+    "stuck": {
+      "n": 0,
+      "mean_active": null,
+      "mean_infeas_steps": null,
+      "frac": null
+    },
+    "timeout": {
+      "n": 31,
+      "mean_active": 400.0,
+      "mean_infeas_steps": 85.45161290322581,
+      "frac": 0.2136290322580645
+    },
+    "all": {
+      "n": 2000,
+      "mean_active": 75.0785,
+      "mean_infeas_steps": 4.875,
+      "frac": 0.06332608352153614
+    },
+    "resolved_phys": {
+      "n": 1969,
+      "mean_active": 69.9629253428136,
+      "mean_infeas_steps": 3.606399187404774,
+      "frac": 0.060959709011209895
+    },
+    "incomplete": {
+      "n": 31,
+      "mean_active": 400.0,
+      "mean_infeas_steps": 85.45161290322581,
+      "frac": 0.2136290322580645
+    }
+  }
+}

@@ -28,6 +28,12 @@ class BatchedScene:
     initial_omega: Tensor | None = None
     initial_attitude_quat: Tensor | None = None   # quadrotor_3d: [B,4] body->world quaternion
     initial_omega_vec: Tensor | None = None        # quadrotor_3d: [B,3] body rates
+    # v2.9.2 item A (EVAL-ONLY, default None => every existing path is byte-identical): the obstacle
+    # block of the observation frozen at its step-zero value, [B, 4*k_obs]. Carried on the SCENE and
+    # not on the system so that it row-subsets correctly wherever the scene does -- in particular
+    # `kstep_fallback.slice_scene`, which the registered cell's empty-branch fallback calls on a
+    # boolean mask of the batch. A cache held on the system would desynchronize there.
+    frozen_obs_block: Tensor | None = None
 
 
 def batch_scenes(

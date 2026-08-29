@@ -311,6 +311,17 @@ def _load_framework(
             checkpoint_path,
             config_overrides=config_overrides,
         )
+    if framework == "alt_pncbf":
+        # v2.9.3: the alternating-block (policy-iteration) framework. Its DEPLOYED object is the joint
+        # framework's — same certificate net, same policy net, same HardNet projection — so this branch
+        # only routes the checkpoint to the loader that knows its `framework` tag; the evaluated object,
+        # the pools and the metric are unchanged.
+        from src.frameworks.alt_pncbf.train import load_framework_from_checkpoint
+
+        return load_framework_from_checkpoint(
+            checkpoint_path,
+            config_overrides=config_overrides,
+        )
     raise ValueError(f"Unsupported checkpoint framework: {framework!r}")
 
 

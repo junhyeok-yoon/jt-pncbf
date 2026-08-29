@@ -1,0 +1,9 @@
+{
+  "best_cps": 0.7750078831367903,
+  "best_step": 37050,
+  "current_step": 40000,
+  "halt_reason": null,
+  "phase": "done",
+  "stage": "full",
+  "updated_at": "2026-08-20T10:34:15+00:00"
+}

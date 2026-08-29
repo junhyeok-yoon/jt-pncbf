@@ -1,0 +1,113 @@
+{
+  "created_at": "2026-08-23T20:03:45+00:00",
+  "git_commit": "6d46be9ab4e7530700f8b8e3939ac83c5145bf15",
+  "n_scenes": 2000,
+  "obstacle_distribution": "random",
+  "pool_format_version": 1,
+  "pool_sha256": "d64212c5bf558cf538bc66648e7b210c8bf3194bd76fbbfdf212b9f040f6304a",
+  "sampler_params": {
+    "env": {
+      "bounds": {
+        "f_rotor_max": 4.905,
+        "f_rotor_min": 0.0,
+        "omega_max": 4.0,
+        "v_max": 2.5
+      },
+      "v_init_max": 0.5,
+      "world_lim": 4.0
+    },
+    "eval_scene": {
+      "min_start_goal_dist": 1.5,
+      "start_goal_clearance": 0.15
+    },
+    "fixed_obstacle": {
+      "active_count": 1,
+      "center": [
+        0.0,
+        0.0
+      ],
+      "radius": 0.8
+    },
+    "obstacle": {
+      "corridor_along_factor": 1.5,
+      "corridor_perp_factor": 1.0,
+      "n_max": 12,
+      "n_min": 1,
+      "p_corridor": 0.6,
+      "per_system": {
+        "quadrotor_3d": {
+          "n_max": 18,
+          "n_min": 2,
+          "r_max": 0.8,
+          "r_min": 0.15,
+          "variant": "d2r"
+        }
+      },
+      "r_max": 0.8,
+      "r_min": 0.15
+    },
+    "obstacle_distribution": "random",
+    "scene_train": {
+      "init_feasibility_margin": 0.0
+    }
+  },
+  "seed": 823456,
+  "system": "quadrotor_3d",
+  "viability_screen": {
+    "eval_only": {
+      "checked": [
+        "src/envs",
+        "src/frameworks",
+        "src/common"
+      ],
+      "importers_found": 0,
+      "mechanism": "the predicate lives in src/eval/, is imported only by this builder, and the training scene sampler src/envs/scene_init.py does not reference it; training therefore still experiences the region 03_train 1.2 requires"
+    },
+    "gate": {
+      "attempts": 2045,
+      "flagged_at_omega_reject": 0,
+      "flagged_at_omega_sound": 0,
+      "n_scenes": 2000,
+      "rejected": 45,
+      "rejection_rate": 0.022004889975550123,
+      "second_generation_identical_scenes": true,
+      "second_generation_pkl_byte_identical": true,
+      "worst_attempts_for_one_scene": 3
+    },
+    "legs": [
+      "floor",
+      "ceiling",
+      "horizontal"
+    ],
+    "omega_reject": 8.005974362183034,
+    "omega_reject_source": "data/runs/v2.9.3/doom_certificate/measured_rate.json -> max_realised_dtheta_dt, over 240 episodes / 32852 states of data/runs/v2.9.3/failure_atlas/raw",
+    "omega_sound": 13.995354249492381,
+    "omega_sound_is_recorded_not_applied": true,
+    "omega_sound_source": "sqrt2 * (omega_max + alpha_max * dt), computed from the constants of doom_certificate.md section 1; not typed",
+    "predicate": "src/eval/viability_screen.py",
+    "predicate_parity": {
+      "omega_measured": {
+        "matches_certificate": true,
+        "n_compared": 2000,
+        "n_flagged": 14,
+        "omega": 8.005974362183034
+      },
+      "omega_sound": {
+        "matches_certificate": true,
+        "n_compared": 2000,
+        "n_flagged": 1,
+        "omega": 13.995354249492381
+      }
+    },
+    "predicate_source": "the certificate of data/runs/v2.9.3/doom_certificate/make_doom_certificate.py, reused not reimplemented; floor leg called directly, ceiling and horizontal legs proved bit-identical to doom_flags.npz on all 2000 registered scenes before any draw",
+    "rejection": {
+      "attempts": 2045,
+      "rate": 0.022004889975550123,
+      "rejected": 45,
+      "retry_cap": 1000,
+      "semantics": "03_train 1.1 -- a rejected attempt consumes its draws and the whole scene is redrawn; the screen never relaxes",
+      "worst_attempts_for_one_scene": 3
+    },
+    "sufficient_not_necessary": "flagged means no admissible input could have saved the scene; unflagged does NOT mean survivable"
+  }
+}

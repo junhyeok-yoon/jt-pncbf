@@ -1,0 +1,27 @@
+{
+  "what": "L363 at the 100 Hz cell -- the trainer's own grid A and grid B eval PNGs",
+  "producer": "src.eval.run_full.write_trajectory_figures -> src.eval.plotting.plot_trajectory_control_grid (the shipped fixed format, 04_eval section 3); nothing customised, only the cell moves",
+  "cell": {
+    "dt": 0.01,
+    "dt_ctrl": 0.01,
+    "max_steps": 2000,
+    "control_rate_hz": 100.0,
+    "horizon_s": 20.0,
+    "empty_fallback": {
+      "mode": "kstep",
+      "phases": 1,
+      "k": 3
+    }
+  },
+  "pool": "eval_fullvia_quadrotor-3d-d2r_n2000_seed823456.pkl",
+  "pool_sha8": "d64212c5",
+  "ckpt": "data/runs/v2.9.3/set__20260820-215728__seed42/v2.9.3__jt__20260820-215728__seed42/checkpoints/best.pt",
+  "ckpt_step": 31500,
+  "figures": [
+    "eval/l363_100hz_20260824-154230/trajectory_grid_A.png",
+    "eval/l363_100hz_20260824-154230/trajectory_grid_B.png"
+  ],
+  "intervention_episode_count": 1669,
+  "plotted_episode_count": 16,
+  "shortfall": 0
+}

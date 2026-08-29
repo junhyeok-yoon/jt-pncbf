@@ -1,0 +1,34 @@
+{
+  "fig4_certificate_zero_level.pdf": {
+    "pdf": "fig4_certificate_zero_level.pdf",
+    "pages": 1,
+    "mediabox_pt": [
+      0.0,
+      0.0,
+      504.0,
+      171.36
+    ],
+    "mediabox_width_pt": 504.0,
+    "mediabox_height_pt": 171.36,
+    "mediabox_width_in": 7.0,
+    "mediabox_height_in": 2.38,
+    "min_tf_pt": 6.5,
+    "max_tf_pt": 8.0,
+    "distinct_tf_pt": [
+      6.5,
+      7.0,
+      8.0
+    ],
+    "n_text_ops": 64,
+    "all_text_ge_6pt": true,
+    "embedded_fonts": [
+      "BMQQDV+DejaVuSans",
+      "EVICAO+DejaVuSans-Bold"
+    ],
+    "n_image_xobjects": 5,
+    "rasterized_text_objects": 0,
+    "bytes": 251664,
+    "target_width_in": 7.0,
+    "width_err_pt": 0.0
+  }
+}

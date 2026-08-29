@@ -1,0 +1,63 @@
+{
+  "fig1_teaser_one_scene.pdf": {
+    "pdf": "fig1_teaser_one_scene.pdf",
+    "pages": 1,
+    "mediabox_pt": [
+      0.0,
+      0.0,
+      504.0,
+      219.6
+    ],
+    "mediabox_width_pt": 504.0,
+    "mediabox_height_pt": 219.6,
+    "mediabox_width_in": 7.0,
+    "mediabox_height_in": 3.05,
+    "min_tf_pt": 7.0,
+    "max_tf_pt": 8.0,
+    "distinct_tf_pt": [
+      7.0,
+      8.0
+    ],
+    "n_text_ops": 56,
+    "all_text_ge_6pt": true,
+    "embedded_fonts": [
+      "BMQQDV+DejaVuSans"
+    ],
+    "n_image_xobjects": 0,
+    "rasterized_text_objects": 0,
+    "bytes": 27531,
+    "target_width_in": 7.0,
+    "width_err_pt": 0.0
+  },
+  "fig1_teaser_three_scenes.pdf": {
+    "pdf": "fig1_teaser_three_scenes.pdf",
+    "pages": 1,
+    "mediabox_pt": [
+      0.0,
+      0.0,
+      504.0,
+      219.6
+    ],
+    "mediabox_width_pt": 504.0,
+    "mediabox_height_pt": 219.6,
+    "mediabox_width_in": 7.0,
+    "mediabox_height_in": 3.05,
+    "min_tf_pt": 7.0,
+    "max_tf_pt": 8.0,
+    "distinct_tf_pt": [
+      7.0,
+      8.0
+    ],
+    "n_text_ops": 57,
+    "all_text_ge_6pt": true,
+    "embedded_fonts": [
+      "BMQQDV+DejaVuSans",
+      "EVICAO+DejaVuSans-Bold"
+    ],
+    "n_image_xobjects": 0,
+    "rasterized_text_objects": 0,
+    "bytes": 45824,
+    "target_width_in": 7.0,
+    "width_err_pt": 0.0
+  }
+}

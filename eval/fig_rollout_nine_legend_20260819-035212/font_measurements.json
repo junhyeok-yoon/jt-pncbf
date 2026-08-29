@@ -1,0 +1,37 @@
+{
+  "new": {
+    "mediabox_pt": [
+      504.0,
+      493.92
+    ],
+    "mediabox_in": [
+      7.0,
+      6.86
+    ],
+    "n_text_ops": 213,
+    "distinct_tf_pt": [
+      7.0,
+      8.0
+    ],
+    "min_tf_pt": 7.0,
+    "bytes": 92563,
+    "all_text_ge_6pt": true
+  },
+  "old_for_reference": {
+    "mediabox_pt": [
+      504.0,
+      493.92
+    ],
+    "mediabox_in": [
+      7.0,
+      6.86
+    ],
+    "n_text_ops": 213,
+    "distinct_tf_pt": [
+      7.0,
+      8.0
+    ],
+    "min_tf_pt": 7.0,
+    "bytes": 91638
+  }
+}
